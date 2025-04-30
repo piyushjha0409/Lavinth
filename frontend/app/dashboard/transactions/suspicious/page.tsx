@@ -92,13 +92,13 @@ export default function SuspiciousTransactionsPage() {
       let endpoint;
 
       if (filterType === "dust") {
-        endpoint = `http://localhost:3001/api/dust-transactions/potential-dust?limit=${pageSize}&offset=${offset}`;
+        endpoint = `https://solanashield.ddns.net/api/dust-transactions/potential-dust?limit=${pageSize}&offset=${offset}`;
       } else if (filterType === "poisoning") {
-        endpoint = `http://localhost:3001/api/dust-transactions/potential-poisoning?limit=${pageSize}&offset=${offset}`;
+        endpoint = `https://solanashield.ddns.net/api/dust-transactions/potential-poisoning?limit=${pageSize}&offset=${offset}`;
       } else {
         // For 'all', we need to fetch both dust and poisoning transactions and combine them
-        const dustEndpoint = `http://localhost:3001/api/dust-transactions/potential-dust?limit=${pageSize}&offset=${offset}`;
-        const poisoningEndpoint = `http://localhost:3001/api/dust-transactions/potential-poisoning?limit=${pageSize}&offset=${offset}`;
+        const dustEndpoint = `https://solanashield.ddns.net/api/dust-transactions/potential-dust?limit=${pageSize}&offset=${offset}`;
+        const poisoningEndpoint = `https://solanashield.ddns.net/api/dust-transactions/potential-poisoning?limit=${pageSize}&offset=${offset}`;
 
         const [dustResponse, poisoningResponse] = await Promise.all([
           fetch(dustEndpoint),

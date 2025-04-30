@@ -213,7 +213,7 @@ export default function Dashboard() {
   // Function to fetch overview data
   const fetchOverviewData = async () => {
     try {
-      const response = await fetch("http://localhost:3001/api/overview");
+      const response = await fetch("https://solanashield.ddns.net/api/overview");
 
       if (!response.ok) {
         throw new Error("Failed to fetch overview data");
@@ -250,7 +250,7 @@ export default function Dashboard() {
       setIsTableLoading(true); // Set table loading state to true
       const offset = (currentPage - 1) * pageSize;
       const response = await fetch(
-        `http://localhost:3001/api/dust-transactions?limit=${pageSize}&offset=${offset}`
+        `https://solanashield.ddns.net/api/dust-transactions?limit=${pageSize}&offset=${offset}`
       );
 
       if (!response.ok) {
