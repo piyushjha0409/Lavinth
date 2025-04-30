@@ -165,6 +165,16 @@ export default function Home() {
                   >
                     <Link href="/dashboard">Get Started</Link>
                   </Button>
+                  <Button
+                    asChild
+                    size="lg"
+                    className="bg-gradient-to-r from-cyan-500 to-fuchsia-500 hover:from-cyan-600 hover:to-fuchsia-600 text-white border-none shadow-[0_0_15px_rgba(0,255,255,0.7)] group transition-all duration-300"
+                  >
+                    <Link href="/wallet-check">
+                      Wallet Safety Detection
+                      <Shield className="ml-2 h-4 w-4" />
+                    </Link>
+                  </Button>
                 </div>
                 <div className="flex items-center space-x-4 text-sm text-cyan-200 font-medium">
                   <div className="flex items-center space-x-1">

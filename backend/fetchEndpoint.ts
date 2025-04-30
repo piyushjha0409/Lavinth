@@ -414,6 +414,59 @@ app.get("/api/overview", async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * Check if a wallet address is flagged as a dusting candidate
+ * Returns:
+ * - status: success or error
+ * - isDusted: boolean indicating if the address is flagged as a dusting candidate
+ * - riskScore: risk score of the address if it exists in the dusting_candidates table
+ * - message: description of the result
+ */
+app.get("/api/check-wallet/:address", async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { address } = req.params;
+
+    // Validate the address format (basic validation for Solana address)
+    if (!address || address.length !== 44) {
+      return res.status(400).json({
+        status: "error",
+        message: "Invalid wallet address format",
+      });
+    }
+
+    // Query to check if the address exists in the dusting_candidates table
+    const query = "SELECT address, risk_score FROM dusting_candidates WHERE address = $1";
+    const result = await db.pool.query(query, [address]);
+   
+    if (result.rowCount && result.rowCount > 0) {
+      // Address exists in the dusting_candidates table
+      const riskScore = parseFloat(result.rows[0].risk_score);
+      
+      return res.status(200).json({
+        status: "success",
+        isDusted: true,
+        riskScore,
+        message: `This wallet address is flagged as a potential dusting source with a risk score of ${riskScore.toFixed(4)}.`,
+      });
+    } else {
+      // Address does not exist in the dusting_candidates table
+      return res.status(200).json({
+        status: "success",
+        isDusted: false,
+        riskScore: 0,
+        message: "This wallet address is not flagged as a dusting source and appears to be safe.",
+      });
+    }
+  } catch (error) {
+    console.error("Error checking wallet address:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Failed to check wallet address",
+      error: (error as Error).message,
+    });
+  }
+});
+
 // Start the server
 app.listen(PORT, () => {
   console.log(`Solana Dust Detector API running on port ${PORT}`);
