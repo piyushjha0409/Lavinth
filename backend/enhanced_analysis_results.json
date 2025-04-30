@@ -1,0 +1,15 @@
+{
+  "metadata": {
+    "timestamp": "2025-04-29T18:52:22.411Z",
+    "totalTransactions": 0,
+    "dustThreshold": 0.001,
+    "networkStats": {
+      "totalClusters": 0,
+      "averageClusterSize": null
+    }
+  },
+  "riskAnalysis": [],
+  "clusters": [],
+  "potentialDusters": [],
+  "addressSimilarities": {}
+}
