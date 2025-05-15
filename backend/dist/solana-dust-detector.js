@@ -45,6 +45,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.analyzeTransactions = analyzeTransactions;
+exports.processTransaction = processTransaction;
+const web3 = __importStar(require("@solana/web3.js"));
 const web3_js_1 = require("@solana/web3.js");
 const fs = __importStar(require("fs"));
 // Remove the direct import of p-limit
@@ -56,6 +59,10 @@ const db_utils_1 = __importDefault(require("./db/db-utils"));
 const createLimiter = require("./p-limit-wrapper");
 // Load environment variables
 dotenv.config();
+// Import enhanced features
+const adaptive_thresholds_1 = require("./adaptive-thresholds");
+const ml_detection_1 = require("./ml-detection");
+const dust_alert_system_1 = require("./dust-alert-system");
 // Initialize database
 db_utils_1.default.initializeDatabase().catch((error) => {
     console.error("Failed to initialize database:", error);
@@ -65,18 +72,34 @@ db_utils_1.default.initializeDatabase().catch((error) => {
 const CHAINALYSIS_API_KEY = process.env.CHAINALYSIS_API_KEY || "";
 const TRM_LABS_API_KEY = process.env.TRM_LABS_API_KEY || "";
 // Parse Helius API keys from environment variable
-console.log("Raw HELIUS_API_KEYS env variable:", process.env.HELIUS_API_KEYS);
+const scam_url_service_1 = require("./scam-url-service");
 const HELIUS_API_KEYS = (process.env.HELIUS_API_KEYS || "")
     .split(",")
     .map(key => key.trim())
     .filter((key) => key.length > 0);
 console.log("Parsed HELIUS_API_KEYS array:", HELIUS_API_KEYS);
+// Helper to extract URLs from a string (e.g., memo or metadata)
+function extractUrls(text) {
+    if (!text)
+        return [];
+    const urlRegex = /https?:\/\/[^\s]+|[a-zA-Z0-9\-_.]+\.[a-zA-Z]{2,}/g;
+    return text.match(urlRegex) || [];
+}
+// Check if any extracted URLs match the scam blocklist
+function isScamUrlPresent(text, apiKey) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const urls = extractUrls(text);
+        if (urls.length === 0)
+            return false;
+        const scamList = yield (0, scam_url_service_1.getCombinedScamUrlList)(apiKey);
+        return urls.some(url => scamList.some(scam => url.includes(scam)));
+    });
+}
 console.log(`Found ${HELIUS_API_KEYS.length} Helius API keys`);
 if (HELIUS_API_KEYS.length === 0) {
     throw new Error("No Helius API keys configured. Please set HELIUS_API_KEYS in .env file");
 }
 // Parse Helius API keys from environment variable
-console.log("HELIUS API KEYS", HELIUS_API_KEYS);
 const RPC_ENDPOINTS = HELIUS_API_KEYS.map(apiKey => `https://mainnet.helius-rpc.com/?api-key=${apiKey}`);
 // Advanced configuration
 const CONFIG = {
@@ -144,8 +167,10 @@ function sleep(ms) {
         return new Promise((resolve) => setTimeout(resolve, ms));
     });
 }
-// Store potential dusting sources
-const dustingCandidates = new Map();
+// Store potential dusting attackers (senders of dust transactions)
+const dustingAttackers = new Map();
+// Store potential dusting victims (recipients of dust transactions)
+const dustingVictims = new Map();
 // Store potential address poisoning candidates (similar addresses)
 const addressPoisoningCandidates = new Set();
 // Cache for address transaction counts
@@ -385,6 +410,20 @@ function processTransaction(tx, sigInfo) {
                     }
                 }
             }
+            // Check for scam URLs in memoContent
+            let isScamUrl = false;
+            if (memoContent && HELIUS_API_KEYS.length > 0) {
+                // Use the first API key for scam URL lookup
+                try {
+                    isScamUrl = yield isScamUrlPresent(memoContent, HELIUS_API_KEYS[0]);
+                    if (isScamUrl) {
+                        console.warn(`Scam URL detected in transaction ${signature}:`, memoContent);
+                    }
+                }
+                catch (err) {
+                    console.error("Error checking scam URL in memoContent:", err);
+                }
+            }
             // Check if this might be a dust transaction
             const isPotentialDust = tokenType === "SOL" && amount > 0 && amount < CONFIG.thresholds.dust.sol;
             // Update dusting candidates tracking
@@ -410,6 +449,8 @@ function processTransaction(tx, sigInfo) {
                         isPotentialDust,
                         isPotentialPoisoning,
                         riskScore: 0, // Initial risk score, will be updated after analysis
+                        isScamUrl,
+                        memoContent,
                     });
                 }
                 catch (dbError) {
@@ -439,18 +480,19 @@ function processTransaction(tx, sigInfo) {
     });
 }
 /**
- * Update tracking of potential dusting sources and store in database
- * @param sender The address sending the transaction
- * @param recipient The address receiving the transaction
+ * Update tracking of potential dusting attackers and victims and store in database
+ * @param sender The address sending the transaction (potential attacker)
+ * @param recipient The address receiving the transaction (potential victim)
  * @param timestamp The transaction timestamp
  */
 function updateDustingCandidates(sender, recipient, timestamp) {
     return __awaiter(this, void 0, void 0, function* () {
-        if (!dustingCandidates.has(sender)) {
-            dustingCandidates.set(sender, {
+        // Track the sender as a potential attacker
+        if (!dustingAttackers.has(sender)) {
+            dustingAttackers.set(sender, {
                 address: sender,
                 smallTransfersCount: 0,
-                uniqueRecipients: new Set(),
+                uniqueVictims: new Set(),
                 timestamps: [],
                 riskScore: 0,
                 patterns: {
@@ -467,45 +509,202 @@ function updateDustingCandidates(sender, recipient, timestamp) {
                 },
             });
         }
-        const candidate = dustingCandidates.get(sender);
-        candidate.smallTransfersCount++;
-        candidate.uniqueRecipients.add(recipient);
-        candidate.timestamps.push(timestamp);
-        // Calculate risk score based on activity
-        let riskScore = 0;
-        if (candidate.smallTransfersCount >= CONFIG.thresholds.detection.minTransfers) {
-            // Basic risk scoring - can be enhanced with more sophisticated algorithms
-            riskScore = Math.min(0.3 + (candidate.smallTransfersCount / 100) + (candidate.uniqueRecipients.size / 50), 1.0);
+        // Track the recipient as a potential victim
+        if (!dustingVictims.has(recipient)) {
+            dustingVictims.set(recipient, {
+                address: recipient,
+                dustTransactionsCount: 0,
+                uniqueAttackers: new Set(),
+                timestamps: [],
+                riskScore: 0,
+            });
         }
-        candidate.riskScore = riskScore;
-        // If this sender has sent many small transfers to different recipients, it's a strong dusting indicator
-        if (candidate.smallTransfersCount >= CONFIG.thresholds.detection.minTransfers &&
-            candidate.uniqueRecipients.size >= CONFIG.thresholds.detection.minTransfers) {
-            console.log(`Potential dusting source detected: ${sender} (${candidate.smallTransfersCount} transfers to ${candidate.uniqueRecipients.size} recipients)`);
-            // Store the candidate in the database
+        // Update attacker data
+        const attacker = dustingAttackers.get(sender);
+        attacker.smallTransfersCount++;
+        attacker.uniqueVictims.add(recipient);
+        attacker.timestamps.push(timestamp);
+        // Update victim data
+        const victim = dustingVictims.get(recipient);
+        victim.dustTransactionsCount++;
+        victim.uniqueAttackers.add(sender);
+        victim.timestamps.push(timestamp);
+        // Calculate risk score for attacker based on activity
+        let attackerRiskScore = 0;
+        if (attacker.smallTransfersCount >= CONFIG.thresholds.detection.minTransfers) {
+            // Basic risk scoring - can be enhanced with more sophisticated algorithms
+            attackerRiskScore = Math.min(0.3 + (attacker.smallTransfersCount / 100) + (attacker.uniqueVictims.size / 50), 1.0);
+        }
+        attacker.riskScore = attackerRiskScore;
+        // Calculate risk score for victim based on number of dust transactions received
+        let victimRiskScore = 0;
+        if (victim.dustTransactionsCount >= 2) { // Even a few dust transactions can be concerning
+            victimRiskScore = Math.min(0.2 + (victim.dustTransactionsCount / 20) + (victim.uniqueAttackers.size / 10), 1.0);
+        }
+        victim.riskScore = victimRiskScore;
+        // If this sender has sent many small transfers to different recipients, it's a strong dusting attacker indicator
+        if (attacker.smallTransfersCount >= CONFIG.thresholds.detection.minTransfers &&
+            attacker.uniqueVictims.size >= CONFIG.thresholds.detection.minTransfers) {
+            console.log(`Potential dusting attacker detected: ${sender} (${attacker.smallTransfersCount} transfers to ${attacker.uniqueVictims.size} victims)`);
+            // Store the attacker in the database
             try {
-                yield db_utils_1.default.insertOrUpdateDustingCandidate({
-                    address: candidate.address,
-                    smallTransfersCount: candidate.smallTransfersCount,
-                    uniqueRecipientsCount: candidate.uniqueRecipients.size,
-                    uniqueRecipients: Array.from(candidate.uniqueRecipients),
-                    timestamps: candidate.timestamps,
-                    riskScore: candidate.riskScore,
-                    temporalPattern: {
-                        burstCount: candidate.patterns.temporal.burstCount,
-                        averageTimeBetweenTransfers: candidate.patterns.temporal.averageTimeBetweenTransfers,
-                        regularityScore: candidate.patterns.temporal.regularityScore
-                    },
-                    networkPattern: {
-                        clusterSize: candidate.patterns.network.clusterSize,
-                        centralityScore: candidate.patterns.network.centralityScore,
-                        recipientOverlap: candidate.patterns.network.recipientOverlap
-                    }
-                });
-                console.log(`Stored dusting candidate in database: ${sender}`);
+                // Create a database-compatible attacker object with default values for required fields
+                const dbAttacker = {
+                    address: attacker.address,
+                    smallTransfersCount: attacker.smallTransfersCount,
+                    uniqueVictimsCount: attacker.uniqueVictims.size,
+                    uniqueVictims: Array.from(attacker.uniqueVictims),
+                    timestamps: attacker.timestamps,
+                    riskScore: attacker.riskScore,
+                    temporalPattern: JSON.stringify({
+                        burstCount: attacker.patterns.temporal.burstCount,
+                        averageTimeBetweenTransfers: attacker.patterns.temporal.averageTimeBetweenTransfers,
+                        regularityScore: attacker.patterns.temporal.regularityScore
+                    }),
+                    networkPattern: JSON.stringify({
+                        clusterSize: attacker.patterns.network.clusterSize,
+                        centralityScore: attacker.patterns.network.centralityScore,
+                        recipientOverlap: attacker.patterns.network.recipientOverlap
+                    }),
+                    // Add optional fields with default values to match the database schema
+                    walletAgeDays: null,
+                    totalTransactionVolume: null,
+                    knownLabels: null,
+                    relatedAddresses: null,
+                    previousAttackPatterns: null,
+                    // Use default JSON structures for required fields that don't accept NULL
+                    timePatterns: JSON.stringify({
+                        hourlyDistribution: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                        weekdayDistribution: [0, 0, 0, 0, 0, 0, 0],
+                        burstDetection: { burstThreshold: 300000, burstWindows: [] }
+                    }),
+                    behavioralIndicators: JSON.stringify({
+                        usesNewAccounts: false,
+                        hasAbnormalFundingPattern: false,
+                        targetsPremiumWallets: false,
+                        usesScriptedTransactions: false
+                    }),
+                    mlFeatures: null,
+                    mlPrediction: null
+                };
+                // Use the pool directly since we're having issues with the method
+                yield db_utils_1.default.pool.query(`INSERT INTO dusting_attackers 
+        (address, small_transfers_count, unique_victims_count, unique_victims, timestamps, 
+            risk_score, temporal_pattern, network_pattern, wallet_age_days, total_transaction_volume,
+            known_labels, related_addresses, previous_attack_patterns, time_patterns,
+            behavioral_indicators, ml_features, ml_prediction, last_updated) 
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, CURRENT_TIMESTAMP)
+        ON CONFLICT (address) DO UPDATE SET
+            small_transfers_count = EXCLUDED.small_transfers_count,
+            unique_victims_count = EXCLUDED.unique_victims_count,
+            unique_victims = EXCLUDED.unique_victims,
+            timestamps = EXCLUDED.timestamps,
+            risk_score = EXCLUDED.risk_score,
+            temporal_pattern = EXCLUDED.temporal_pattern,
+            network_pattern = EXCLUDED.network_pattern,
+            wallet_age_days = EXCLUDED.wallet_age_days,
+            total_transaction_volume = EXCLUDED.total_transaction_volume,
+            known_labels = EXCLUDED.known_labels,
+            related_addresses = EXCLUDED.related_addresses,
+            previous_attack_patterns = EXCLUDED.previous_attack_patterns,
+            time_patterns = EXCLUDED.time_patterns,
+            behavioral_indicators = EXCLUDED.behavioral_indicators,
+            ml_features = EXCLUDED.ml_features,
+            ml_prediction = EXCLUDED.ml_prediction,
+            last_updated = CURRENT_TIMESTAMP
+        RETURNING *`, [
+                    dbAttacker.address,
+                    dbAttacker.smallTransfersCount,
+                    dbAttacker.uniqueVictimsCount,
+                    dbAttacker.uniqueVictims,
+                    dbAttacker.timestamps,
+                    dbAttacker.riskScore,
+                    dbAttacker.temporalPattern,
+                    dbAttacker.networkPattern,
+                    dbAttacker.walletAgeDays,
+                    dbAttacker.totalTransactionVolume,
+                    dbAttacker.knownLabels,
+                    dbAttacker.relatedAddresses,
+                    dbAttacker.previousAttackPatterns,
+                    dbAttacker.timePatterns,
+                    dbAttacker.behavioralIndicators,
+                    dbAttacker.mlFeatures,
+                    dbAttacker.mlPrediction
+                ]);
+                console.log(`Stored dusting attacker in database: ${sender}`);
             }
             catch (error) {
-                console.error(`Error storing dusting candidate in database: ${sender}`, error);
+                console.error(`Error storing dusting attacker in database: ${sender}`, error);
+            }
+        }
+        // If this recipient has received multiple dust transactions, track as a potential victim
+        if (victim.dustTransactionsCount >= 2) {
+            console.log(`Potential dusting victim detected: ${recipient} (${victim.dustTransactionsCount} dust transactions from ${victim.uniqueAttackers.size} attackers)`);
+            // Store the victim in the database
+            try {
+                // Create a database-compatible victim object with default values for required fields
+                const dbVictim = {
+                    address: victim.address,
+                    dustTransactionsCount: victim.dustTransactionsCount,
+                    uniqueAttackersCount: victim.uniqueAttackers.size,
+                    uniqueAttackers: Array.from(victim.uniqueAttackers),
+                    timestamps: victim.timestamps,
+                    riskScore: victim.riskScore,
+                    // Add optional fields with default values to match the database schema
+                    walletAgeDays: null,
+                    walletValueEstimate: null,
+                    // Use default JSON structures for required fields that don't accept NULL
+                    timePatterns: JSON.stringify({
+                        hourlyDistribution: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                        weekdayDistribution: [0, 0, 0, 0, 0, 0, 0],
+                        burstDetection: { burstThreshold: 300000, burstWindows: [] }
+                    }),
+                    vulnerabilityAssessment: JSON.stringify({
+                        walletActivity: "low",
+                        assetValue: "low",
+                        previousInteractions: false,
+                        riskExposure: 0
+                    }),
+                    mlFeatures: null,
+                    mlPrediction: null
+                };
+                // Use the pool directly since we're having issues with the method
+                yield db_utils_1.default.pool.query(`INSERT INTO dusting_victims 
+        (address, dust_transactions_count, unique_attackers_count, unique_attackers, timestamps, 
+            risk_score, wallet_age_days, wallet_value_estimate, time_patterns, vulnerability_assessment,
+            ml_features, ml_prediction, last_updated) 
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP)
+        ON CONFLICT (address) DO UPDATE SET
+            dust_transactions_count = EXCLUDED.dust_transactions_count,
+            unique_attackers_count = EXCLUDED.unique_attackers_count,
+            unique_attackers = EXCLUDED.unique_attackers,
+            timestamps = EXCLUDED.timestamps,
+            risk_score = EXCLUDED.risk_score,
+            wallet_age_days = EXCLUDED.wallet_age_days,
+            wallet_value_estimate = EXCLUDED.wallet_value_estimate,
+            time_patterns = EXCLUDED.time_patterns,
+            vulnerability_assessment = EXCLUDED.vulnerability_assessment,
+            ml_features = EXCLUDED.ml_features,
+            ml_prediction = EXCLUDED.ml_prediction,
+            last_updated = CURRENT_TIMESTAMP
+        RETURNING *`, [
+                    dbVictim.address,
+                    dbVictim.dustTransactionsCount,
+                    dbVictim.uniqueAttackersCount,
+                    dbVictim.uniqueAttackers,
+                    dbVictim.timestamps,
+                    dbVictim.riskScore,
+                    dbVictim.walletAgeDays,
+                    dbVictim.walletValueEstimate,
+                    dbVictim.timePatterns,
+                    dbVictim.vulnerabilityAssessment,
+                    dbVictim.mlFeatures,
+                    dbVictim.mlPrediction
+                ]);
+                console.log(`Stored dusting victim in database: ${recipient}`);
+            }
+            catch (error) {
+                console.error(`Error storing dusting victim in database: ${recipient}`, error);
             }
         }
     });
@@ -625,11 +824,13 @@ function findSimilarAddresses(addresses) {
  * Analyze transaction patterns to identify potential dusting or poisoning campaigns
  */
 function analyzeTransactions(transactions) {
-    // Extract potential dusters (addresses making many small transfers)
-    const potentialDusters = Array.from(dustingCandidates.values()).filter((candidate) => candidate.smallTransfersCount >=
+    // Extract potential attackers (addresses making many small transfers)
+    const potentialAttackers = Array.from(dustingAttackers.values()).filter((attacker) => attacker.smallTransfersCount >=
         CONFIG.thresholds.detection.minTransfers &&
-        candidate.uniqueRecipients.size >=
+        attacker.uniqueVictims.size >=
             CONFIG.thresholds.detection.minTransfers);
+    // Extract potential victims (addresses receiving dust transactions)
+    const potentialVictims = Array.from(dustingVictims.values()).filter((victim) => victim.dustTransactionsCount >= 2);
     // Find potentially similar addresses for poisoning detection
     const addressPool = new Set();
     let dustTransactionCount = 0;
@@ -644,15 +845,15 @@ function analyzeTransactions(transactions) {
     const addressSimilarities = findSimilarAddresses(Array.from(addressPool));
     // Analyze time patterns for dusting activities
     const dustingTimestampPatterns = {};
-    potentialDusters.forEach((duster) => {
+    potentialAttackers.forEach((attacker) => {
         // Sort timestamps chronologically
-        const sortedTimestamps = [...duster.timestamps].sort((a, b) => a - b);
-        dustingTimestampPatterns[duster.address] = sortedTimestamps;
+        const sortedTimestamps = [...attacker.timestamps].sort((a, b) => a - b);
+        dustingTimestampPatterns[attacker.address] = sortedTimestamps;
     });
-    // Analyze temporal patterns for each dusting candidate
+    // Analyze temporal patterns for each dusting attacker
     const suspiciousPatterns = {};
-    potentialDusters.forEach((duster) => {
-        const timestamps = [...duster.timestamps].sort((a, b) => a - b);
+    potentialAttackers.forEach((attacker) => {
+        const timestamps = [...attacker.timestamps].sort((a, b) => a - b);
         // Look for bursts of activity (multiple transfers in short time windows)
         let burstCount = 0;
         let timeGaps = [];
@@ -671,14 +872,15 @@ function analyzeTransactions(transactions) {
         if (burstCount > 0 ||
             (averageTimeBetweenTransfers > 0 &&
                 averageTimeBetweenTransfers < CONFIG.thresholds.detection.timeWindow)) {
-            suspiciousPatterns[duster.address] = {
+            suspiciousPatterns[attacker.address] = {
                 burstCount,
                 averageTimeBetweenTransfers,
             };
         }
     });
     return {
-        potentialDusters,
+        potentialAttackers,
+        potentialVictims,
         addressSimilarities,
         dustTransactionCount,
         totalTransactions: transactions.length,
@@ -689,14 +891,22 @@ function analyzeTransactions(transactions) {
 /**
  * Expand investigation to related addresses
  */
-function expandInvestigation(initialTransactions, potentialDusters) {
-    return __awaiter(this, void 0, void 0, function* () {
+function expandInvestigation(initialTransactions_1, potentialAttackers_1) {
+    return __awaiter(this, arguments, void 0, function* (initialTransactions, potentialAttackers, potentialVictims = []) {
         console.log("Expanding investigation to related addresses...");
-        // Extract addresses from potential dusters for deeper investigation
+        // Extract addresses from potential attackers and victims for deeper investigation
         const addressesToInvestigate = new Set();
-        // Add top dusting sources to investigation list
-        potentialDusters.forEach((duster) => {
-            addressesToInvestigate.add(duster.address);
+        // Add top dusting attackers to investigation list
+        potentialAttackers.forEach((attacker) => {
+            addressesToInvestigate.add(attacker.address);
+        });
+        // Add selected victims to investigation list (optional)
+        // Limiting to top 10 victims with highest risk scores to avoid excessive API calls
+        potentialVictims
+            .sort((a, b) => b.riskScore - a.riskScore)
+            .slice(0, 10)
+            .forEach((victim) => {
+            addressesToInvestigate.add(victim.address);
         });
         // Limit investigation to prevent excessive API calls
         const maxAdditionalAddresses = 20;
@@ -747,11 +957,13 @@ function saveResults(transactions, analysis) {
             dustThreshold: CONFIG.thresholds.dust.sol,
             minTransfersForDusting: CONFIG.thresholds.detection.minTransfers,
             dustTransactionCount: analysis.dustTransactionCount,
-            potentialDustersCount: analysis.potentialDusters.length,
+            potentialAttackersCount: analysis.potentialAttackers.length,
+            potentialVictimsCount: analysis.potentialVictims.length,
             similarAddressGroupsCount: Object.keys(analysis.addressSimilarities)
                 .length,
         },
-        potentialDusters: analysis.potentialDusters,
+        potentialAttackers: analysis.potentialAttackers,
+        potentialVictims: analysis.potentialVictims,
         similarAddressGroups: analysis.addressSimilarities,
         transactions: transactions.slice(0, 1000), // Limit to first 1000 to keep file size manageable
     };
@@ -781,10 +993,36 @@ function updateDustThreshold() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
             const connection = getNextConnection();
-            const recentBlockhash = yield connection.getRecentBlockhash();
-            const currentFee = recentBlockhash.feeCalculator.lamportsPerSignature / 1e9;
-            currentDustThreshold =
-                currentFee * CONFIG.thresholds.dust.networkFeeMultiplier;
+            // Get current network fee using the newer getFeeForMessage API
+            const { blockhash } = yield connection.getLatestBlockhash();
+            // Create a dummy keypair for fee calculation
+            const payer = web3.Keypair.generate();
+            // Create a simple transfer transaction
+            const transaction = new web3.Transaction().add(web3.SystemProgram.transfer({
+                fromPubkey: payer.publicKey,
+                toPubkey: payer.publicKey,
+                lamports: 1000,
+            }));
+            transaction.recentBlockhash = blockhash;
+            transaction.feePayer = payer.publicKey;
+            // Get the message from the transaction
+            const message = transaction.compileMessage();
+            // Get the fee for this message
+            let currentFee = 0.000005; // Default fallback fee (5000 lamports) if API call fails
+            try {
+                const feeResponse = yield connection.getFeeForMessage(message);
+                if (feeResponse && feeResponse.value) {
+                    currentFee = feeResponse.value / 1e9; // Convert lamports to SOL
+                    console.log(`Successfully retrieved current network fee: ${currentFee} SOL`);
+                }
+                else {
+                    console.warn('Fee response value is null or undefined, using fallback fee');
+                }
+            }
+            catch (error) {
+                console.warn(`Error getting fee for message, using fallback fee: ${(error === null || error === void 0 ? void 0 : error.message) || 'Unknown error'}`);
+            }
+            currentDustThreshold = currentFee * CONFIG.thresholds.dust.networkFeeMultiplier;
             console.log(`Updated dust threshold to ${currentDustThreshold} SOL`);
         }
         catch (error) {
@@ -828,24 +1066,67 @@ class NetworkAnalyzer {
     constructor() {
         this.graph = new Map();
         this.addressPatterns = new Map();
+        // Track multi-hop relationships (A->B->C)
+        this.multiHopConnections = new Map();
+        // Track transaction amounts for each edge
+        this.edgeWeights = new Map();
+        // Cache for betweenness centrality calculations
+        this.betweennessCentralityCache = new Map();
     }
-    addTransaction(sender, recipient) {
+    addTransaction(sender, recipient, amount = 0) {
+        // Add to direct graph
         if (!this.graph.has(sender)) {
             this.graph.set(sender, new Set());
         }
         this.graph.get(sender).add(recipient);
+        // Track edge weights (transaction amounts)
+        if (!this.edgeWeights.has(sender)) {
+            this.edgeWeights.set(sender, new Map());
+        }
+        if (!this.edgeWeights.get(sender).has(recipient)) {
+            this.edgeWeights.get(sender).set(recipient, []);
+        }
+        this.edgeWeights.get(sender).get(recipient).push(amount);
+        // Update multi-hop connections (up to 2 hops)
+        this.updateMultiHopConnections(sender, recipient);
+        // Invalidate centrality cache when graph changes
+        this.betweennessCentralityCache.clear();
+    }
+    updateMultiHopConnections(sender, recipient) {
+        // Initialize multi-hop connections for sender if not exists
+        if (!this.multiHopConnections.has(sender)) {
+            this.multiHopConnections.set(sender, new Set());
+        }
+        // Add direct connection
+        this.multiHopConnections.get(sender).add(recipient);
+        // Find all addresses that the recipient connects to (2nd hop)
+        const recipientConnections = this.graph.get(recipient);
+        if (recipientConnections) {
+            for (const secondHop of recipientConnections) {
+                this.multiHopConnections.get(sender).add(secondHop);
+            }
+        }
+        // Update connections for addresses that connect to sender (reverse 2nd hop)
+        for (const [address, connections] of this.graph.entries()) {
+            if (connections.has(sender)) {
+                if (!this.multiHopConnections.has(address)) {
+                    this.multiHopConnections.set(address, new Set());
+                }
+                this.multiHopConnections.get(address).add(recipient);
+            }
+        }
     }
     findClusters() {
         const clusters = new Map();
         const visited = new Set();
-        const dfs = (address, cluster) => {
-            if (visited.has(address))
+        const dfs = (address, cluster, depth = 0, maxDepth = 3) => {
+            if (visited.has(address) || depth > maxDepth)
                 return;
             visited.add(address);
             cluster.add(address);
             const connections = this.graph.get(address) || new Set();
             for (const connected of connections) {
-                dfs(connected, cluster);
+                dfs(connected, cluster, depth + 1, maxDepth);
             }
         };
         for (const address of this.graph.keys()) {
@@ -872,19 +1153,281 @@ class NetworkAnalyzer {
         }
         return directConnections + secondDegreeConnections * 0.5;
     }
+    calculateBetweennessCentrality(address) {
+        // Check cache first
+        if (this.betweennessCentralityCache.has(address)) {
+            return this.betweennessCentralityCache.get(address);
+        }
+        // Get all nodes in the graph
+        const nodes = new Set();
+        for (const [node, connections] of this.graph.entries()) {
+            nodes.add(node);
+            for (const connection of connections) {
+                nodes.add(connection);
+            }
+        }
+        // If there are too many nodes, use an approximation
+        if (nodes.size > 1000) {
+            const approximation = this.approximateBetweennessCentrality(address);
+            this.betweennessCentralityCache.set(address, approximation);
+            return approximation;
+        }
+        // Calculate betweenness centrality (number of shortest paths that pass through this node)
+        let betweenness = 0;
+        const nodeArray = Array.from(nodes);
+        for (let i = 0; i < nodeArray.length; i++) {
+            for (let j = i + 1; j < nodeArray.length; j++) {
+                if (i === j)
+                    continue;
+                const source = nodeArray[i];
+                const target = nodeArray[j];
+                // Skip if source or target is the address we're calculating for
+                if (source === address || target === address)
+                    continue;
+                // Find all shortest paths between source and target
+                const paths = this.findAllShortestPaths(source, target);
+                if (paths.length === 0)
+                    continue;
+                // Count paths that pass through address
+                let pathsThroughAddress = 0;
+                for (const path of paths) {
+                    if (path.includes(address)) {
+                        pathsThroughAddress++;
+                    }
+                }
+                // Add contribution to betweenness
+                betweenness += pathsThroughAddress / paths.length;
+            }
+        }
+        // Normalize by the maximum possible betweenness
+        const n = nodes.size;
+        if (n > 2) { // Avoid division by zero
+            betweenness = betweenness / ((n - 1) * (n - 2) / 2);
+        }
+        // Cache the result
+        this.betweennessCentralityCache.set(address, betweenness);
+        return betweenness;
+    }
+    approximateBetweennessCentrality(address) {
+        // For large graphs, use an approximation based on local structure
+        const connections = this.graph.get(address);
+        if (!connections || connections.size === 0)
+            return 0;
+        // Calculate how many pairs of neighbors would need to go through this node
+        let pairs = 0;
+        const neighbors = Array.from(connections);
+        for (let i = 0; i < neighbors.length; i++) {
+            for (let j = i + 1; j < neighbors.length; j++) {
+                const neighbor1 = neighbors[i];
+                const neighbor2 = neighbors[j];
+                // Check if these neighbors are directly connected
+                const neighbor1Connections = this.graph.get(neighbor1);
+                if (neighbor1Connections && neighbor1Connections.has(neighbor2)) {
+                    // They're directly connected, so they don't need to go through address
+                    continue;
+                }
+                // These neighbors would need to go through address to reach each other
+                pairs++;
+            }
+        }
+        // Normalize by the maximum possible pairs
+        const n = connections.size;
+        const maxPairs = (n * (n - 1)) / 2; // n choose 2
+        return maxPairs > 0 ? pairs / maxPairs : 0;
+    }
+    findAllShortestPaths(source, target) {
+        // Use BFS to find all shortest paths between source and target
+        const visited = new Set();
+        const queue = [{ node: source, path: [source] }];
+        const shortestPaths = [];
+        let shortestLength = Infinity;
+        visited.add(source);
+        while (queue.length > 0) {
+            const { node, path } = queue.shift();
+            // If we've found paths longer than the shortest one, stop searching
+            if (path.length > shortestLength)
+                break;
+            // If we've reached the target
+            if (node === target) {
+                if (path.length < shortestLength) {
+                    // Found a shorter path, clear previous paths
+                    shortestLength = path.length;
+                    shortestPaths.length = 0;
+                }
+                shortestPaths.push(path);
+                continue;
+            }
+            // Explore neighbors
+            const neighbors = this.graph.get(node) || new Set();
+            for (const neighbor of neighbors) {
+                if (!visited.has(neighbor)) {
+                    visited.add(neighbor);
+                    queue.push({ node: neighbor, path: [...path, neighbor] });
+                }
+            }
+        }
+        return shortestPaths;
+    }
+    // Find common funding sources for a set of addresses
+    findCommonFundingSources(addresses) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const commonSources = new Map();
+            const addressSet = new Set(addresses);
+            // For each address in the graph, check if it's a source for multiple addresses in our set
+            for (const [source, targets] of this.graph.entries()) {
+                const connectedAddresses = [];
+                for (const target of targets) {
+                    if (addressSet.has(target)) {
+                        connectedAddresses.push(target);
+                    }
+                }
+                // If this source connects to multiple addresses in our set, it's a common source
+                if (connectedAddresses.length > 1) {
+                    commonSources.set(source, connectedAddresses);
+                }
+            }
+            return commonSources;
+        });
+    }
+    // Analyze transaction patterns for an address
+    analyzeTransactionPatterns(address) {
+        let outgoingCount = 0;
+        let incomingCount = 0;
+        let uniqueTargets = 0;
+        let uniqueSources = 0;
+        let totalOutgoingAmount = 0;
+        let totalIncomingAmount = 0;
+        // Outgoing transactions
+        const outgoingConnections = this.graph.get(address);
+        if (outgoingConnections) {
+            uniqueTargets = outgoingConnections.size;
+            // Calculate total outgoing amount
+            const outgoingAmounts = this.edgeWeights.get(address);
+            if (outgoingAmounts) {
+                for (const [_, amounts] of outgoingAmounts) {
+                    outgoingCount += amounts.length;
+                    totalOutgoingAmount += amounts.reduce((sum, amount) => sum + amount, 0);
+                }
+            }
+        }
+        // Incoming transactions
+        for (const [source, targets] of this.graph.entries()) {
+            if (targets.has(address)) {
+                uniqueSources++;
+                // Calculate total incoming amount
+                const sourceAmounts = this.edgeWeights.get(source);
+                if (sourceAmounts && sourceAmounts.has(address)) {
+                    const amounts = sourceAmounts.get(address);
+                    incomingCount += amounts.length;
+                    totalIncomingAmount += amounts.reduce((sum, amount) => sum + amount, 0);
+                }
+            }
+        }
+        // Calculate averages
+        const averageOutgoingAmount = outgoingCount > 0 ? totalOutgoingAmount / outgoingCount : 0;
+        const averageIncomingAmount = incomingCount > 0 ? totalIncomingAmount / incomingCount : 0;
+        // Calculate pattern regularity (0-1) based on consistency of transaction amounts
+        let patternRegularity = 0;
+        if (outgoingCount > 1) {
+            const outgoingAmounts = this.edgeWeights.get(address);
+            if (outgoingAmounts) {
+                // Flatten all amounts into a single array
+                const allAmounts = [];
+                for (const [_, amounts] of outgoingAmounts) {
+                    allAmounts.push(...amounts);
+                }
+                // Calculate standard deviation
+                const mean = allAmounts.reduce((sum, val) => sum + val, 0) / allAmounts.length;
+                const variance = allAmounts.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / allAmounts.length;
+                const stdDev = Math.sqrt(variance);
+                // Calculate coefficient of variation (lower means more regular)
+                const cv = mean > 0 ? stdDev / mean : 0;
+                // Convert to regularity score (1 - normalized CV)
+                patternRegularity = Math.max(0, Math.min(1, 1 - (cv / (1 + cv))));
+            }
+        }
+        return {
+            outgoingCount,
+            incomingCount,
+            uniqueTargets,
+            uniqueSources,
+            averageOutgoingAmount,
+            averageIncomingAmount,
+            patternRegularity
+        };
+    }
 }
-// Homoglyph detection for address poisoning
+// Enhanced address similarity detection for poisoning
 const HOMOGLYPHS = {
-    "0": ["O", "o"],
-    O: ["0", "o"],
-    l: ["I", "1"],
-    I: ["l", "1"],
-    "1": ["l", "I"],
-    // Add more homoglyphs as needed
+    "0": ["O", "o", "Q", "D"],
+    "O": ["0", "o", "Q", "D"],
+    "o": ["0", "O", "Q", "a"],
+    "l": ["I", "1", "|", "i"],
+    "I": ["l", "1", "|", "i"],
+    "1": ["l", "I", "|", "i"],
+    "|": ["l", "I", "1", "i"],
+    "i": ["l", "I", "1", "|"],
+    "5": ["S", "s"],
+    "S": ["5", "s"],
+    "s": ["5", "S"],
+    "B": ["8", "b"],
+    "8": ["B", "b"],
+    "b": ["B", "8"],
+    "n": ["m", "r"],
+    "m": ["n", "w"],
+    "w": ["vv", "W", "m"],
+    "vv": ["w", "W"],
+    "W": ["w", "vv"],
+    "g": ["q", "9"],
+    "q": ["g", "9"],
+    "9": ["g", "q"],
+    "Z": ["2", "z"],
+    "z": ["Z", "2"],
+    "2": ["Z", "z"]
+};
+// Keyboard layout for typosquatting detection
+const KEYBOARD_ADJACENCY = {
+    "1": ["2", "q", "w"],
+    "2": ["1", "3", "q", "w", "e"],
+    "3": ["2", "4", "w", "e", "r"],
+    "4": ["3", "5", "e", "r", "t"],
+    "5": ["4", "6", "r", "t", "y"],
+    "6": ["5", "7", "t", "y", "u"],
+    "7": ["6", "8", "y", "u", "i"],
+    "8": ["7", "9", "u", "i", "o"],
+    "9": ["8", "0", "i", "o", "p"],
+    "0": ["9", "o", "p"],
+    "q": ["1", "2", "w", "a", "s"],
+    "w": ["1", "2", "3", "q", "e", "a", "s", "d"],
+    "e": ["2", "3", "4", "w", "r", "s", "d", "f"],
+    "r": ["3", "4", "5", "e", "t", "d", "f", "g"],
+    "t": ["4", "5", "6", "r", "y", "f", "g", "h"],
+    "y": ["5", "6", "7", "t", "u", "g", "h", "j"],
+    "u": ["6", "7", "8", "y", "i", "h", "j", "k"],
+    "i": ["7", "8", "9", "u", "o", "j", "k", "l"],
+    "o": ["8", "9", "0", "i", "p", "k", "l"],
+    "p": ["9", "0", "o", "l"],
+    "a": ["q", "w", "s", "z", "x"],
+    "s": ["q", "w", "e", "a", "d", "z", "x", "c"],
+    "d": ["w", "e", "r", "s", "f", "x", "c", "v"],
+    "f": ["e", "r", "t", "d", "g", "c", "v", "b"],
+    "g": ["r", "t", "y", "f", "h", "v", "b", "n"],
+    "h": ["t", "y", "u", "g", "j", "b", "n", "m"],
+    "j": ["y", "u", "i", "h", "k", "n", "m"],
+    "k": ["u", "i", "o", "j", "l", "m"],
+    "l": ["i", "o", "p", "k"],
+    "z": ["a", "s", "x"],
+    "x": ["z", "a", "s", "d", "c"],
+    "c": ["x", "s", "d", "f", "v"],
+    "v": ["c", "d", "f", "g", "b"],
+    "b": ["v", "f", "g", "h", "n"],
+    "n": ["b", "g", "h", "j", "m"],
+    "m": ["n", "h", "j", "k"]
 };
 function findHomoglyphPatterns(address) {
     const patterns = [];
     const chars = address.split("");
+    // Generate single-character substitutions
     for (let i = 0; i < chars.length; i++) {
         const char = chars[i];
         if (HOMOGLYPHS[char]) {
@@ -895,7 +1438,75 @@ function findHomoglyphPatterns(address) {
             });
         }
     }
+    // Generate keyboard typo patterns (limited to 2 to avoid explosion)
+    for (let i = 0; i < Math.min(chars.length, 8); i++) {
+        const char = chars[i].toLowerCase();
+        if (KEYBOARD_ADJACENCY[char]) {
+            KEYBOARD_ADJACENCY[char].forEach((replacement) => {
+                const pattern = [...chars];
+                pattern[i] = replacement;
+                patterns.push(pattern.join(""));
+            });
+        }
+    }
     return patterns;
+}
+// Calculate visual similarity between two addresses
+function calculateVisualSimilarity(address1, address2) {
+    if (address1 === address2)
+        return 1.0;
+    if (address1.length !== address2.length)
+        return 0.0;
+    let matchCount = 0;
+    const chars1 = address1.split("");
+    const chars2 = address2.split("");
+    for (let i = 0; i < chars1.length; i++) {
+        // Exact match
+        if (chars1[i] === chars2[i]) {
+            matchCount += 1;
+            continue;
+        }
+        // Homoglyph match
+        const homoglyphs1 = HOMOGLYPHS[chars1[i]] || [];
+        if (homoglyphs1.includes(chars2[i])) {
+            matchCount += 0.8; // 80% similarity for homoglyphs
+            continue;
+        }
+        // Keyboard adjacency match
+        const adjacent1 = KEYBOARD_ADJACENCY[chars1[i].toLowerCase()] || [];
+        if (adjacent1.includes(chars2[i].toLowerCase())) {
+            matchCount += 0.4; // 40% similarity for adjacent keys
+        }
+    }
+    return matchCount / chars1.length;
+}
+// Calculate comprehensive address similarity score
+function calculateAddressSimilarity(address1, address2) {
+    // Calculate visual similarity score
+    const visualSimilarity = calculateVisualSimilarity(address1, address2);
+    // Calculate Levenshtein distance-based similarity
+    const levDistance = levenshteinDistance(address1, address2);
+    const maxLength = Math.max(address1.length, address2.length);
+    const levenshteinSimilarity = 1 - (levDistance / maxLength);
+    // Calculate prefix/suffix similarity
+    let prefixSimilarity = 0;
+    let suffixSimilarity = 0;
+    // Check for common prefix (first 4-8 chars)
+    const prefixLength = Math.min(8, Math.min(address1.length, address2.length));
+    const prefix1 = address1.substring(0, prefixLength);
+    const prefix2 = address2.substring(0, prefixLength);
+    prefixSimilarity = calculateVisualSimilarity(prefix1, prefix2);
+    // Check for common suffix (last 4-8 chars)
+    const suffixLength = Math.min(8, Math.min(address1.length, address2.length));
+    const suffix1 = address1.substring(address1.length - suffixLength);
+    const suffix2 = address2.substring(address2.length - suffixLength);
+    suffixSimilarity = calculateVisualSimilarity(suffix1, suffix2);
+    // Combine scores with appropriate weights
+    // Prefix and suffix similarity are weighted higher for Solana addresses
+    return (0.3 * visualSimilarity +
+        0.2 * levenshteinSimilarity +
+        0.3 * prefixSimilarity +
+        0.2 * suffixSimilarity);
 }
 // Token-aware dust detection
 function getTokenMetadata(mint) {
@@ -940,6 +1551,41 @@ function main() {
         yield initializePLimit();
         // Initialize network analyzer
         const networkAnalyzer = new NetworkAnalyzer();
+        // Initialize adaptive thresholds
+        const adaptiveThresholds = new adaptive_thresholds_1.AdaptiveThresholds(getNextConnection());
+        yield adaptiveThresholds.updateThresholds();
+        const thresholds = adaptiveThresholds.getCurrentThresholds();
+        console.log('Using adaptive thresholds:', thresholds);
+        // Initialize ML model
+        const mlModel = new ml_detection_1.DustDetectionModel();
+        // Initialize alert system if enabled
+        const alertSystem = process.env.ENABLE_ALERTS === 'true' ?
+            new dust_alert_system_1.DustingAlertSystem({
+                enabled: true,
+                channels: {
+                    discord: process.env.DISCORD_WEBHOOK_URL ? {
+                        webhookUrl: process.env.DISCORD_WEBHOOK_URL
+                    } : undefined,
+                    email: process.env.EMAIL_RECIPIENTS ? {
+                        recipients: process.env.EMAIL_RECIPIENTS.split(','),
+                        smtpConfig: {
+                            host: process.env.SMTP_HOST || '',
+                            port: parseInt(process.env.SMTP_PORT || '587'),
+                            secure: process.env.SMTP_SECURE === 'true',
+                            auth: {
+                                user: process.env.SMTP_USER || '',
+                                pass: process.env.SMTP_PASS || ''
+                            }
+                        }
+                    } : undefined
+                }
+            }) : null;
+        // Start alert monitoring if enabled
+        if (alertSystem) {
+            alertSystem.monitorInRealTime().catch(error => {
+                console.error('Error starting alert system:', error);
+            });
+        }
         // Initialize dust threshold
         yield updateDustThreshold();
         // 1. Find active addresses automatically
@@ -1055,7 +1701,8 @@ function main() {
                 size: value.size,
                 addresses: Array.from(value),
             })),
-            potentialDusters: finalAnalysis.potentialDusters,
+            potentialAttackers: finalAnalysis.potentialAttackers,
+            potentialVictims: finalAnalysis.potentialVictims,
             addressSimilarities: finalAnalysis.addressSimilarities,
         };
         fs.writeFileSync("enhanced_analysis_results.json", JSON.stringify(enhancedResults, (key, value) => {

@@ -13,14 +13,61 @@ export interface DustTransaction {
     isPotentialDust: boolean;
     isPotentialPoisoning: boolean;
     riskScore?: number;
+    isScamUrl?: boolean;
+    memoContent?: string;
 }
-export interface DustingCandidate {
+export interface TimePattern {
+    hourlyDistribution: number[];
+    weekdayDistribution: number[];
+    burstDetection: {
+        burstThreshold: number;
+        burstWindows: Array<{
+            start: number;
+            end: number;
+        }>;
+    };
+}
+export interface BehavioralIndicators {
+    usesNewAccounts: boolean;
+    hasAbnormalFundingPattern: boolean;
+    targetsPremiumWallets: boolean;
+    usesScriptedTransactions: boolean;
+}
+export interface MLFeatures {
+    transactionFrequency: number;
+    averageAmount: number;
+    recipientCount: number;
+    timePatternFeatures: number[];
+    networkFeatures: number[];
+}
+export interface MLPrediction {
+    attackerScore: number;
+    victimScore: number;
+    confidence: number;
+}
+export interface VulnerabilityAssessment {
+    walletActivity: 'high' | 'medium' | 'low';
+    assetValue: 'high' | 'medium' | 'low';
+    previousInteractions: boolean;
+    riskExposure: number;
+}
+export interface DustingAttacker {
     address: string;
     smallTransfersCount: number;
-    uniqueRecipientsCount: number;
-    uniqueRecipients: string[];
+    uniqueVictimsCount: number;
+    uniqueVictims: string[];
     timestamps: number[];
     riskScore: number;
+    walletAgeDays?: number;
+    totalTransactionVolume?: number;
+    knownLabels?: string[];
+    relatedAddresses?: string[];
+    previousAttackPatterns?: {
+        timestamp: number;
+        victimCount: number;
+        pattern: string;
+    }[];
+    timePatterns?: TimePattern;
     temporalPattern: {
         burstCount: number;
         averageTimeBetweenTransfers: number;
@@ -30,7 +77,26 @@ export interface DustingCandidate {
         clusterSize: number;
         centralityScore: number;
         recipientOverlap: number;
+        betweennessCentrality?: number;
     };
+    behavioralIndicators?: BehavioralIndicators;
+    mlFeatures?: MLFeatures;
+    mlPrediction?: MLPrediction;
+    lastUpdated?: Date;
+}
+export interface DustingVictim {
+    address: string;
+    dustTransactionsCount: number;
+    uniqueAttackersCount: number;
+    uniqueAttackers: string[];
+    timestamps: number[];
+    riskScore: number;
+    walletAgeDays?: number;
+    walletValueEstimate?: number;
+    timePatterns?: TimePattern;
+    vulnerabilityAssessment?: VulnerabilityAssessment;
+    mlFeatures?: MLFeatures;
+    mlPrediction?: MLPrediction;
     lastUpdated?: Date;
 }
 export interface RiskAnalysis {
@@ -66,8 +132,10 @@ export declare class DatabaseUtils {
      * Update existing transaction
      */
     updateTransaction(signature: string, updateFields: Partial<DustTransaction>): Promise<boolean>;
-    insertOrUpdateDustingCandidate(candidate: DustingCandidate): Promise<QueryResult>;
-    getDustingCandidates(minRiskScore?: number): Promise<QueryResult>;
+    insertOrUpdateDustingAttacker(attacker: DustingAttacker): Promise<QueryResult>;
+    insertOrUpdateDustingVictim(victim: DustingVictim): Promise<QueryResult>;
+    getDustingAttackers(minRiskScore?: number): Promise<QueryResult>;
+    getDustingVictims(minRiskScore?: number): Promise<QueryResult>;
 }
 declare const _default: DatabaseUtils;
 export default _default;

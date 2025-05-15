@@ -1,0 +1,37 @@
+# Solana Dusting Detection Configuration
+
+# API Configuration
+PORT=3000
+SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
+
+# Database Configuration
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=solana_dust
+DB_USER=postgres
+DB_PASSWORD=your_password
+
+# Dust Detection Thresholds
+DUST_AMOUNT_THRESHOLD=0.001
+DUST_TRANSACTION_COUNT_THRESHOLD=5
+ENABLE_ADAPTIVE_THRESHOLDS=true
+
+# Alert System Configuration
+ENABLE_ALERTS=true
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/your_webhook_url
+
+# Email Alerts
+EMAIL_RECIPIENTS=admin@example.com,security@example.com
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your_email@example.com
+SMTP_PASS=your_password
+
+# Machine Learning Configuration
+ENABLE_ML_DETECTION=true
+ML_TRAINING_INTERVAL_HOURS=24
+
+# Network Analysis
+NETWORK_ANALYSIS_DEPTH=3
+MAX_RELATED_ADDRESSES=50

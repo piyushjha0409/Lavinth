@@ -214,50 +214,125 @@ class DatabaseUtils {
             }
         });
     }
-    insertOrUpdateDustingCandidate(candidate) {
+    insertOrUpdateDustingAttacker(attacker) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
-                const { address, smallTransfersCount, uniqueRecipientsCount, uniqueRecipients, timestamps, riskScore, temporalPattern, networkPattern } = candidate;
+                const { address, smallTransfersCount, uniqueVictimsCount, uniqueVictims, timestamps, riskScore, temporalPattern, networkPattern, walletAgeDays, totalTransactionVolume, knownLabels, relatedAddresses, previousAttackPatterns, timePatterns, behavioralIndicators, mlFeatures, mlPrediction } = attacker;
                 // Use ON CONFLICT to handle duplicates based on address
-                const result = yield config_1.default.query(`INSERT INTO dusting_candidates 
-                (address, small_transfers_count, unique_recipients_count, unique_recipients, timestamps, 
-                    risk_score, temporal_pattern, network_pattern, last_updated) 
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP)
+                const result = yield config_1.default.query(`INSERT INTO dusting_attackers 
+                (address, small_transfers_count, unique_victims_count, unique_victims, timestamps, 
+                    risk_score, temporal_pattern, network_pattern, wallet_age_days, total_transaction_volume,
+                    known_labels, related_addresses, previous_attack_patterns, time_patterns,
+                    behavioral_indicators, ml_features, ml_prediction, last_updated) 
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, CURRENT_TIMESTAMP)
                 ON CONFLICT (address) DO UPDATE SET
                     small_transfers_count = EXCLUDED.small_transfers_count,
-                    unique_recipients_count = EXCLUDED.unique_recipients_count,
-                    unique_recipients = EXCLUDED.unique_recipients,
+                    unique_victims_count = EXCLUDED.unique_victims_count,
+                    unique_victims = EXCLUDED.unique_victims,
                     timestamps = EXCLUDED.timestamps,
                     risk_score = EXCLUDED.risk_score,
                     temporal_pattern = EXCLUDED.temporal_pattern,
                     network_pattern = EXCLUDED.network_pattern,
+                    wallet_age_days = EXCLUDED.wallet_age_days,
+                    total_transaction_volume = EXCLUDED.total_transaction_volume,
+                    known_labels = EXCLUDED.known_labels,
+                    related_addresses = EXCLUDED.related_addresses,
+                    previous_attack_patterns = EXCLUDED.previous_attack_patterns,
+                    time_patterns = EXCLUDED.time_patterns,
+                    behavioral_indicators = EXCLUDED.behavioral_indicators,
+                    ml_features = EXCLUDED.ml_features,
+                    ml_prediction = EXCLUDED.ml_prediction,
                     last_updated = CURRENT_TIMESTAMP
                 RETURNING *`, [
                     address,
                     smallTransfersCount,
-                    uniqueRecipientsCount,
-                    uniqueRecipients,
+                    uniqueVictimsCount,
+                    uniqueVictims,
                     timestamps,
                     riskScore,
                     temporalPattern,
-                    networkPattern
+                    networkPattern,
+                    walletAgeDays || null,
+                    totalTransactionVolume || null,
+                    knownLabels || null,
+                    relatedAddresses || null,
+                    previousAttackPatterns || null,
+                    timePatterns || null,
+                    behavioralIndicators || null,
+                    mlFeatures || null,
+                    mlPrediction || null
                 ]);
                 return result.rows[0];
             }
             catch (error) {
                 if (error instanceof Error) {
-                    console.error('Error inserting/updating dusting candidate:', error.message);
+                    console.error('Error inserting/updating dusting attacker:', error.message);
                 }
                 else {
-                    console.error('Error inserting/updating dusting candidate:', error);
+                    console.error('Error inserting/updating dusting attacker:', error);
                 }
                 throw error;
             }
         });
     }
-    getDustingCandidates() {
+    insertOrUpdateDustingVictim(victim) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const { address, dustTransactionsCount, uniqueAttackersCount, uniqueAttackers, timestamps, riskScore, walletAgeDays, walletValueEstimate, timePatterns, vulnerabilityAssessment, mlFeatures, mlPrediction } = victim;
+                // Use ON CONFLICT to handle duplicates based on address
+                const result = yield config_1.default.query(`INSERT INTO dusting_victims 
+                (address, dust_transactions_count, unique_attackers_count, unique_attackers, timestamps, 
+                    risk_score, wallet_age_days, wallet_value_estimate, time_patterns, vulnerability_assessment,
+                    ml_features, ml_prediction, last_updated) 
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP)
+                ON CONFLICT (address) DO UPDATE SET
+                    dust_transactions_count = EXCLUDED.dust_transactions_count,
+                    unique_attackers_count = EXCLUDED.unique_attackers_count,
+                    unique_attackers = EXCLUDED.unique_attackers,
+                    timestamps = EXCLUDED.timestamps,
+                    risk_score = EXCLUDED.risk_score,
+                    wallet_age_days = EXCLUDED.wallet_age_days,
+                    wallet_value_estimate = EXCLUDED.wallet_value_estimate,
+                    time_patterns = EXCLUDED.time_patterns,
+                    vulnerability_assessment = EXCLUDED.vulnerability_assessment,
+                    ml_features = EXCLUDED.ml_features,
+                    ml_prediction = EXCLUDED.ml_prediction,
+                    last_updated = CURRENT_TIMESTAMP
+                RETURNING *`, [
+                    address,
+                    dustTransactionsCount,
+                    uniqueAttackersCount,
+                    uniqueAttackers,
+                    timestamps,
+                    riskScore,
+                    walletAgeDays || null,
+                    walletValueEstimate || null,
+                    timePatterns || null,
+                    vulnerabilityAssessment || null,
+                    mlFeatures || null,
+                    mlPrediction || null
+                ]);
+                return result.rows[0];
+            }
+            catch (error) {
+                if (error instanceof Error) {
+                    console.error('Error inserting/updating dusting victim:', error.message);
+                }
+                else {
+                    console.error('Error inserting/updating dusting victim:', error);
+                }
+                throw error;
+            }
+        });
+    }
+    getDustingAttackers() {
         return __awaiter(this, arguments, void 0, function* (minRiskScore = 0.5) {
-            return this.pool.query('SELECT * FROM dusting_candidates WHERE risk_score >= $1 ORDER BY risk_score DESC', [minRiskScore]);
+            return this.pool.query('SELECT * FROM dusting_attackers WHERE risk_score >= $1 ORDER BY risk_score DESC', [minRiskScore]);
+        });
+    }
+    getDustingVictims() {
+        return __awaiter(this, arguments, void 0, function* (minRiskScore = 0.5) {
+            return this.pool.query('SELECT * FROM dusting_victims WHERE risk_score >= $1 ORDER BY risk_score DESC', [minRiskScore]);
         });
     }
 }

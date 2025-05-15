@@ -4,6 +4,9 @@ import cors from "cors";
 import dotenv from "dotenv";
 import express, { Application, Request, Response } from "express";
 import db from "./db/db-utils";
+import { analyzeTransactions, processTransaction } from './solana-dust-detector';
+import { DustTransaction } from './db/db-utils';
+import { Connection, PublicKey } from '@solana/web3.js';
 
 // Load environment variables
 dotenv.config();
@@ -14,6 +17,32 @@ const PORT = process.env.PORT || 3001;
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Utility: get address transactions and run analysis if needed
+async function getOrAnalyzeAddress(address: string): Promise<any> {
+  // Try to get from DB first
+  const dbResult = await db.getAddressTransactions(address);
+  const txs: DustTransaction[] = dbResult.rows;
+  if (txs.length > 0) {
+    // Analyze existing transactions
+    const analysis = analyzeTransactions(txs as any);
+    return {
+      address,
+      flagged: analysis.potentialAttackers.some((a: any) => a.address === address) || analysis.potentialVictims.some((v: any) => v.address === address),
+      riskScore: analysis.potentialAttackers.find((a: any) => a.address === address)?.riskScore || analysis.potentialVictims.find((v: any) => v.address === address)?.riskScore || 0,
+      flags: [], // You can expand this: dusting, poisoning, scam, etc.
+      details: analysis,
+      flaggedTransactions: txs.filter(tx => tx.isPotentialDust || tx.isPotentialPoisoning || tx.isScamUrl),
+    };
+  } else {
+    // Fetch from chain and analyze (pseudo-code, you may need to adapt)
+    // const connection = new Connection(process.env.SOLANA_RPC!);
+    // const recentTxs = await fetchAddressTransactions(address);
+    // const analysis = analyzeTransactions(recentTxs);
+    // return { ... };
+    return { address, flagged: false, riskScore: 0, flags: [], details: {}, flaggedTransactions: [] };
+  }
+}
 
 /**
  * Get all dust transactions with optional filtering
@@ -466,6 +495,8 @@ app.get("/api/check-wallet/:address", async (req: Request, res: Response): Promi
     });
   }
 });
+
+
 
 // Start the server
 app.listen(PORT, () => {
