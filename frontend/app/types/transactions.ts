@@ -43,7 +43,7 @@ export interface DashboardData {
   dustingSources: number;
   pendingTransactions: number;
   transactionsOverTime: any[];
-  // New properties from materialized views
+  // Enhanced data from the API
   attackerPatterns?: Array<{
     address: string;
     risk_score: number;
@@ -53,6 +53,7 @@ export interface DashboardData {
     centrality_score: number;
     uses_scripts: boolean;
     last_updated: string;
+    avg_amount?: number;
   }>;
   victimExposure?: Array<{
     address: string;
@@ -63,6 +64,7 @@ export interface DashboardData {
     wallet_activity: string;
     asset_value: string;
     last_updated: string;
+    total_received?: number;
   }>;
   dailySummary?: Array<{
     day: string;
@@ -70,6 +72,15 @@ export interface DashboardData {
     unique_victims: number;
     total_dust_transactions: number;
     avg_dust_amount: number;
+    total_transactions?: number;
+  }>;
+  // Additional metrics from enhanced API
+  avgTransactionFee?: number;
+  uniqueSenders?: number;
+  uniqueRecipients?: number;
+  tokenDistribution?: Array<{
+    token_type: string;
+    count: number;
   }>;
 }
 

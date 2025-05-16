@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { AlertCircle, CheckCircle, Search } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,26 +11,63 @@ import { Input } from "@/components/ui/input";
 import { BackgroundBeams } from "@/components/ui/background-beams";
 import { Spotlight } from "@/components/ui/spotlight";
 
+interface AttackerDetails {
+  smallTransfersCount: number;
+  uniqueVictimsCount: number;
+  temporalPattern: {
+    burstCount: number;
+    regularityScore: number;
+    averageTimeBetweenTransfers: number;
+  };
+  networkPattern: {
+    clusterSize: number;
+    centralityScore: number;
+    recipientOverlap: number;
+  };
+  behavioralIndicators: {
+    usesNewAccounts: boolean;
+    targetsPremiumWallets: boolean;
+    usesScriptedTransactions: boolean;
+    hasAbnormalFundingPattern: boolean;
+  };
+  lastUpdated: string;
+}
+
 interface WalletCheckResult {
   status: string;
   isDusted: boolean;
   riskScore: number;
   message: string;
+  attackerDetails?: AttackerDetails;
   error?: string;
 }
 
 export default function WalletCheckPage() {
+  const searchParams = useSearchParams();
   const [walletAddress, setWalletAddress] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<WalletCheckResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Check for address parameter in URL when component mounts
+  useEffect(() => {
+    const addressParam = searchParams.get('address');
+    if (addressParam) {
+      setWalletAddress(addressParam);
+      // Automatically trigger wallet check with a small delay to ensure state is updated
+      setTimeout(() => {
+        checkWalletWithAddress(addressParam);
+      }, 100);
+    }
+  }, [searchParams]);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setWalletAddress(e.target.value);
   };
 
-  const checkWallet = async () => {
-    if (!walletAddress || walletAddress.trim() === "") {
+  // Function to check wallet with a specific address (used for URL params)
+  const checkWalletWithAddress = async (address: string) => {
+    if (!address || address.trim() === "") {
       setError("Please enter a wallet address");
       return;
     }
@@ -39,7 +77,7 @@ export default function WalletCheckPage() {
     setResult(null);
 
     try {
-      const response = await fetch(`https://solanashield.ddns.net/api/check-wallet/${walletAddress}`);
+      const response = await fetch(`http://localhost:3001/api/check-wallet/${address}`);
       const data = await response.json();
 
       if (data.status === "error") {
@@ -53,6 +91,10 @@ export default function WalletCheckPage() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const checkWallet = async () => {
+    await checkWalletWithAddress(walletAddress);
   };
 
   return (
@@ -134,15 +176,62 @@ export default function WalletCheckPage() {
                         </h3>
                         <p>{result.message}</p>
                         {result.isDusted && (
-                          <div className="mt-2">
-                            <div className="text-sm text-red-300">Risk Score</div>
-                            <div className="w-full bg-gray-700 rounded-full h-2.5 mt-1">
-                              <div 
-                                className="bg-gradient-to-r from-yellow-500 to-red-500 h-2.5 rounded-full" 
-                                style={{ width: `${result.riskScore * 100}%` }}
-                              ></div>
+                          <div className="mt-2 space-y-4">
+                            <div>
+                              <div className="text-sm text-red-300">Risk Score</div>
+                              <div className="w-full bg-gray-700 rounded-full h-2.5 mt-1">
+                                <div 
+                                  className="bg-gradient-to-r from-yellow-500 to-red-500 h-2.5 rounded-full" 
+                                  style={{ width: `${result.riskScore * 100}%` }}
+                                ></div>
+                              </div>
+                              <div className="text-xs text-right mt-1">{(result.riskScore * 100).toFixed(2)}%</div>
                             </div>
-                            <div className="text-xs text-right mt-1">{(result.riskScore * 100).toFixed(2)}%</div>
+                            
+                            {result.attackerDetails && (
+                              <div className="space-y-3 border-t border-red-500/30 pt-3 mt-3">
+                                <h4 className="font-medium text-red-300">Attacker Details</h4>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                  <div className="bg-black/40 p-3 rounded border border-red-500/20">
+                                    <h5 className="text-sm font-medium text-red-200 mb-2">Transfer Patterns</h5>
+                                    <div className="space-y-1 text-sm">
+                                      <p><span className="text-gray-400">Small Transfers:</span> {result.attackerDetails.smallTransfersCount}</p>
+                                      <p><span className="text-gray-400">Unique Victims:</span> {result.attackerDetails.uniqueVictimsCount}</p>
+                                      <p><span className="text-gray-400">Last Updated:</span> {new Date(result.attackerDetails.lastUpdated).toLocaleString()}</p>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="bg-black/40 p-3 rounded border border-red-500/20">
+                                    <h5 className="text-sm font-medium text-red-200 mb-2">Temporal Pattern</h5>
+                                    <div className="space-y-1 text-sm">
+                                      <p><span className="text-gray-400">Burst Count:</span> {result.attackerDetails.temporalPattern.burstCount}</p>
+                                      <p><span className="text-gray-400">Regularity Score:</span> {result.attackerDetails.temporalPattern.regularityScore}</p>
+                                      <p><span className="text-gray-400">Avg Time Between Transfers:</span> {result.attackerDetails.temporalPattern.averageTimeBetweenTransfers}</p>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="bg-black/40 p-3 rounded border border-red-500/20">
+                                    <h5 className="text-sm font-medium text-red-200 mb-2">Network Pattern</h5>
+                                    <div className="space-y-1 text-sm">
+                                      <p><span className="text-gray-400">Cluster Size:</span> {result.attackerDetails.networkPattern.clusterSize}</p>
+                                      <p><span className="text-gray-400">Centrality Score:</span> {result.attackerDetails.networkPattern.centralityScore}</p>
+                                      <p><span className="text-gray-400">Recipient Overlap:</span> {result.attackerDetails.networkPattern.recipientOverlap}</p>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="bg-black/40 p-3 rounded border border-red-500/20">
+                                    <h5 className="text-sm font-medium text-red-200 mb-2">Behavioral Indicators</h5>
+                                    <div className="space-y-1 text-sm">
+                                      <p><span className="text-gray-400">Uses New Accounts:</span> {result.attackerDetails.behavioralIndicators.usesNewAccounts ? "Yes" : "No"}</p>
+                                      <p><span className="text-gray-400">Targets Premium Wallets:</span> {result.attackerDetails.behavioralIndicators.targetsPremiumWallets ? "Yes" : "No"}</p>
+                                      <p><span className="text-gray-400">Uses Scripted Transactions:</span> {result.attackerDetails.behavioralIndicators.usesScriptedTransactions ? "Yes" : "No"}</p>
+                                      <p><span className="text-gray-400">Abnormal Funding Pattern:</span> {result.attackerDetails.behavioralIndicators.hasAbnormalFundingPattern ? "Yes" : "No"}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
