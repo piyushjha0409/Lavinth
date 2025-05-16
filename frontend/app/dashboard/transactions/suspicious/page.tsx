@@ -109,17 +109,17 @@ export default function SuspiciousTransactionsPage() {
       let endpoint;
 
       if (filterType === "dust") {
-        endpoint = `http://localhost:3001/api/dust-transactions/potential-dust?limit=${pageSize}&offset=${offset}`;
+        endpoint = `https://api.lavinth.com/api/dust-transactions/potential-dust?limit=${pageSize}&offset=${offset}`;
       } else if (filterType === "poisoning") {
-        endpoint = `http://localhost:3001/api/dust-transactions/potential-poisoning?limit=${pageSize}&offset=${offset}`;
+        endpoint = `https://api.lavinth.com/api/dust-transactions/potential-poisoning?limit=${pageSize}&offset=${offset}`;
       } else if (filterType === "attackers") {
-        endpoint = `http://localhost:3001/api/dusting-attackers?limit=${pageSize}&offset=${offset}`;
+        endpoint = `https://api.lavinth.com/api/dusting-attackers?limit=${pageSize}&offset=${offset}`;
       } else if (filterType === "victims") {
-        endpoint = `http://localhost:3001/api/dusting-victims?limit=${pageSize}&offset=${offset}`;
+        endpoint = `https://api.lavinth.com/api/dusting-victims?limit=${pageSize}&offset=${offset}`;
       } else {
         // For 'all', we need to fetch both dust and poisoning transactions and combine them
-        const dustEndpoint = `http://localhost:3001/api/dust-transactions/potential-dust?limit=${pageSize}&offset=${offset}`;
-        const poisoningEndpoint = `http://localhost:3001/api/dust-transactions/potential-poisoning?limit=${pageSize}&offset=${offset}`;
+        const dustEndpoint = `https://api.lavinth.com/api/dust-transactions/potential-dust?limit=${pageSize}&offset=${offset}`;
+        const poisoningEndpoint = `https://api.lavinth.com/api/dust-transactions/potential-poisoning?limit=${pageSize}&offset=${offset}`;
 
         const [dustResponse, poisoningResponse] = await Promise.all([
           fetch(dustEndpoint),

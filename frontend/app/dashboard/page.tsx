@@ -308,7 +308,7 @@ export default function Dashboard() {
   const fetchOverviewData = async () => {
     try {
       // Use lavinth's endpoint for materialized view data
-      const response = await fetch("http://localhost:3001/api/overview");
+      const response = await fetch("https://api.lavinth.com/api/overview");
 
       if (!response.ok) {
         throw new Error("Failed to fetch overview data");
@@ -426,7 +426,7 @@ export default function Dashboard() {
       setIsTableLoading(true); // Set table loading state to true
       const offset = (currentPage - 1) * pageSize;
       const response = await fetch(
-        `http://localhost:3001/api/dust-transactions?limit=${pageSize}&offset=${offset}`
+        `https://api.lavinth.com/api/dust-transactions?limit=${pageSize}&offset=${offset}`
       );
 
       if (!response.ok) {
@@ -509,7 +509,7 @@ export default function Dashboard() {
       
       const offset = (attackersPage - 1) * attackersPageSize;
       const response = await fetch(
-        `http://localhost:3001/api/dusting-attackers?limit=${attackersPageSize}&offset=${offset}`
+        `https://api.lavinth.com/api/dusting-attackers?limit=${attackersPageSize}&offset=${offset}`
       );
 
       if (!response.ok) {
@@ -544,7 +544,7 @@ export default function Dashboard() {
       
       const offset = (victimsPage - 1) * victimsPageSize;
       const response = await fetch(
-        `http://localhost:3001/api/dusting-victims?limit=${victimsPageSize}&offset=${offset}`
+        `https://api.lavinth.com/api/dusting-victims?limit=${victimsPageSize}&offset=${offset}`
       );
 
       if (!response.ok) {
