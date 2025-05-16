@@ -59,13 +59,13 @@ const features = [
 const testimonials = [
   {
     quote:
-      "SolanaShield has been a game-changer for our DeFi platform. We've seen a 95% reduction in user-reported scams.",
+      "Lavinth has been a game-changer for our DeFi platform. We've seen a 95% reduction in user-reported scams.",
     name: "Alex Rivera",
     title: "CTO at SolFinance",
   },
   {
     quote:
-      "Implementing SolanaShield was straightforward and the results were immediate. Our users feel much safer.",
+      "Implementing Lavinth was straightforward and the results were immediate. Our users feel much safer.",
     name: "Sarah Chen",
     title: "Lead Developer at TokenSwap",
   },
@@ -77,7 +77,7 @@ const testimonials = [
   },
   {
     quote:
-      "Address poisoning was a major issue for our users. SolanaShield's prevention system has eliminated the problem.",
+      "Address poisoning was a major issue for our users. Lavinth's prevention system has eliminated the problem.",
     name: "Priya Sharma",
     title: "Product Manager at BlockTrade",
   },
@@ -200,7 +200,7 @@ export default function Home() {
                 <div className="retro-border p-2 bg-gradient-to-br from-cyan-500/20 to-fuchsia-500/20 rounded-sm">
                   <Image
                     src={bannerImage}
-                    alt="SolanaShield Dashboard Preview"
+                    alt="Lavinth's Dashboard Preview"
                     width={700}
                     height={500}
                     className="rounded-md"
@@ -237,7 +237,7 @@ export default function Home() {
                   Comprehensive Security for Solana
                 </RetroText>
                 <p className="max-w-[900px] text-gray-400 md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
-                  SolanaShield provides advanced protection against the most
+                  Lavinth provides advanced protection against the most
                   common attack vectors in the Solana ecosystem.
                 </p>
               </div>
@@ -279,10 +279,10 @@ export default function Home() {
                   as="h2"
                   className="text-3xl font-bold tracking-tighter md:text-4xl/tight text-neon-500"
                 >
-                  See SolanaShield in Action
+                  See Lavinth in Action
                 </RetroText>
                 <p className="max-w-[900px] text-gray-300 md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
-                  Experience how SolanaShield protects your Solana applications
+                  Experience how Lavinth protects your Solana applications
                   and users from common attack vectors.
                 </p>
               </div>
@@ -316,7 +316,7 @@ export default function Home() {
                   <div className="grid gap-6 lg:grid-cols-2">
                     <RetroCard>
                       <h3 className="text-xl font-bold mb-4 text-neon-500">
-                        Without SolanaShield
+                        Without Lavinth
                       </h3>
                       <div className="space-y-4">
                         <div className="rounded-none bg-black border border-red-500 p-4">
@@ -338,7 +338,7 @@ export default function Home() {
                     </RetroCard>
                     <RetroCard>
                       <h3 className="text-xl font-bold mb-4 text-neon-500">
-                        With SolanaShield
+                        With Lavinth
                       </h3>
                       <div className="space-y-4">
                         <div className="rounded-none bg-black border border-neon-500 p-4">
@@ -368,7 +368,7 @@ export default function Home() {
                   <div className="grid gap-6 lg:grid-cols-2">
                     <RetroCard>
                       <h3 className="text-xl font-bold mb-4 text-neon-500">
-                        Without SolanaShield
+                        Without Lavinth
                       </h3>
                       <div className="space-y-4">
                         <div className="rounded-none bg-black border border-red-500 p-4">
@@ -391,7 +391,7 @@ export default function Home() {
                     </RetroCard>
                     <RetroCard>
                       <h3 className="text-xl font-bold mb-4 text-neon-500">
-                        With SolanaShield
+                        With Lavinth
                       </h3>
                       <div className="space-y-4">
                         <div className="rounded-none bg-black border border-neon-500 p-4">
@@ -420,7 +420,7 @@ export default function Home() {
                   <div className="grid gap-6 lg:grid-cols-2">
                     <RetroCard>
                       <h3 className="text-xl font-bold mb-4 text-neon-500">
-                        Without SolanaShield
+                        Without Lavinth
                       </h3>
                       <div className="space-y-4">
                         <div className="rounded-none bg-black border border-red-500 p-4">
@@ -443,7 +443,7 @@ export default function Home() {
                     </RetroCard>
                     <RetroCard>
                       <h3 className="text-xl font-bold mb-4 text-neon-500">
-                        With SolanaShield
+                        With Lavinth
                       </h3>
                       <div className="space-y-4">
                         <div className="rounded-none bg-black border border-neon-500 p-4">
@@ -494,7 +494,7 @@ export default function Home() {
                   Meet The Founders
                 </RetroText>
                 <p className="max-w-[900px] text-gray-400 md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
-                  The brilliant minds behind SolanaShield.
+                  The brilliant minds behind Lavinth.
                 </p>
               </div>
             </div>
@@ -959,7 +959,7 @@ export default function Home() {
                   as="span"
                   className="text-lg font-bold text-neon-500"
                 >
-                  SolanaShield
+                  Lavinth
                 </RetroText>
               </div>
               <p className="text-sm text-gray-400">
@@ -1057,7 +1057,7 @@ export default function Home() {
           </div>
           <div className="mt-8 border-t border-neon-800 pt-8 text-center text-sm text-gray-400">
             <p>
-              {new Date().getFullYear()} SolanaShield. All rights reserved.
+              {new Date().getFullYear()} Lavinth. All rights reserved.
             </p>
           </div>
         </div>

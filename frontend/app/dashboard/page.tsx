@@ -35,9 +35,8 @@ import {
 import { TweetCard } from "@/components/TweetCard";
 
 // Import types and processing utilities
-import { DashboardData } from "../types/transactions";
-
-import { formatNumber } from "../utils/dataProcessing";
+import { Transaction, DashboardData } from "../types/transactions";
+import { formatNumber, formatAddress, getTopDusters, processDashboardData } from "../utils/dataProcessing";
 
 // API Transaction interface
 interface ApiTransaction {
@@ -213,7 +212,8 @@ export default function Dashboard() {
   // Function to fetch overview data
   const fetchOverviewData = async () => {
     try {
-      const response = await fetch("https://solanashield.ddns.net/api/overview");
+      // Use lavinth's endpoint for materialized view data
+      const response = await fetch("https://lavinth.ddns.net/api/overview");
 
       if (!response.ok) {
         throw new Error("Failed to fetch overview data");
@@ -221,7 +221,18 @@ export default function Dashboard() {
 
       const result = await response.json();
       if (result.status === "success") {
-        // Create DashboardData object from the overview API data
+        // Extract materialized view data if available
+        const attackerPatterns = result.data.attackerPatterns || [];
+        const victimExposure = result.data.victimExposure || [];
+        const dailySummary = result.data.dailySummary || [];
+        
+        // Create DashboardData object from the overview API data using the updated processDashboardData function
+        const transactions = result.data.recentTransactions || [];
+        const dashboardData = processDashboardData(transactions, attackerPatterns, victimExposure, dailySummary);
+        
+        setDashboardData(dashboardData);
+      } else {
+        // Fallback to basic dashboard data without materialized views
         setDashboardData({
           activeTransactions: result.data.totalTransactions || 0,
           successfulTransactions: result.data.successfulTransactions || 0,
@@ -236,6 +247,10 @@ export default function Dashboard() {
           dustingSources: result.data.dustingSources || 0, // Use dustingSources directly instead of suspiciousWallets
           pendingTransactions: 0,
           transactionsOverTime: [],
+          // Add data from materialized views if available
+          attackerPatterns: result.data.attackerPatterns || [],
+          victimExposure: result.data.victimExposure || [],
+          dailySummary: result.data.dailySummary || []
         });
       }
     } catch (err) {
@@ -250,7 +265,7 @@ export default function Dashboard() {
       setIsTableLoading(true); // Set table loading state to true
       const offset = (currentPage - 1) * pageSize;
       const response = await fetch(
-        `https://solanashield.ddns.net/api/dust-transactions?limit=${pageSize}&offset=${offset}`
+        `https://lavinth.ddns.net/api/dust-transactions?limit=${pageSize}&offset=${offset}`
       );
 
       if (!response.ok) {
@@ -282,12 +297,40 @@ export default function Dashboard() {
       setRecentSuspiciousTransactions(suspiciousTxs);
 
       // Extract top dusters - wallets that send many small transactions
-      const dusters = getTopDustersFromApi(transactions);
-      setTopDusters(dusters);
+      // Try to use the attacker_pattern_summary materialized view if available
+      if (dashboardData?.attackerPatterns && dashboardData.attackerPatterns.length > 0) {
+        // Use the materialized view data if available
+        setTopDusters(dashboardData.attackerPatterns.slice(0, 5).map(attacker => ({
+          address: attacker.address,
+          smallTransfersCount: attacker.small_transfers_count || 0,
+          uniqueRecipients: attacker.unique_victims_count || 0,
+          regularityScore: attacker.regularity_score || 0,
+          centralityScore: attacker.centrality_score || 0,
+          usesScripts: attacker.uses_scripts || false
+        })));
+      } else {
+        // Fall back to calculating from transactions if materialized view data isn't available
+        const dusters = getTopDustersFromApi(transactions);
+        setTopDusters(dusters);
+      }
 
       // Generate chart data
-      const chartData = generateVolumeChartData(transactions);
-      setVolumeChartData(chartData);
+      // Try to use the dust_attack_daily_summary materialized view if available
+      if (dashboardData?.dailySummary && dashboardData.dailySummary.length > 0) {
+        // Use the materialized view data for charts
+        const formattedChartData = dashboardData.dailySummary.map(summary => ({
+          date: summary.day,
+          volume: summary.avg_dust_amount * summary.total_dust_transactions,
+          count: summary.total_dust_transactions,
+          uniqueAttackers: summary.unique_attackers,
+          uniqueVictims: summary.unique_victims
+        }));
+        setVolumeChartData(formattedChartData);
+      } else {
+        // Fall back to calculating from transactions
+        const chartData = generateVolumeChartData(transactions);
+        setVolumeChartData(chartData);
+      }
 
       setIsTableLoading(false); // Set table loading state to false when done
     } catch (err) {

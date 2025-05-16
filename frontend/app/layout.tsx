@@ -30,9 +30,9 @@ const pixelifySans = Pixelify_Sans({
 });
 
 export const metadata = {
-  title: "SolanaShield - Advanced Security for Solana Blockchain",
+  title: "Lavinth - Advanced Security for Solana Blockchain",
   description:
-    "Protect your Solana applications from account dusting and address poisoning attacks with SolanaShield's comprehensive security platform.",
+    "Protect your Solana applications from account dusting and address poisoning attacks with Lavinth's comprehensive security platform.",
   generator: "v0.dev",
 };
 
@@ -44,7 +44,7 @@ function GlobalNavigation() {
           <Link href="/" className="flex items-center space-x-2">
             <Shield className="h-6 w-6 text-neon-500" />
             <RetroText as="span" className="inline-block font-bold">
-              SolanaShield
+              Lavinth
             </RetroText>
           </Link>
           <nav className="hidden gap-6 md:flex">

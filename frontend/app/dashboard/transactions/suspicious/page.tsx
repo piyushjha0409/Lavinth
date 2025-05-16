@@ -32,21 +32,38 @@ import { useEffect, useState } from "react";
 
 // Transaction type definition
 interface ApiTransaction {
+  // Common properties
   id: number;
-  signature: string;
-  timestamp: string;
-  slot: string;
-  success: boolean;
-  sender: string;
-  recipient: string;
-  amount: string;
-  fee: string;
-  token_type: string;
-  token_address: string | null;
-  is_potential_dust: boolean;
-  is_potential_poisoning: boolean;
-  risk_score: string;
-  created_at: string;
+  signature?: string;
+  timestamp?: string;
+  slot?: string;
+  success?: boolean;
+  sender?: string;
+  recipient?: string;
+  amount?: string;
+  fee?: string;
+  token_type?: string;
+  token_address?: string | null;
+  is_potential_dust?: boolean;
+  is_potential_poisoning?: boolean;
+  risk_score?: string;
+  created_at?: string;
+  
+  // Attacker properties
+  address?: string;
+  small_transfers_count?: number;
+  unique_victims_count?: number;
+  regularity_score?: number;
+  centrality_score?: number;
+  uses_scripts?: boolean;
+  last_updated?: string;
+  
+  // Victim properties
+  dust_transactions_count?: number;
+  unique_attackers_count?: number;
+  risk_exposure?: number;
+  wallet_activity?: string;
+  asset_value?: string;
 }
 
 interface ApiResponse {
@@ -95,6 +112,10 @@ export default function SuspiciousTransactionsPage() {
         endpoint = `https://solanashield.ddns.net/api/dust-transactions/potential-dust?limit=${pageSize}&offset=${offset}`;
       } else if (filterType === "poisoning") {
         endpoint = `https://solanashield.ddns.net/api/dust-transactions/potential-poisoning?limit=${pageSize}&offset=${offset}`;
+      } else if (filterType === "attackers") {
+        endpoint = `https://solanashield.ddns.net/api/dusting-attackers?limit=${pageSize}&offset=${offset}`;
+      } else if (filterType === "victims") {
+        endpoint = `https://solanashield.ddns.net/api/dusting-victims?limit=${pageSize}&offset=${offset}`;
       } else {
         // For 'all', we need to fetch both dust and poisoning transactions and combine them
         const dustEndpoint = `https://solanashield.ddns.net/api/dust-transactions/potential-dust?limit=${pageSize}&offset=${offset}`;
@@ -133,7 +154,7 @@ export default function SuspiciousTransactionsPage() {
         // Sort by timestamp descending (most recent first) - client-side sorting only
         uniqueTransactions.sort(
           (a, b) =>
-            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+            new Date(b.timestamp || Date.now()).getTime() - new Date(a.timestamp || Date.now()).getTime()
         );
 
         // Slice to match the page size
@@ -218,6 +239,120 @@ export default function SuspiciousTransactionsPage() {
       clearTimeout(handler);
     };
   }, [searchQuery]);
+
+  // Function to export transaction data to CSV
+  const exportToCSV = () => {
+    let headers: string[];
+    let rows: any[][];
+    let filename: string;
+
+    if (filterType === "attackers") {
+      // Define CSV headers for attackers
+      headers = [
+        "Address",
+        "Risk Score",
+        "Small Transfers Count",
+        "Unique Victims Count",
+        "Regularity Score",
+        "Centrality Score",
+        "Uses Scripts",
+        "Last Updated",
+      ];
+
+      // Convert attacker data to CSV rows
+      rows = transactions.map((tx) => [
+        tx.address || "",
+        tx.risk_score || 0,
+        tx.small_transfers_count || 0,
+        tx.unique_victims_count || 0,
+        tx.regularity_score || 0,
+        tx.centrality_score || 0,
+        tx.uses_scripts ? "Yes" : "No",
+        tx.last_updated ? new Date(tx.last_updated).toLocaleString() : "",
+      ]);
+
+      filename = `dusting_attackers_${new Date().toISOString().split("T")[0]}.csv`;
+    } else if (filterType === "victims") {
+      // Define CSV headers for victims
+      headers = [
+        "Address",
+        "Risk Score",
+        "Dust Transactions Count",
+        "Unique Attackers Count",
+        "Risk Exposure",
+        "Wallet Activity",
+        "Asset Value",
+        "Last Updated",
+      ];
+
+      // Convert victim data to CSV rows
+      rows = transactions.map((tx) => [
+        tx.address || "",
+        tx.risk_score || 0,
+        tx.dust_transactions_count || 0,
+        tx.unique_attackers_count || 0,
+        tx.risk_exposure || 0,
+        tx.wallet_activity || "low",
+        tx.asset_value || "",
+        tx.last_updated ? new Date(tx.last_updated).toLocaleString() : "",
+      ]);
+
+      filename = `dusting_victims_${new Date().toISOString().split("T")[0]}.csv`;
+    } else {
+      // Define CSV headers for transactions
+      headers = [
+        "Transaction ID",
+        "Type",
+        "From",
+        "To",
+        "Amount",
+        "Token",
+        "Status",
+        "Time",
+      ];
+
+      // Convert transactions to CSV rows
+      rows = transactions.map((tx) => [
+        tx.signature || "",
+        tx.is_potential_dust && tx.is_potential_poisoning
+          ? "Dust & Poisoning"
+          : tx.is_potential_dust
+          ? "Dust"
+          : tx.is_potential_poisoning
+          ? "Poisoning"
+          : "Suspicious",
+        tx.sender || "",
+        tx.recipient || "",
+        tx.amount || 0,
+        tx.token_type || "SOL",
+        tx.success ? "Success" : "Failed",
+        tx.timestamp ? new Date(tx.timestamp).toLocaleString() : "",
+      ]);
+
+      filename = `suspicious_transactions_${new Date().toISOString().split("T")[0]}.csv`;
+    }
+
+    // Create CSV content
+    const csvContent =
+      headers.join(",") +
+      "\n" +
+      rows.map((row) => row.join(",")).join("\n");
+
+    // Create a Blob with the CSV content
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8" });
+
+    // Create a download link
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    link.style.visibility = "hidden";
+
+    // Append link to document, click it, and remove it
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   // Handle page change
   const handlePageChange = (page: number) => {
@@ -360,6 +495,8 @@ export default function SuspiciousTransactionsPage() {
                     <SelectItem value="all">All Suspicious</SelectItem>
                     <SelectItem value="dust">Dust Attacks Only</SelectItem>
                     <SelectItem value="poisoning">Poisoning Only</SelectItem>
+                    <SelectItem value="attackers">Dusting Attackers</SelectItem>
+                    <SelectItem value="victims">Dusting Victims</SelectItem>
                   </SelectGroup>
                 </SelectContent>
               </Select>
@@ -410,15 +547,37 @@ export default function SuspiciousTransactionsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b">
-                    <th className="py-3 text-left font-medium">
-                      Transaction ID
-                    </th>
-                    <th className="py-3 text-left font-medium">Type</th>
-                    <th className="py-3 text-left font-medium">From</th>
-                    <th className="py-3 text-left font-medium">To</th>
-                    <th className="py-3 text-left font-medium">Amount</th>
-                    <th className="py-3 text-left font-medium">Status</th>
-                    <th className="py-3 text-left font-medium">Time</th>
+                    {filterType === "attackers" ? (
+                      <>
+                        <th className="py-3 text-left font-medium">Address</th>
+                        <th className="py-3 text-left font-medium">Risk Score</th>
+                        <th className="py-3 text-left font-medium">Transfers</th>
+                        <th className="py-3 text-left font-medium">Victims</th>
+                        <th className="py-3 text-left font-medium">Regularity</th>
+                        <th className="py-3 text-left font-medium">Centrality</th>
+                        <th className="py-3 text-left font-medium">Last Updated</th>
+                      </>
+                    ) : filterType === "victims" ? (
+                      <>
+                        <th className="py-3 text-left font-medium">Address</th>
+                        <th className="py-3 text-left font-medium">Risk Score</th>
+                        <th className="py-3 text-left font-medium">Dust Txs</th>
+                        <th className="py-3 text-left font-medium">Attackers</th>
+                        <th className="py-3 text-left font-medium">Risk Exposure</th>
+                        <th className="py-3 text-left font-medium">Wallet Activity</th>
+                        <th className="py-3 text-left font-medium">Last Updated</th>
+                      </>
+                    ) : (
+                      <>
+                        <th className="py-3 text-left font-medium">Transaction ID</th>
+                        <th className="py-3 text-left font-medium">Type</th>
+                        <th className="py-3 text-left font-medium">From</th>
+                        <th className="py-3 text-left font-medium">To</th>
+                        <th className="py-3 text-left font-medium">Amount</th>
+                        <th className="py-3 text-left font-medium">Status</th>
+                        <th className="py-3 text-left font-medium">Time</th>
+                      </>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -430,64 +589,120 @@ export default function SuspiciousTransactionsPage() {
                           idx % 2 === 0 ? "bg-gray-50 text-black" : ""
                         } border-b`}
                       >
-                        <td className="py-3 font-mono">
-                          {tx.signature
-                            ? tx.signature.substring(0, 8) + "..."
-                            : "N/A"}
-                        </td>
-                        <td className="py-3">
-                          {tx.is_potential_dust && tx.is_potential_poisoning ? (
-                            <div className="flex flex-col gap-1">
-                              <span className="px-2 py-1 rounded bg-yellow-100 text-yellow-800 text-xs">
-                                Dust
+                        {filterType === "attackers" ? (
+                          <>
+                            <td className="py-3 font-mono">
+                              {tx.address ? tx.address.substring(0, 8) + "..." : "N/A"}
+                            </td>
+                            <td className="py-3">
+                              <span className={`px-2 py-1 rounded text-xs ${
+                                parseFloat(tx.risk_score || '0') >= 0.7 ? "bg-red-100 text-red-800" : 
+                                parseFloat(tx.risk_score || '0') >= 0.4 ? "bg-yellow-100 text-yellow-800" : 
+                                "bg-green-100 text-green-800"
+                              }`}>
+                                {parseFloat(tx.risk_score || '0').toFixed(2)}
                               </span>
-                              <span className="px-2 py-1 rounded bg-red-100 text-red-800 text-xs">
-                                Poisoning
+                            </td>
+                            <td className="py-3">{tx.small_transfers_count || 0}</td>
+                            <td className="py-3">{tx.unique_victims_count || 0}</td>
+                            <td className="py-3">{parseFloat(String(tx.regularity_score || 0)).toFixed(2)}</td>
+                            <td className="py-3">{parseFloat(String(tx.centrality_score || 0)).toFixed(2)}</td>
+                            <td className="py-3">
+                              {tx.last_updated ? new Date(tx.last_updated).toLocaleString() : "Unknown"}
+                            </td>
+                          </>
+                        ) : filterType === "victims" ? (
+                          <>
+                            <td className="py-3 font-mono">
+                              {tx.address ? tx.address.substring(0, 8) + "..." : "N/A"}
+                            </td>
+                            <td className="py-3">
+                              <span className={`px-2 py-1 rounded text-xs ${
+                                parseFloat(tx.risk_score || '0') >= 0.7 ? "bg-red-100 text-red-800" : 
+                                parseFloat(tx.risk_score || '0') >= 0.4 ? "bg-yellow-100 text-yellow-800" : 
+                                "bg-green-100 text-green-800"
+                              }`}>
+                                {parseFloat(tx.risk_score || '0').toFixed(2)}
                               </span>
-                            </div>
-                          ) : tx.is_potential_dust ? (
-                            <span className="px-2 py-1 rounded bg-yellow-100 text-yellow-800 text-xs">
-                              Dust
-                            </span>
-                          ) : tx.is_potential_poisoning ? (
-                            <span className="px-2 py-1 rounded bg-red-100 text-red-800 text-xs">
-                              Poisoning
-                            </span>
-                          ) : (
-                            <span className="px-2 py-1 rounded bg-gray-100 text-gray-800 text-xs">
-                              Suspicious
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-3 font-mono">
-                          {tx.sender
-                            ? tx.sender.substring(0, 6) + "..."
-                            : "N/A"}
-                        </td>
-                        <td className="py-3 font-mono">
-                          {tx.recipient
-                            ? tx.recipient.substring(0, 6) + "..."
-                            : "N/A"}
-                        </td>
-                        <td className="py-3">
-                          {tx.amount || 0} {tx.token_type || "SOL"}
-                        </td>
-                        <td className="py-3">
-                          {tx.success ? (
-                            <span className="px-2 py-1 rounded bg-green-100 text-green-800 text-xs">
-                              Success
-                            </span>
-                          ) : (
-                            <span className="px-2 py-1 rounded bg-red-100 text-red-800 text-xs">
-                              Failed
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-3">
-                          {tx.timestamp
-                            ? new Date(tx.timestamp).toLocaleString()
-                            : "Unknown"}
-                        </td>
+                            </td>
+                            <td className="py-3">{tx.dust_transactions_count || 0}</td>
+                            <td className="py-3">{tx.unique_attackers_count || 0}</td>
+                            <td className="py-3">{parseFloat(String(tx.risk_exposure || 0)).toFixed(2)}</td>
+                            <td className="py-3">
+                              <span className={`px-2 py-1 rounded text-xs ${
+                                tx.wallet_activity === "high" ? "bg-green-100 text-green-800" : 
+                                tx.wallet_activity === "medium" ? "bg-yellow-100 text-yellow-800" : 
+                                "bg-red-100 text-red-800"
+                              }`}>
+                                {tx.wallet_activity || "low"}
+                              </span>
+                            </td>
+                            <td className="py-3">
+                              {tx.last_updated ? new Date(tx.last_updated).toLocaleString() : "Unknown"}
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="py-3 font-mono">
+                              {tx.signature
+                                ? tx.signature.substring(0, 8) + "..."
+                                : "N/A"}
+                            </td>
+                            <td className="py-3">
+                              {tx.is_potential_dust && tx.is_potential_poisoning ? (
+                                <div className="flex flex-col gap-1">
+                                  <span className="px-2 py-1 rounded bg-yellow-100 text-yellow-800 text-xs">
+                                    Dust
+                                  </span>
+                                  <span className="px-2 py-1 rounded bg-red-100 text-red-800 text-xs">
+                                    Poisoning
+                                  </span>
+                                </div>
+                              ) : tx.is_potential_dust ? (
+                                <span className="px-2 py-1 rounded bg-yellow-100 text-yellow-800 text-xs">
+                                  Dust
+                                </span>
+                              ) : tx.is_potential_poisoning ? (
+                                <span className="px-2 py-1 rounded bg-red-100 text-red-800 text-xs">
+                                  Poisoning
+                                </span>
+                              ) : (
+                                <span className="px-2 py-1 rounded bg-gray-100 text-gray-800 text-xs">
+                                  Suspicious
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3 font-mono">
+                              {tx.sender
+                                ? tx.sender.substring(0, 6) + "..."
+                                : "N/A"}
+                            </td>
+                            <td className="py-3 font-mono">
+                              {tx.recipient
+                                ? tx.recipient.substring(0, 6) + "..."
+                                : "N/A"}
+                            </td>
+                            <td className="py-3">
+                              {tx.amount || 0} {tx.token_type || "SOL"}
+                            </td>
+                            <td className="py-3">
+                              {tx.success ? (
+                                <span className="px-2 py-1 rounded bg-green-100 text-green-800 text-xs">
+                                  Success
+                                </span>
+                              ) : (
+                                <span className="px-2 py-1 rounded bg-red-100 text-red-800 text-xs">
+                                  Failed
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3">
+                              {tx.timestamp
+                                ? new Date(tx.timestamp).toLocaleString()
+                                : "Unknown"}
+                            </td>
+                          </>
+                        )}
                       </tr>
                     ))
                   ) : (
@@ -567,60 +782,7 @@ export default function SuspiciousTransactionsPage() {
         <div className="mt-4 flex justify-end">
           <Button
             variant="outline"
-            onClick={() => {
-              const csvContent = [
-                // CSV header
-                [
-                  "Transaction ID",
-                  "Type",
-                  "From",
-                  "To",
-                  "Amount",
-                  "Token",
-                  "Status",
-                  "Time",
-                  "Risk Score",
-                ].join(","),
-                // CSV data rows
-                ...transactions.map((tx) =>
-                  [
-                    tx.signature || tx.id,
-                    tx.is_potential_dust
-                      ? tx.is_potential_poisoning
-                        ? "Dust+Poisoning"
-                        : "Dust"
-                      : tx.is_potential_poisoning
-                      ? "Poisoning"
-                      : "Suspicious",
-                    tx.sender || "",
-                    tx.recipient || "",
-                    tx.amount || 0,
-                    tx.token_type || "SOL",
-                    tx.success ? "Success" : "Failed",
-                    new Date(tx.timestamp).toLocaleString(),
-                    tx.risk_score || "0",
-                  ].join(",")
-                ),
-              ].join("\n");
-
-              // Create blob and download
-              const blob = new Blob([csvContent], {
-                type: "text/csv;charset=utf-8;",
-              });
-              const url = URL.createObjectURL(blob);
-              const link = document.createElement("a");
-              link.setAttribute("href", url);
-              link.setAttribute(
-                "download",
-                `suspicious-transactions-${new Date()
-                  .toISOString()
-                  .slice(0, 10)}.csv`
-              );
-              link.style.visibility = "hidden";
-              document.body.appendChild(link);
-              link.click();
-              document.body.removeChild(link);
-            }}
+            onClick={exportToCSV}
           >
             Export Data
           </Button>
