@@ -25,11 +25,16 @@ import { AdaptiveThresholds } from './adaptive-thresholds';
 import { DustDetectionModel } from './ml-detection';
 import { DustingAlertSystem } from './dust-alert-system';
 
-// Initialize database
-db.initializeDatabase().catch((error) => {
-  console.error("Failed to initialize database:", error);
-  process.exit(1);
-});
+// Initialize the database schema with retry logic
+console.log('Initializing database schema with all required tables...');
+db.initializeDatabase()
+  .then(() => {
+    console.log('Database schema initialization completed successfully');
+  })
+  .catch((error) => {
+    console.error('Error during database schema initialization:', error);
+    console.log('Continuing execution despite schema initialization error...');
+  });
 
 // Third-party API configurations
 const CHAINALYSIS_API_KEY = process.env.CHAINALYSIS_API_KEY || "";
@@ -806,9 +811,11 @@ async function updateDustingCandidates(
         mlPrediction: null
       };
       
-      // Use the pool directly since we're having issues with the method
-      await db.pool.query(
-        `INSERT INTO dusting_attackers 
+      console.log(`Attempting to store dusting attacker in database: ${sender}`);
+      
+      // Use the robust connection pool with retry logic
+      const query = `
+        INSERT INTO dusting_attackers 
         (address, small_transfers_count, unique_victims_count, unique_victims, timestamps, 
             risk_score, temporal_pattern, network_pattern, wallet_age_days, total_transaction_volume,
             known_labels, related_addresses, previous_attack_patterns, time_patterns,
@@ -832,27 +839,30 @@ async function updateDustingCandidates(
             ml_features = EXCLUDED.ml_features,
             ml_prediction = EXCLUDED.ml_prediction,
             last_updated = CURRENT_TIMESTAMP
-        RETURNING *`,
-        [
-            dbAttacker.address, 
-            dbAttacker.smallTransfersCount, 
-            dbAttacker.uniqueVictimsCount,
-            dbAttacker.uniqueVictims, 
-            dbAttacker.timestamps, 
-            dbAttacker.riskScore,
-            dbAttacker.temporalPattern,
-            dbAttacker.networkPattern,
-            dbAttacker.walletAgeDays,
-            dbAttacker.totalTransactionVolume,
-            dbAttacker.knownLabels,
-            dbAttacker.relatedAddresses,
-            dbAttacker.previousAttackPatterns,
-            dbAttacker.timePatterns,
-            dbAttacker.behavioralIndicators,
-            dbAttacker.mlFeatures,
-            dbAttacker.mlPrediction
-        ]
-      );
+        RETURNING *`;
+      
+      const params = [
+        dbAttacker.address, 
+        dbAttacker.smallTransfersCount, 
+        dbAttacker.uniqueVictimsCount,
+        dbAttacker.uniqueVictims, 
+        dbAttacker.timestamps, 
+        dbAttacker.riskScore,
+        dbAttacker.temporalPattern,
+        dbAttacker.networkPattern,
+        dbAttacker.walletAgeDays,
+        dbAttacker.totalTransactionVolume,
+        dbAttacker.knownLabels,
+        dbAttacker.relatedAddresses,
+        dbAttacker.previousAttackPatterns,
+        dbAttacker.timePatterns,
+        dbAttacker.behavioralIndicators,
+        dbAttacker.mlFeatures,
+        dbAttacker.mlPrediction
+      ];
+      
+      // Use the executeQuery method with built-in retry logic
+      await db.pool.executeQuery(query, params, 3);
       console.log(`Stored dusting attacker in database: ${sender}`);
     } catch (error) {
       console.error(`Error storing dusting attacker in database: ${sender}`, error);
@@ -894,9 +904,11 @@ async function updateDustingCandidates(
         mlPrediction: null
       };
       
-      // Use the pool directly since we're having issues with the method
-      await db.pool.query(
-        `INSERT INTO dusting_victims 
+      console.log(`Attempting to store dusting victim in database: ${recipient}`);
+      
+      // Use the robust connection pool with retry logic
+      const query = `
+        INSERT INTO dusting_victims 
         (address, dust_transactions_count, unique_attackers_count, unique_attackers, timestamps, 
             risk_score, wallet_age_days, wallet_value_estimate, time_patterns, vulnerability_assessment,
             ml_features, ml_prediction, last_updated) 
@@ -914,23 +926,26 @@ async function updateDustingCandidates(
             ml_features = EXCLUDED.ml_features,
             ml_prediction = EXCLUDED.ml_prediction,
             last_updated = CURRENT_TIMESTAMP
-        RETURNING *`,
-        [
-            dbVictim.address, 
-            dbVictim.dustTransactionsCount, 
-            dbVictim.uniqueAttackersCount,
-            dbVictim.uniqueAttackers, 
-            dbVictim.timestamps, 
-            dbVictim.riskScore,
-            dbVictim.walletAgeDays,
-            dbVictim.walletValueEstimate,
-            dbVictim.timePatterns,
-            dbVictim.vulnerabilityAssessment,
-            dbVictim.mlFeatures,
-            dbVictim.mlPrediction
-        ]
-      );
-      console.log(`Stored dusting victim in database: ${recipient}`);
+        RETURNING *`;
+      
+      const params = [
+        dbVictim.address, 
+        dbVictim.dustTransactionsCount, 
+        dbVictim.uniqueAttackersCount,
+        dbVictim.uniqueAttackers, 
+        dbVictim.timestamps, 
+        dbVictim.riskScore,
+        dbVictim.walletAgeDays,
+        dbVictim.walletValueEstimate,
+        dbVictim.timePatterns,
+        dbVictim.vulnerabilityAssessment,
+        dbVictim.mlFeatures,
+        dbVictim.mlPrediction
+      ];
+      
+      // Use the executeQuery method with built-in retry logic
+      await db.pool.executeQuery(query, params, 3);
+      console.log(`Successfully stored dusting victim in database: ${recipient}`);
     } catch (error) {
       console.error(`Error storing dusting victim in database: ${recipient}`, error);
     }

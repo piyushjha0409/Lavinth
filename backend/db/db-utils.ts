@@ -133,88 +133,97 @@ export class DatabaseUtils {
     }
 
     async initializeDatabase(): Promise<void> {
-        const client = await pool.connect();
-        try {
-            console.log("Initializing database schema...");
-            
-            // Read schema SQL from file
-            const schemaPath = path.join(__dirname, 'schema.sql');
-            const schemaSql = fs.readFileSync(schemaPath, 'utf8');
-            
-            // Execute schema SQL
-            await client.query(schemaSql);
-            
-            console.log("Database schema initialized successfully");
-        } catch (error) {
-            console.error("Error initializing database schema:", error);
-            throw error;
-        } finally {
-            client.release();
+        let client = null;
+        let retries = 0;
+        const maxRetries = 3;
+        
+        while (retries < maxRetries) {
+            try {
+                console.log(`Initializing database schema (attempt ${retries + 1}/${maxRetries})...`);
+                
+                // Read schema SQL from file
+                const schemaPath = path.join(__dirname, 'schema.sql');
+                const schemaSql = fs.readFileSync(schemaPath, 'utf8');
+                
+                // Use our robust connection pool's executeQuery method
+                await pool.executeQuery(schemaSql, [], maxRetries);
+                
+                // Verify that all required tables exist
+                const tables = ['dust_transactions', 'risk_analysis', 'dusting_attackers', 'dusting_victims', 'dusting_candidates'];
+                for (const table of tables) {
+                    console.log(`Verifying table ${table}...`);
+                    const result = await pool.executeQuery(`SELECT to_regclass('public.${table}') as table_exists;`, []);
+                    if (!result.rows[0].table_exists) {
+                        throw new Error(`Table ${table} was not created successfully`);
+                    }
+                }
+                
+                console.log("Database schema initialized successfully with all required tables");
+                return;
+            } catch (error) {
+                retries++;
+                console.error(`Error initializing database schema (attempt ${retries}/${maxRetries}):`, error);
+                
+                if (retries < maxRetries) {
+                    // Exponential backoff: 1s, 2s, 4s, etc.
+                    const backoffTime = 1000 * Math.pow(2, retries - 1);
+                    console.log(`Retrying database initialization in ${backoffTime}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, backoffTime));
+                } else {
+                    throw error;
+                }
+            }
         }
     }
 
-    async insertDustTransaction(transaction: DustTransaction): Promise<QueryResult> {
+    async insertDustTransaction(transaction: DustTransaction, maxRetries: number = 3): Promise<QueryResult> {
+        console.log(`Attempting to insert dust transaction: ${transaction.signature}`);
+        
+        // SQL query for insertion with conflict handling
+        const query = `
+          INSERT INTO dust_transactions (
+            signature, timestamp, slot, success, sender, recipient, amount, fee, token_type, token_address, is_potential_dust, is_potential_poisoning, risk_score
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          ON CONFLICT (signature, timestamp) DO UPDATE SET
+            slot = EXCLUDED.slot,
+            success = EXCLUDED.success,
+            sender = EXCLUDED.sender,
+            recipient = EXCLUDED.recipient,
+            amount = EXCLUDED.amount,
+            fee = EXCLUDED.fee,
+            token_type = EXCLUDED.token_type,
+            token_address = EXCLUDED.token_address,
+            is_potential_dust = EXCLUDED.is_potential_dust,
+            is_potential_poisoning = EXCLUDED.is_potential_poisoning,
+            risk_score = EXCLUDED.risk_score
+          RETURNING *;
+        `;
+
+        // Parameters for the query
+        const params = [
+          transaction.signature,
+          transaction.timestamp,
+          transaction.slot,
+          transaction.success,
+          transaction.sender,
+          transaction.recipient,
+          transaction.amount,
+          transaction.fee,
+          transaction.tokenType,
+          transaction.tokenAddress,
+          transaction.isPotentialDust,
+          transaction.isPotentialPoisoning,
+          transaction.riskScore
+        ];
+
         try {
-            const {
-                signature,
-                timestamp,
-                slot,
-                success,
-                sender,
-                recipient,
-                amount,
-                fee,
-                tokenType,
-                tokenAddress,
-                isPotentialDust,
-                isPotentialPoisoning,
-                riskScore
-            } = transaction;
-            
-            // Use ON CONFLICT to handle duplicates based on signature and timestamp
-            const result = await pool.query(
-                `INSERT INTO dust_transactions 
-                (signature, timestamp, slot, success, sender, recipient, amount, fee, 
-                    token_type, token_address, is_potential_dust, is_potential_poisoning, risk_score) 
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-                ON CONFLICT (signature, timestamp) DO UPDATE SET
-                    slot = EXCLUDED.slot,
-                    success = EXCLUDED.success,
-                    sender = EXCLUDED.sender,
-                    recipient = EXCLUDED.recipient,
-                    amount = EXCLUDED.amount,
-                    fee = EXCLUDED.fee,
-                    token_type = EXCLUDED.token_type,
-                    token_address = EXCLUDED.token_address,
-                    is_potential_dust = EXCLUDED.is_potential_dust,
-                    is_potential_poisoning = EXCLUDED.is_potential_poisoning,
-                    risk_score = EXCLUDED.risk_score
-                RETURNING *`,
-                [
-                    signature, 
-                    timestamp, 
-                    slot, 
-                    success, 
-                    sender, 
-                    recipient, 
-                    amount, 
-                    fee, 
-                    tokenType, 
-                    tokenAddress, 
-                    isPotentialDust, 
-                    isPotentialPoisoning, 
-                    riskScore
-                ]
-            );
-            
-            return result.rows[0];
-        } catch (error: unknown) {
-            if (error instanceof Error) {
-                console.error('Error inserting transaction:', error.message);
-            } else {
-                console.error('Error inserting transaction:', error);
-            }
-            throw error;
+          // Use the pool's executeQuery method which has built-in retry logic
+          const result = await pool.executeQuery(query, params, maxRetries);
+          console.log(`Successfully inserted/updated dust transaction: ${transaction.signature}`);
+          return result;
+        } catch (error) {
+          console.error(`Failed to insert dust transaction after ${maxRetries} retries:`, error);
+          throw error;
         }
     }
 

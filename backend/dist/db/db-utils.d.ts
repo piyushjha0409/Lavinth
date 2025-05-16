@@ -119,7 +119,7 @@ export declare class DatabaseUtils {
     pool: Pool;
     constructor();
     initializeDatabase(): Promise<void>;
-    insertDustTransaction(transaction: DustTransaction): Promise<QueryResult>;
+    insertDustTransaction(transaction: DustTransaction, maxRetries?: number): Promise<QueryResult>;
     updateRiskAnalysis(analysis: RiskAnalysis): Promise<QueryResult>;
     getHighRiskAddresses(minRiskScore?: number): Promise<QueryResult>;
     getAddressTransactions(address: string): Promise<QueryResult>;
