@@ -135,29 +135,16 @@ export class DatabaseUtils {
     async initializeDatabase(): Promise<void> {
         const client = await pool.connect();
         try {
-            console.log("Initializing database schema - checking for updates...");
+            console.log("Initializing database schema...");
             
             // Read schema SQL from file
             const schemaPath = path.join(__dirname, 'schema.sql');
             const schemaSql = fs.readFileSync(schemaPath, 'utf8');
             
-            // Execute schema SQL with IF NOT EXISTS clauses
-            // This ensures existing tables won't be dropped
+            // Execute schema SQL
             await client.query(schemaSql);
             
-            // List created tables for verification
-            const tablesResult = await client.query(`
-                SELECT table_name 
-                FROM information_schema.tables 
-                WHERE table_schema = 'public' 
-                ORDER BY table_name;
-            `);
-            
-            console.log("Database schema updated successfully. Available tables:");
-            tablesResult.rows.forEach((row, index) => {
-                console.log(`${index + 1}. ${row.table_name}`);
-            });
-            
+            console.log("Database schema initialized successfully");
         } catch (error) {
             console.error("Error initializing database schema:", error);
             throw error;
@@ -166,54 +153,68 @@ export class DatabaseUtils {
         }
     }
 
-    async insertDustTransaction(transaction: DustTransaction, maxRetries: number = 3): Promise<QueryResult> {
-        console.log(`Attempting to insert dust transaction: ${transaction.signature}`);
-        
-        // SQL query for insertion with conflict handling
-        const query = `
-          INSERT INTO dust_transactions (
-            signature, timestamp, slot, success, sender, recipient, amount, fee, token_type, token_address, is_potential_dust, is_potential_poisoning, risk_score
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-          ON CONFLICT (signature, timestamp) DO UPDATE SET
-            slot = EXCLUDED.slot,
-            success = EXCLUDED.success,
-            sender = EXCLUDED.sender,
-            recipient = EXCLUDED.recipient,
-            amount = EXCLUDED.amount,
-            fee = EXCLUDED.fee,
-            token_type = EXCLUDED.token_type,
-            token_address = EXCLUDED.token_address,
-            is_potential_dust = EXCLUDED.is_potential_dust,
-            is_potential_poisoning = EXCLUDED.is_potential_poisoning,
-            risk_score = EXCLUDED.risk_score
-          RETURNING *;
-        `;
-
-        // Parameters for the query
-        const params = [
-          transaction.signature,
-          transaction.timestamp,
-          transaction.slot,
-          transaction.success,
-          transaction.sender,
-          transaction.recipient,
-          transaction.amount,
-          transaction.fee,
-          transaction.tokenType,
-          transaction.tokenAddress,
-          transaction.isPotentialDust,
-          transaction.isPotentialPoisoning,
-          transaction.riskScore
-        ];
-
+    async insertDustTransaction(transaction: DustTransaction): Promise<QueryResult> {
         try {
-          // Use the pool's executeQuery method which has built-in retry logic
-          const result = await pool.executeQuery(query, params, maxRetries);
-          console.log(`Successfully inserted/updated dust transaction: ${transaction.signature}`);
-          return result;
-        } catch (error) {
-          console.error(`Failed to insert dust transaction after ${maxRetries} retries:`, error);
-          throw error;
+            const {
+                signature,
+                timestamp,
+                slot,
+                success,
+                sender,
+                recipient,
+                amount,
+                fee,
+                tokenType,
+                tokenAddress,
+                isPotentialDust,
+                isPotentialPoisoning,
+                riskScore
+            } = transaction;
+            
+            // Use ON CONFLICT to handle duplicates based on signature and timestamp
+            const result = await pool.query(
+                `INSERT INTO dust_transactions 
+                (signature, timestamp, slot, success, sender, recipient, amount, fee, 
+                    token_type, token_address, is_potential_dust, is_potential_poisoning, risk_score) 
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                ON CONFLICT (signature, timestamp) DO UPDATE SET
+                    slot = EXCLUDED.slot,
+                    success = EXCLUDED.success,
+                    sender = EXCLUDED.sender,
+                    recipient = EXCLUDED.recipient,
+                    amount = EXCLUDED.amount,
+                    fee = EXCLUDED.fee,
+                    token_type = EXCLUDED.token_type,
+                    token_address = EXCLUDED.token_address,
+                    is_potential_dust = EXCLUDED.is_potential_dust,
+                    is_potential_poisoning = EXCLUDED.is_potential_poisoning,
+                    risk_score = EXCLUDED.risk_score
+                RETURNING *`,
+                [
+                    signature, 
+                    timestamp, 
+                    slot, 
+                    success, 
+                    sender, 
+                    recipient, 
+                    amount, 
+                    fee, 
+                    tokenType, 
+                    tokenAddress, 
+                    isPotentialDust, 
+                    isPotentialPoisoning, 
+                    riskScore
+                ]
+            );
+            
+            return result.rows[0];
+        } catch (error: unknown) {
+            if (error instanceof Error) {
+                console.error('Error inserting transaction:', error.message);
+            } else {
+                console.error('Error inserting transaction:', error);
+            }
+            throw error;
         }
     }
 

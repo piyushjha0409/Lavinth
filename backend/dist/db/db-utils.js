@@ -55,42 +55,33 @@ class DatabaseUtils {
     }
     initializeDatabase() {
         return __awaiter(this, void 0, void 0, function* () {
-            let client = null;
-            let retries = 0;
-            const maxRetries = 3;
-            while (retries < maxRetries) {
-                try {
-                    console.log(`Initializing database schema (attempt ${retries + 1}/${maxRetries})...`);
-                    // Read schema SQL from file
-                    const schemaPath = path.join(__dirname, 'schema.sql');
-                    const schemaSql = fs.readFileSync(schemaPath, 'utf8');
-                    // Use our robust connection pool's executeQuery method
-                    yield config_1.default.executeQuery(schemaSql, [], maxRetries);
-                    // Verify that all required tables exist
-                    const tables = ['dust_transactions', 'risk_analysis', 'dusting_attackers', 'dusting_victims', 'dusting_candidates'];
-                    for (const table of tables) {
-                        console.log(`Verifying table ${table}...`);
-                        const result = yield config_1.default.executeQuery(`SELECT to_regclass('public.${table}') as table_exists;`, []);
-                        if (!result.rows[0].table_exists) {
-                            throw new Error(`Table ${table} was not created successfully`);
-                        }
-                    }
-                    console.log("Database schema initialized successfully with all required tables");
-                    return;
-                }
-                catch (error) {
-                    retries++;
-                    console.error(`Error initializing database schema (attempt ${retries}/${maxRetries}):`, error);
-                    if (retries < maxRetries) {
-                        // Exponential backoff: 1s, 2s, 4s, etc.
-                        const backoffTime = 1000 * Math.pow(2, retries - 1);
-                        console.log(`Retrying database initialization in ${backoffTime}ms...`);
-                        yield new Promise(resolve => setTimeout(resolve, backoffTime));
-                    }
-                    else {
-                        throw error;
-                    }
-                }
+            const client = yield config_1.default.connect();
+            try {
+                console.log("Initializing database schema - checking for updates...");
+                // Read schema SQL from file
+                const schemaPath = path.join(__dirname, 'schema.sql');
+                const schemaSql = fs.readFileSync(schemaPath, 'utf8');
+                // Execute schema SQL with IF NOT EXISTS clauses
+                // This ensures existing tables won't be dropped
+                yield client.query(schemaSql);
+                // List created tables for verification
+                const tablesResult = yield client.query(`
+                SELECT table_name 
+                FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                ORDER BY table_name;
+            `);
+                console.log("Database schema updated successfully. Available tables:");
+                tablesResult.rows.forEach((row, index) => {
+                    console.log(`${index + 1}. ${row.table_name}`);
+                });
+            }
+            catch (error) {
+                console.error("Error initializing database schema:", error);
+                throw error;
+            }
+            finally {
+                client.release();
             }
         });
     }
