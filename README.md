@@ -1,12 +1,12 @@
-# SolanaShield: Secure Your Solana Ecosystem
+# Lavinth: Secure Your Solana Ecosystem
 
 ## Overview
 
-SolanaShield is an advanced security platform designed to protect Solana blockchain users, developers, and applications from common attack vectors including account dusting and address poisoning. By providing real-time detection and prevention mechanisms, SolanaShield helps maintain the integrity of the Solana ecosystem and enhances user safety.
+Lavinth is an advanced security platform designed to protect Solana blockchain users, developers, and applications from common attack vectors including account dusting and address poisoning. By providing real-time detection and prevention mechanisms, SolanaShield helps maintain the integrity of the Solana ecosystem and enhances user safety.
 
 ## Details
 
-SolanaShield addresses critical security challenges in the Solana ecosystem:
+Lavinth addresses critical security challenges in the Solana ecosystem:
 
 1. **Dusting Attacks**: Identifies and filters unsolicited token transfers that often promote scam services or malicious websites.
 
