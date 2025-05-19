@@ -158,11 +158,18 @@ function initializePLimit() {
         }
     });
 }
-// Initialize connections
+// Initialize connections with custom fetch implementation to handle large responses
 let currentEndpointIndex = 0;
-const connections = RPC_ENDPOINTS.map((endpoint) => new web3_js_1.Connection(endpoint, "confirmed"));
-// Helper function to get next connection with round-robin
+const connections = RPC_ENDPOINTS.map((endpoint) => {
+    // Create connection with custom fetch options to handle large responses
+    const connection = new web3_js_1.Connection(endpoint, "confirmed");
+    // We can't directly modify the Connection's fetch method in TypeScript,
+    // so we'll use a more robust approach with retry logic in our block processing code
+    return connection;
+});
+// Helper function to get next connection with round-robin rotation
 function getNextConnection() {
+    // Rotate through available connections
     currentEndpointIndex = (currentEndpointIndex + 1) % connections.length;
     return connections[currentEndpointIndex];
 }
@@ -196,10 +203,56 @@ function findActiveAddresses() {
                 try {
                     const blockSlot = slot - i;
                     console.log(`Processing block at slot ${blockSlot}`);
-                    const block = yield getNextConnection().getBlock(blockSlot, {
-                        maxSupportedTransactionVersion: 0,
-                        commitment: "confirmed",
-                    });
+                    // Add retry logic with exponential backoff for JSON parsing errors
+                    let block = null;
+                    let retryCount = 0;
+                    const maxRetries = CONFIG.processing.maxRetries;
+                    let lastError = null;
+                    while (retryCount <= maxRetries) {
+                        try {
+                            // Try different connections on each retry
+                            const connection = getNextConnection();
+                            // Add a timeout to the getBlock call
+                            const timeoutPromise = new Promise((_, reject) => {
+                                setTimeout(() => {
+                                    reject(new Error(`Request timed out after ${30000}ms`));
+                                }, 30000); // 30 second timeout
+                            });
+                            // Race the getBlock call with a timeout
+                            block = (yield Promise.race([
+                                connection.getBlock(blockSlot, {
+                                    maxSupportedTransactionVersion: 0,
+                                    commitment: "confirmed",
+                                }),
+                                timeoutPromise
+                            ]));
+                            // If successful, break out of retry loop
+                            break;
+                        }
+                        catch (err) { // Using any here for error handling
+                            lastError = err;
+                            // Check if it's a JSON parsing error or timeout
+                            if ((err instanceof SyntaxError &&
+                                (err.message.includes('JSON') || err.message.includes('position'))) ||
+                                err.message.includes('timed out')) {
+                                retryCount++;
+                                if (retryCount <= maxRetries) {
+                                    // Exponential backoff
+                                    const backoffTime = CONFIG.processing.initialBackoff * Math.pow(2, retryCount - 1);
+                                    console.log(`Error processing block: ${err.message}, retrying in ${backoffTime}ms (attempt ${retryCount}/${maxRetries})`);
+                                    yield sleep(backoffTime);
+                                }
+                            }
+                            else {
+                                // If it's not a JSON parsing error or timeout, throw immediately
+                                throw err;
+                            }
+                        }
+                    }
+                    // If we've exhausted retries, throw the last error
+                    if (retryCount > maxRetries && lastError) {
+                        throw lastError;
+                    }
                     if (!block || !block.transactions) {
                         console.log(`No transactions found in block ${blockSlot}`);
                         continue;
