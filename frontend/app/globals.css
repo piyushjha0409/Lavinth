@@ -5,27 +5,34 @@
 @layer base {
   :root {
     --background: 0 0% 0%;
-    --foreground: 0 0% 98%;
+    --foreground: 0 0% 100%;
+
     --card: 0 0% 3%;
-    --card-foreground: 0 0% 98%;
+    --card-foreground: 0 0% 100%;
+
     --popover: 0 0% 3%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 142 100% 50%;
-    --primary-foreground: 0 0% 0%;
-    --secondary: 142 100% 10%;
-    --secondary-foreground: 142 100% 50%;
-    --muted: 142 50% 10%;
-    --muted-foreground: 142 50% 80%;
-    --accent: 142 100% 10%;
-    --accent-foreground: 142 100% 50%;
-    --destructive: 0 100% 50%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 142 50% 20%;
-    --input: 142 50% 20%;
-    --ring: 142 100% 50%;
-    --radius: 0.25rem;
-    --blue-500: #0cff0c;
-    --blue-600: #00dd00;
+    --popover-foreground: 0 0% 100%;
+
+    --primary: 224 64% 60%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 240 4% 16%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 240 4% 16%;
+    --muted-foreground: 240 5% 65%;
+
+    --accent: 240 4% 16%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 240 4% 16%;
+    --input: 240 4% 16%;
+    --ring: 224 64% 60%;
+
+    --radius: 0.5rem;
   }
 }
 
@@ -34,249 +41,26 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground font-retro;
-  }
-  h1,
-  h2,
-  h3,
-  h4,
-  h5,
-  h6 {
-    @apply font-mono;
+    @apply bg-background text-foreground;
   }
 }
 
-@keyframes text-reveal {
-  from {
-    transform: translateY(20px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
+/* Custom animation for the terminal cursor */
+@keyframes blink {
+  0%,
+  100% {
     opacity: 1;
   }
-}
-
-.animate-text-reveal {
-  animation: text-reveal 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-@keyframes scroll {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(calc(-100% - 1rem));
-  }
-}
-
-.animate-scroll {
-  animation: scroll var(--animation-duration) linear infinite;
-  animation-direction: var(--animation-direction);
-}
-
-/* Retro CRT effect - disabled */
-.crt::before,
-.crt::after {
-  content: none;
-}
-
-.scan-line {
-  display: none;
-}
-
-.retro-border {
-  position: relative;
-  border: 2px solid #0cff0c;
-  box-shadow: 0 0 10px #0cff0c, inset 0 0 10px #0cff0c;
-}
-
-.retro-border::before,
-.retro-border::after {
-  content: "";
-  position: absolute;
-  width: 20px;
-  height: 20px;
-  border: 2px solid #0cff0c;
-}
-
-.retro-border::before {
-  top: -5px;
-  left: -5px;
-  border-right: none;
-  border-bottom: none;
-}
-
-.retro-border::after {
-  bottom: -5px;
-  right: -5px;
-  border-left: none;
-  border-top: none;
-}
-
-.retro-glow {
-  text-shadow: 0 0px 2px #0cff0c, 0 0 2px #0cff0c;
-}
-
-.retro-text {
-  position: relative;
-  display: inline-block;
-}
-
-/*
-.retro-text::before {
-  content: attr(data-text);
-  position: absolute;
-  left: -2px;
-  text-shadow: 2px 0 #0cff0c;
-  top: 0;
-  color: #0cff0c;
-  overflow: hidden;
-  clip: rect(0, 900px, 0, 0);
-  animation: text-glitch 3s infinite linear alternate-reverse;
-}
-
-.retro-text::after {
-  content: attr(data-text);
-  position: absolute;
-  left: 2px;
-  text-shadow: -2px 0 #0cff0c;
-  top: 0;
-  color: #0cff0c;
-  overflow: hidden;
-  clip: rect(0, 900px, 0, 0);
-  animation: text-glitch 2s infinite linear alternate-reverse;
-}
-*/
-
-@keyframes text-glitch {
-  0% {
-    clip: rect(44px, 9999px, 56px, 0);
-  }
-  5% {
-    clip: rect(74px, 9999px, 6px, 0);
-  }
-  10% {
-    clip: rect(77px, 9999px, 38px, 0);
-  }
-  15% {
-    clip: rect(94px, 9999px, 29px, 0);
-  }
-  20% {
-    clip: rect(7px, 9999px, 57px, 0);
-  }
-  25% {
-    clip: rect(1px, 9999px, 49px, 0);
-  }
-  30% {
-    clip: rect(22px, 9999px, 40px, 0);
-  }
-  35% {
-    clip: rect(28px, 9999px, 65px, 0);
-  }
-  40% {
-    clip: rect(54px, 9999px, 84px, 0);
-  }
-  45% {
-    clip: rect(12px, 9999px, 57px, 0);
-  }
   50% {
-    clip: rect(60px, 9999px, 18px, 0);
-  }
-  55% {
-    clip: rect(84px, 9999px, 58px, 0);
-  }
-  60% {
-    clip: rect(25px, 9999px, 6px, 0);
-  }
-  65% {
-    clip: rect(85px, 9999px, 93px, 0);
-  }
-  70% {
-    clip: rect(67px, 9999px, 42px, 0);
-  }
-  75% {
-    clip: rect(24px, 9999px, 31px, 0);
-  }
-  80% {
-    clip: rect(41px, 9999px, 21px, 0);
-  }
-  85% {
-    clip: rect(46px, 9999px, 1px, 0);
-  }
-  90% {
-    clip: rect(7px, 9999px, 69px, 0);
-  }
-  95% {
-    clip: rect(82px, 9999px, 73px, 0);
-  }
-  100% {
-    clip: rect(63px, 9999px, 79px, 0);
+    opacity: 0;
   }
 }
 
-@keyframes flicker {
-  0% {
-    opacity: 0.27861;
-  }
-  5% {
-    opacity: 0.34769;
-  }
-  10% {
-    opacity: 0.23604;
-  }
-  15% {
-    opacity: 0.90626;
-  }
-  20% {
-    opacity: 0.18128;
-  }
-  25% {
-    opacity: 0.83891;
-  }
-  30% {
-    opacity: 0.65583;
-  }
-  35% {
-    opacity: 0.67807;
-  }
-  40% {
-    opacity: 0.26559;
-  }
-  45% {
-    opacity: 0.84693;
-  }
-  50% {
-    opacity: 0.96019;
-  }
-  55% {
-    opacity: 0.08594;
-  }
-  60% {
-    opacity: 0.20313;
-  }
-  65% {
-    opacity: 0.71988;
-  }
-  70% {
-    opacity: 0.53455;
-  }
-  75% {
-    opacity: 0.37288;
-  }
-  80% {
-    opacity: 0.71428;
-  }
-  85% {
-    opacity: 0.70419;
-  }
-  90% {
-    opacity: 0.7003;
-  }
-  95% {
-    opacity: 0.36108;
-  }
-  100% {
-    opacity: 0.24387;
-  }
+.animate-blink {
+  animation: blink 1s infinite;
+}
+
+/* Custom gradient background */
+.bg-gradient-radial {
+  background-image: radial-gradient(var(--tw-gradient-stops));
 }
