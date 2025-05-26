@@ -14,7 +14,7 @@ import { StatsCard } from "./overview-tab";
 import { Card, CardContent } from "../ui/card";
 import { Button } from "../ui/button";
 import { Progress } from "../ui/progress";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 interface DustingAttacker {
   id: number;
@@ -95,6 +95,10 @@ export default function AttackersTab() {
       setIsAttackersLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchDustingAttackers();
+  }, [attackersPage]);
 
   return (
     <>

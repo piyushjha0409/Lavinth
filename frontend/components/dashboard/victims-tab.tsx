@@ -8,7 +8,7 @@ import {
   ChevronsRight,
   User,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { StatsCard } from "./overview-tab";
 import { Button } from "../ui/button";
 import { Card, CardContent } from "../ui/card";
@@ -92,6 +92,10 @@ export default function VictimsTab() {
       setIsVictimsLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchDustingVictims();
+  }, [victimsPage]);
 
   return (
     <>
