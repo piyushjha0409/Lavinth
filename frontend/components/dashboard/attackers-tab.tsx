@@ -257,9 +257,7 @@ export default function AttackersTab() {
                             variant="ghost"
                             size="sm"
                             onClick={() =>
-                              router.push(
-                                `/wallet-check?address=${attacker.address}`
-                              )
+                              window.location.href = `/wallet-check?address=${attacker.address}`
                             }
                             className="h-8 w-8 p-0"
                           >
