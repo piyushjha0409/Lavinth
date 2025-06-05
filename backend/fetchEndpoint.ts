@@ -519,7 +519,7 @@ app.get("/api/check-wallet/:address", async (req: Request, res: Response): Promi
     const { address } = req.params;
 
     // Validate the address format (basic validation for Solana address)
-    if (!address || address.length !== 44) {
+    if (!address) {
       return res.status(400).json({
         status: "error",
         message: "Invalid wallet address format",
