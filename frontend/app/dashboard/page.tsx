@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import VictimsTab from "@/components/dashboard/victims-tab";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, ArrowLeft } from "lucide-react";
 import { useEffect, useState } from "react";
 import { DashboardData } from "../types/transactions";
 
@@ -161,9 +161,14 @@ export default function Dashboard() {
 
   return (
     <div className="container mx-auto p-4 md:p-6 text-cyan-300">
-      <h1 className="text-3xl font-bold text-cyan-200 mb-6">
-        Blockchain Security Dashboard
-      </h1>
+      <div className="flex items-center mb-6">
+        <a href="/" className="mr-4 hover:text-cyan-100 transition-colors">
+          <ArrowLeft className="h-6 w-6" />
+        </a>
+        <h1 className="text-3xl font-bold text-cyan-200">
+          Blockchain Security Dashboard
+        </h1>
+      </div>
 
       <Tabs defaultValue="overview" className="space-y-6">
         <TabsList className="grid grid-cols-3 md:grid-cols-7 gap-2">
