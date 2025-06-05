@@ -430,7 +430,7 @@ app.get("/api/check-wallet/:address", (req, res) => __awaiter(void 0, void 0, vo
     try {
         const { address } = req.params;
         // Validate the address format (basic validation for Solana address)
-        if (!address || address.length !== 44) {
+        if (!address) {
             return res.status(400).json({
                 status: "error",
                 message: "Invalid wallet address format",
