@@ -33,6 +33,18 @@ export interface AlertConfig {
         victimExposureLevel: number;
     };
 }
+export interface DustingAttacker {
+    address: string;
+    risk_score: number;
+    unique_victims_count: number;
+    small_transfers_count: number;
+}
+export interface DustingVictim {
+    address: string;
+    risk_score: number;
+    unique_attackers_count: number;
+    dust_transactions_count: number;
+}
 export declare class DustingAlertSystem {
     private config;
     private isRunning;
@@ -41,24 +53,9 @@ export declare class DustingAlertSystem {
     private emailTransporter?;
     constructor(config?: Partial<AlertConfig>);
     private initializeChannels;
-    /**
-     * Start continuous monitoring for dust attacks
-     */
     monitorInRealTime(): Promise<void>;
-    /**
-     * Stop the monitoring process
-     */
     stopMonitoring(): void;
-    /**
-     * Check for new high-risk attackers and victims
-     */
     private checkForNewThreats;
-    /**
-     * Send an alert through configured channels
-     */
     private sendAlert;
-    /**
-     * Format alert message based on alert type
-     */
     private formatAlertMessage;
 }

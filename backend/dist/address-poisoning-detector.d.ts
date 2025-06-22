@@ -5,7 +5,7 @@
  * confidence scoring to minimize false positives while effectively identifying
  * malicious similar addresses.
  */
-import { Connection } from '@solana/web3.js';
+import { Connection } from "@solana/web3.js";
 export interface AddressInfo {
     address: string;
     firstSeen: number;
@@ -29,7 +29,7 @@ export interface AddressClassification {
     isPotentiallyPoisoned: boolean;
     legitimacyScore: number;
     confidence: number;
-    suggestedAction: 'block' | 'warn' | 'monitor' | 'safe';
+    suggestedAction: "block" | "warn" | "monitor" | "safe";
     similarAddresses: Array<{
         address: string;
         similarityScore: number;
@@ -49,9 +49,6 @@ export declare class AddressPoisoningDetector {
     private addressCache;
     private similarityCache;
     constructor(connection: Connection);
-    /**
-     * Get address information including transaction history
-     */
     getAddressInfo(address: string): Promise<AddressInfo>;
     /**
      * Find similar addresses in the user's transaction history
@@ -101,7 +98,7 @@ export declare class AddressPoisoningDetector {
      */
     validateTransactionAddress(selectedAddress: string, userHistory: string[]): Promise<{
         isValid: boolean;
-        warningLevel: 'none' | 'low' | 'medium' | 'high';
+        warningLevel: "none" | "low" | "medium" | "high";
         message?: string;
         suggestedAddress?: string;
         similarAddresses?: Array<{

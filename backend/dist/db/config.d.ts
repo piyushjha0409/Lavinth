@@ -1,8 +1,7 @@
-import { Pool } from 'pg';
-declare const pool: Pool;
-declare module 'pg' {
-    interface Pool {
-        executeQuery(text: string, params: any[], maxRetries?: number): Promise<any>;
-    }
+import { Pool, QueryResult } from 'pg';
+export declare class CustomPool extends Pool {
+    constructor();
+    executeQuery(text: string, params?: any[], maxRetries?: number): Promise<QueryResult>;
 }
+declare const pool: CustomPool;
 export default pool;

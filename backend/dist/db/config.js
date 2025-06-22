@@ -42,72 +42,63 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.CustomPool = void 0;
 const dotenv = __importStar(require("dotenv"));
 const pg_1 = require("pg");
 dotenv.config();
-// Create a robust connection pool with retry logic
-const createPool = () => {
-    const pool = new pg_1.Pool({
-        host: process.env.DB_HOST,
-        port: parseInt(process.env.DB_PORT || '31146'),
-        user: process.env.DB_USER,
-        password: process.env.DB_PASSWORD,
-        database: process.env.DB_NAME,
-        ssl: process.env.DB_SSL === 'require' ? { rejectUnauthorized: false } : false,
-        max: 20, // Maximum number of clients in the pool
-        idleTimeoutMillis: 60000, // 1 minute idle timeout
-        connectionTimeoutMillis: 10000, // 10 seconds connection timeout
-        // Add statement timeout to prevent long-running queries
-        statement_timeout: 30000, // 30 seconds
-    });
-    // Test the connection
-    pool.on('connect', () => {
-        console.log('Connected to TimescaleDB');
-    });
-    pool.on('error', (err) => {
-        console.error('Unexpected error on idle client', err);
-        // Don't exit the process, just log the error
-        // process.exit(-1);
-    });
-    return pool;
-};
-// Create the initial pool
-const pool = createPool();
-// Add a wrapper function for query with retry logic
-const executeQuery = (text_1, params_1, ...args_1) => __awaiter(void 0, [text_1, params_1, ...args_1], void 0, function* (text, params, maxRetries = 3) {
-    let retries = 0;
-    let lastError = null;
-    while (retries < maxRetries) {
-        let client = null;
-        try {
-            // Get a client from the pool
-            client = yield pool.connect();
-            const result = yield client.query(text, params);
-            return result;
-        }
-        catch (error) {
-            lastError = error;
-            retries++;
-            console.error(`Database query error (attempt ${retries}/${maxRetries}):`, error.message);
-            // Check if we should retry
-            if (retries < maxRetries) {
-                // Exponential backoff: 1s, 2s, 4s, etc.
-                const backoffTime = 1000 * Math.pow(2, retries - 1);
-                console.log(`Retrying database connection in ${backoffTime}ms...`);
-                yield new Promise(resolve => setTimeout(resolve, backoffTime));
-            }
-        }
-        finally {
-            // Release the client back to the pool
-            if (client) {
-                client.release();
-            }
-        }
+// Create a custom pool class with built-in retry logic
+class CustomPool extends pg_1.Pool {
+    constructor() {
+        super({
+            connectionString: process.env.DATABASE_URL,
+            ssl: { rejectUnauthorized: false },
+            max: 20, // Max number of clients in pool
+            idleTimeoutMillis: 60000, // 1 minute
+            connectionTimeoutMillis: 10000, // 10 seconds
+            statement_timeout: 30000, // Optional: kills long queries
+        });
+        // On successful connection
+        this.on('connect', () => {
+            console.log('Connected to Neon PostgreSQL');
+        });
+        // Log idle client errors
+        this.on('error', (err) => {
+            console.error('Unexpected error on idle PostgreSQL client:', err);
+        });
     }
-    // If we get here, all retries failed
-    console.error(`All ${maxRetries} database query attempts failed.`);
-    throw lastError;
-});
-// Add the executeQuery method to the pool
-pool.executeQuery = executeQuery;
+    // Add retry-enabled query execution function
+    executeQuery(text_1) {
+        return __awaiter(this, arguments, void 0, function* (text, params = [], maxRetries = 3) {
+            let retries = 0;
+            let lastError = null;
+            while (retries < maxRetries) {
+                let client = null;
+                try {
+                    client = yield this.connect();
+                    const result = yield client.query(text, params);
+                    return result;
+                }
+                catch (error) {
+                    lastError = error;
+                    retries++;
+                    console.error(`Query error (attempt ${retries}/${maxRetries}):`, error.message);
+                    if (retries < maxRetries) {
+                        const delay = 1000 * Math.pow(2, (retries - 1));
+                        console.log(`Retrying in ${delay}ms...`);
+                        yield new Promise((res) => setTimeout(res, delay));
+                    }
+                }
+                finally {
+                    if (client)
+                        client.release();
+                }
+            }
+            console.error(`All ${maxRetries} database query attempts failed.`);
+            throw lastError;
+        });
+    }
+}
+exports.CustomPool = CustomPool;
+// Create and export a single instance of the custom pool
+const pool = new CustomPool();
 exports.default = pool;

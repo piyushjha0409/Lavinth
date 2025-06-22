@@ -1,4 +1,5 @@
-import { Pool, QueryResult } from 'pg';
+import { QueryResult } from 'pg';
+import { CustomPool } from './config';
 export interface DustTransaction {
     signature: string;
     timestamp: Date;
@@ -16,41 +17,6 @@ export interface DustTransaction {
     isScamUrl?: boolean;
     memoContent?: string;
 }
-export interface TimePattern {
-    hourlyDistribution: number[];
-    weekdayDistribution: number[];
-    burstDetection: {
-        burstThreshold: number;
-        burstWindows: Array<{
-            start: number;
-            end: number;
-        }>;
-    };
-}
-export interface BehavioralIndicators {
-    usesNewAccounts: boolean;
-    hasAbnormalFundingPattern: boolean;
-    targetsPremiumWallets: boolean;
-    usesScriptedTransactions: boolean;
-}
-export interface MLFeatures {
-    transactionFrequency: number;
-    averageAmount: number;
-    recipientCount: number;
-    timePatternFeatures: number[];
-    networkFeatures: number[];
-}
-export interface MLPrediction {
-    attackerScore: number;
-    victimScore: number;
-    confidence: number;
-}
-export interface VulnerabilityAssessment {
-    walletActivity: 'high' | 'medium' | 'low';
-    assetValue: 'high' | 'medium' | 'low';
-    previousInteractions: boolean;
-    riskExposure: number;
-}
 export interface DustingAttacker {
     address: string;
     smallTransfersCount: number;
@@ -62,26 +28,13 @@ export interface DustingAttacker {
     totalTransactionVolume?: number;
     knownLabels?: string[];
     relatedAddresses?: string[];
-    previousAttackPatterns?: {
-        timestamp: number;
-        victimCount: number;
-        pattern: string;
-    }[];
-    timePatterns?: TimePattern;
-    temporalPattern: {
-        burstCount: number;
-        averageTimeBetweenTransfers: number;
-        regularityScore: number;
-    };
-    networkPattern: {
-        clusterSize: number;
-        centralityScore: number;
-        recipientOverlap: number;
-        betweennessCentrality?: number;
-    };
-    behavioralIndicators?: BehavioralIndicators;
-    mlFeatures?: MLFeatures;
-    mlPrediction?: MLPrediction;
+    previousAttackPatterns?: any;
+    timePatterns?: any;
+    temporalPattern: any;
+    networkPattern: any;
+    behavioralIndicators?: any;
+    mlFeatures?: any;
+    mlPrediction?: any;
     lastUpdated?: Date;
 }
 export interface DustingVictim {
@@ -93,10 +46,10 @@ export interface DustingVictim {
     riskScore: number;
     walletAgeDays?: number;
     walletValueEstimate?: number;
-    timePatterns?: TimePattern;
-    vulnerabilityAssessment?: VulnerabilityAssessment;
-    mlFeatures?: MLFeatures;
-    mlPrediction?: MLPrediction;
+    timePatterns?: any;
+    vulnerabilityAssessment?: any;
+    mlFeatures?: any;
+    mlPrediction?: any;
     lastUpdated?: Date;
 }
 export interface RiskAnalysis {
@@ -104,38 +57,23 @@ export interface RiskAnalysis {
     riskScore: number;
     chainAnalysisData?: any;
     trmLabsData?: any;
-    temporalPattern: {
-        burstCount: number;
-        averageTimeBetweenTransfers: number;
-        regularityScore: number;
-    };
-    networkPattern: {
-        clusterSize: number;
-        centralityScore: number;
-        recipientOverlap: number;
-    };
+    temporalPattern: any;
+    networkPattern: any;
 }
 export declare class DatabaseUtils {
-    pool: Pool;
+    pool: CustomPool;
     constructor();
     initializeDatabase(): Promise<void>;
-    insertDustTransaction(transaction: DustTransaction, maxRetries?: number): Promise<QueryResult>;
-    updateRiskAnalysis(analysis: RiskAnalysis): Promise<QueryResult>;
-    getHighRiskAddresses(minRiskScore?: number): Promise<QueryResult>;
-    getAddressTransactions(address: string): Promise<QueryResult>;
-    close(): Promise<void>;
-    /**
-     * Find transaction by signature and timestamp
-     */
-    findTransactionBySignature(signature: string, timestamp?: Date | null): Promise<any>;
-    /**
-     * Update existing transaction
-     */
-    updateTransaction(signature: string, updateFields: Partial<DustTransaction>): Promise<boolean>;
+    insertDustTransaction(tx: DustTransaction): Promise<QueryResult>;
     insertOrUpdateDustingAttacker(attacker: DustingAttacker): Promise<QueryResult>;
     insertOrUpdateDustingVictim(victim: DustingVictim): Promise<QueryResult>;
+    updateRiskAnalysis(analysis: RiskAnalysis): Promise<QueryResult>;
+    getAddressTransactions(address: string): Promise<QueryResult>;
+    getHighRiskAddresses(minRiskScore?: number): Promise<QueryResult>;
     getDustingAttackers(minRiskScore?: number): Promise<QueryResult>;
     getDustingVictims(minRiskScore?: number): Promise<QueryResult>;
+    close(): Promise<void>;
+    getOverviewStatistics(): Promise<any>;
 }
 declare const _default: DatabaseUtils;
 export default _default;

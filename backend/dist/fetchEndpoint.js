@@ -12,8 +12,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-//TODO: to make overview api for dashboard responses
-// TODO:
 const cors_1 = __importDefault(require("cors"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const express_1 = __importDefault(require("express"));
@@ -110,9 +108,9 @@ app.get("/api/dust-transactions", (req, res) => __awaiter(void 0, void 0, void 0
         const paginationParams = [limitValue, offsetValue];
         const queryParams = [...params, ...paginationParams];
         // Execute the main query
-        const result = yield db_utils_1.default.pool.query(queryBase, queryParams);
+        const result = yield db_utils_1.default.pool.executeQuery(queryBase, queryParams);
         // Execute count query to get total records (for pagination metadata)
-        const countResult = yield db_utils_1.default.pool.query(countQueryBase, params);
+        const countResult = yield db_utils_1.default.pool.executeQuery(countQueryBase, params);
         const totalCount = parseInt(countResult.rows[0].total);
         const totalPages = Math.ceil(totalCount / limitValue);
         const currentPage = Math.floor(offsetValue / limitValue) + 1;
@@ -173,9 +171,9 @@ app.get("/api/dust-transactions/potential-dust", (req, res) => __awaiter(void 0,
         const offsetValue = Number(offset);
         const params = [limitValue, offsetValue];
         // Execute the query
-        const result = yield db_utils_1.default.pool.query(queryBase, params);
+        const result = yield db_utils_1.default.pool.executeQuery(queryBase, params);
         // Execute count query to get total records (for pagination metadata)
-        const countResult = yield db_utils_1.default.pool.query(countQueryBase);
+        const countResult = yield db_utils_1.default.pool.executeQuery(countQueryBase);
         const totalCount = parseInt(countResult.rows[0].total);
         const totalPages = Math.ceil(totalCount / limitValue);
         const currentPage = Math.floor(offsetValue / limitValue) + 1;
@@ -236,9 +234,9 @@ app.get("/api/dust-transactions/potential-poisoning", (req, res) => __awaiter(vo
         const offsetValue = Number(offset);
         const params = [limitValue, offsetValue];
         // Execute the query
-        const result = yield db_utils_1.default.pool.query(queryBase, params);
+        const result = yield db_utils_1.default.pool.executeQuery(queryBase, params);
         // Execute count query to get total records (for pagination metadata)
-        const countResult = yield db_utils_1.default.pool.query(countQueryBase);
+        const countResult = yield db_utils_1.default.pool.executeQuery(countQueryBase);
         const totalCount = parseInt(countResult.rows[0].total);
         const totalPages = Math.ceil(totalCount / limitValue);
         const currentPage = Math.floor(offsetValue / limitValue) + 1;
@@ -281,131 +279,12 @@ app.get("/api/dust-transactions/potential-poisoning", (req, res) => __awaiter(vo
  */
 app.get("/api/overview", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        // Query for total transactions count
-        const totalTransactionsQuery = "SELECT COUNT(*) as total FROM dust_transactions";
-        const totalTransactionsResult = yield db_utils_1.default.pool.query(totalTransactionsQuery);
-        const totalTransactions = parseInt(totalTransactionsResult.rows[0].total);
-        // Query for successful transactions count
-        const successfulTransactionsQuery = "SELECT COUNT(*) as successful FROM dust_transactions WHERE success = true";
-        const successfulTransactionsResult = yield db_utils_1.default.pool.query(successfulTransactionsQuery);
-        const successfulTransactions = parseInt(successfulTransactionsResult.rows[0].successful);
-        // Calculate failed transactions
-        const failedTransactions = totalTransactions - successfulTransactions;
-        // Query for dusted transactions count
-        const dustedTransactionsQuery = "SELECT COUNT(*) as dusted FROM dust_transactions WHERE is_potential_dust = true";
-        const dustedTransactionsResult = yield db_utils_1.default.pool.query(dustedTransactionsQuery);
-        const dustedTransactions = parseInt(dustedTransactionsResult.rows[0].dusted);
-        // Query for poisoned transactions count
-        const poisonedTransactionsQuery = "SELECT COUNT(*) as poisoned FROM dust_transactions WHERE is_potential_poisoning = true";
-        const poisonedTransactionsResult = yield db_utils_1.default.pool.query(poisonedTransactionsQuery);
-        const poisonedTransactions = parseInt(poisonedTransactionsResult.rows[0].poisoned);
-        // Query for total volume in SOL
-        const volumeQuery = "SELECT SUM(amount) as total_volume FROM dust_transactions WHERE token_type = 'SOL' AND success = true";
-        const volumeResult = yield db_utils_1.default.pool.query(volumeQuery);
-        const volume = parseFloat(volumeResult.rows[0].total_volume || 0);
-        // Query for average transaction amount
-        const avgAmountQuery = "SELECT AVG(amount) as avg_amount FROM dust_transactions WHERE token_type = 'SOL' AND success = true";
-        const avgAmountResult = yield db_utils_1.default.pool.query(avgAmountQuery);
-        const avgTransactionAmount = parseFloat(avgAmountResult.rows[0].avg_amount || 0);
-        // Query for average fee
-        const avgFeeQuery = "SELECT AVG(fee::numeric) as avg_fee FROM dust_transactions WHERE success = true";
-        const avgFeeResult = yield db_utils_1.default.pool.query(avgFeeQuery);
-        const avgTransactionFee = parseFloat(avgFeeResult.rows[0].avg_fee || '0');
-        // Query for token type distribution
-        const tokenDistributionQuery = "SELECT token_type, COUNT(*) as count FROM dust_transactions GROUP BY token_type ORDER BY count DESC";
-        const tokenDistributionResult = yield db_utils_1.default.pool.query(tokenDistributionQuery);
-        const tokenDistribution = tokenDistributionResult.rows;
-        // Query for unique senders and recipients
-        const uniqueAddressesQuery = "SELECT COUNT(DISTINCT sender) as unique_senders, COUNT(DISTINCT recipient) as unique_recipients FROM dust_transactions";
-        const uniqueAddressesResult = yield db_utils_1.default.pool.query(uniqueAddressesQuery);
-        const uniqueSenders = parseInt(uniqueAddressesResult.rows[0].unique_senders || 0);
-        const uniqueRecipients = parseInt(uniqueAddressesResult.rows[0].unique_recipients || 0);
-        // Query for top dusting senders (potential attackers)
-        const topDustingSourcesQuery = "SELECT sender as address, COUNT(*) as small_transfers_count, COUNT(DISTINCT recipient) as unique_victims_count, AVG(amount) as avg_amount, MAX(timestamp) as last_activity FROM dust_transactions WHERE is_potential_dust = true AND sender IS NOT NULL GROUP BY sender ORDER BY small_transfers_count DESC LIMIT 10";
-        const topDustingSourcesResult = yield db_utils_1.default.pool.query(topDustingSourcesQuery);
-        const attackerPatterns = topDustingSourcesResult.rows.map(row => ({
-            address: row.address,
-            small_transfers_count: parseInt(row.small_transfers_count),
-            unique_victims_count: parseInt(row.unique_victims_count),
-            avg_amount: parseFloat(row.avg_amount || 0),
-            last_updated: row.last_activity,
-            // Adding placeholder values for compatibility
-            risk_score: 0.7,
-            regularity_score: 0.5,
-            centrality_score: 0.5,
-            uses_scripts: false
-        }));
-        // Query for top dusted recipients (potential victims)
-        const topDustedRecipientsQuery = "SELECT recipient as address, COUNT(*) as dust_transactions_count, COUNT(DISTINCT sender) as unique_attackers_count, SUM(amount) as total_received, MAX(timestamp) as last_activity FROM dust_transactions WHERE is_potential_dust = true AND recipient IS NOT NULL GROUP BY recipient ORDER BY dust_transactions_count DESC LIMIT 10";
-        const topDustedRecipientsResult = yield db_utils_1.default.pool.query(topDustedRecipientsQuery);
-        const victimExposure = topDustedRecipientsResult.rows.map(row => ({
-            address: row.address,
-            dust_transactions_count: parseInt(row.dust_transactions_count),
-            unique_attackers_count: parseInt(row.unique_attackers_count),
-            total_received: parseFloat(row.total_received || 0),
-            last_updated: row.last_activity,
-            // Adding placeholder values for compatibility
-            risk_score: 0.5,
-            risk_exposure: 0.6,
-            wallet_activity: "medium",
-            asset_value: "unknown"
-        }));
-        // Query for daily transaction summary
-        const dailySummaryQuery = "SELECT DATE(timestamp) as day, COUNT(*) as total_transactions, COUNT(CASE WHEN is_potential_dust = true THEN 1 END) as total_dust_transactions, COUNT(DISTINCT sender) as unique_senders, COUNT(DISTINCT recipient) as unique_recipients, AVG(amount) as avg_amount FROM dust_transactions GROUP BY DATE(timestamp) ORDER BY day DESC LIMIT 30";
-        const dailySummaryResult = yield db_utils_1.default.pool.query(dailySummaryQuery);
-        const dailySummary = dailySummaryResult.rows.map(row => ({
-            day: row.day,
-            total_transactions: parseInt(row.total_transactions),
-            total_dust_transactions: parseInt(row.total_dust_transactions),
-            unique_attackers: parseInt(row.unique_senders),
-            unique_victims: parseInt(row.unique_recipients),
-            avg_dust_amount: parseFloat(row.avg_amount || 0)
-        }));
-        // Query for recent transactions (limit to 10)
-        const recentTransactionsQuery = "SELECT * FROM dust_transactions ORDER BY timestamp DESC LIMIT 10";
-        const recentTransactionsResult = yield db_utils_1.default.pool.query(recentTransactionsQuery);
-        const recentTransactions = recentTransactionsResult.rows.map(tx => ({
-            id: tx.id,
-            signature: tx.signature,
-            timestamp: tx.timestamp,
-            slot: tx.slot,
-            success: tx.success,
-            sender: tx.sender,
-            recipient: tx.recipient,
-            amount: String(parseFloat(tx.amount)),
-            fee: String(parseFloat(tx.fee)),
-            token_type: tx.token_type,
-            token_address: tx.token_address,
-            is_potential_dust: tx.is_potential_dust,
-            is_potential_poisoning: tx.is_potential_poisoning,
-            risk_score: String(tx.risk_score || 0.5),
-            created_at: tx.created_at || tx.timestamp
-        }));
-        // Query for dusting sources count (addresses that are potential dusting sources)
-        const dustingSourcesQuery = "SELECT COUNT(DISTINCT sender) as sources FROM dust_transactions WHERE is_potential_dust = true";
-        const dustingSourcesResult = yield db_utils_1.default.pool.query(dustingSourcesQuery);
-        const dustingSources = parseInt(dustingSourcesResult.rows[0].sources || 0);
+        // Use the new getOverviewStatistics method to fetch all statistics at once
+        const statistics = yield db_utils_1.default.getOverviewStatistics();
         // Return all statistics
         res.status(200).json({
             status: "success",
-            data: {
-                totalTransactions,
-                successfulTransactions,
-                failedTransactions,
-                dustedTransactions,
-                poisonedTransactions,
-                volume,
-                dustingSources,
-                avgTransactionAmount,
-                avgTransactionFee,
-                tokenDistribution,
-                uniqueSenders,
-                uniqueRecipients,
-                attackerPatterns,
-                victimExposure,
-                dailySummary,
-                recentTransactions
-            },
+            data: statistics,
         });
     }
     catch (error) {
@@ -440,8 +319,8 @@ app.get("/api/check-wallet/:address", (req, res) => __awaiter(void 0, void 0, vo
         const candidateQuery = "SELECT address, risk_score FROM dusting_candidates WHERE address = $1";
         const attackerQuery = "SELECT * FROM dusting_attackers WHERE address = $1";
         const [candidateResult, attackerResult] = yield Promise.all([
-            db_utils_1.default.pool.query(candidateQuery, [address]),
-            db_utils_1.default.pool.query(attackerQuery, [address])
+            db_utils_1.default.pool.executeQuery(candidateQuery, [address]),
+            db_utils_1.default.pool.executeQuery(attackerQuery, [address])
         ]);
         // Check if address exists in dusting_attackers (more detailed information)
         if (attackerResult.rowCount && attackerResult.rowCount > 0) {
@@ -534,9 +413,9 @@ app.get("/api/dusting-attackers", (req, res) => __awaiter(void 0, void 0, void 0
         const paginationParams = [limitValue, offsetValue];
         const queryParams = [...params, ...paginationParams];
         // Execute the main query
-        const result = yield db_utils_1.default.pool.query(queryBase, queryParams);
+        const result = yield db_utils_1.default.pool.executeQuery(queryBase, queryParams);
         // Execute count query to get total records (for pagination metadata)
-        const countResult = yield db_utils_1.default.pool.query(countQueryBase, params);
+        const countResult = yield db_utils_1.default.pool.executeQuery(countQueryBase, params);
         const totalCount = parseInt(countResult.rows[0].total);
         const totalPages = Math.ceil(totalCount / limitValue);
         const currentPage = Math.floor(offsetValue / limitValue) + 1;
@@ -608,9 +487,9 @@ app.get("/api/dusting-victims", (req, res) => __awaiter(void 0, void 0, void 0, 
         const paginationParams = [limitValue, offsetValue];
         const queryParams = [...params, ...paginationParams];
         // Execute the main query
-        const result = yield db_utils_1.default.pool.query(queryBase, queryParams);
+        const result = yield db_utils_1.default.pool.executeQuery(queryBase, queryParams);
         // Execute count query to get total records (for pagination metadata)
-        const countResult = yield db_utils_1.default.pool.query(countQueryBase, params);
+        const countResult = yield db_utils_1.default.pool.executeQuery(countQueryBase, params);
         const totalCount = parseInt(countResult.rows[0].total);
         const totalPages = Math.ceil(totalCount / limitValue);
         const currentPage = Math.floor(offsetValue / limitValue) + 1;
@@ -653,7 +532,7 @@ app.get("/api/dusting-attackers/:address", (req, res) => __awaiter(void 0, void 
             });
         }
         const query = "SELECT * FROM dusting_attackers WHERE address = $1";
-        const result = yield db_utils_1.default.pool.query(query, [address]);
+        const result = yield db_utils_1.default.pool.executeQuery(query, [address]);
         if (result.rowCount === 0) {
             return res.status(404).json({
                 status: "error",
@@ -688,7 +567,7 @@ app.get("/api/dusting-victims/:address", (req, res) => __awaiter(void 0, void 0,
             });
         }
         const query = "SELECT * FROM dusting_victims WHERE address = $1";
-        const result = yield db_utils_1.default.pool.query(query, [address]);
+        const result = yield db_utils_1.default.pool.executeQuery(query, [address]);
         if (result.rowCount === 0) {
             return res.status(404).json({
                 status: "error",

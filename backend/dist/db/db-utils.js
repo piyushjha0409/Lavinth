@@ -57,27 +57,12 @@ class DatabaseUtils {
         return __awaiter(this, void 0, void 0, function* () {
             const client = yield config_1.default.connect();
             try {
-                console.log("Initializing database schema - checking for updates...");
-                // Read schema SQL from file
                 const schemaPath = path.join(__dirname, 'schema.sql');
                 const schemaSql = fs.readFileSync(schemaPath, 'utf8');
-                // Execute schema SQL with IF NOT EXISTS clauses
-                // This ensures existing tables won't be dropped
                 yield client.query(schemaSql);
-                // List created tables for verification
-                const tablesResult = yield client.query(`
-                SELECT table_name 
-                FROM information_schema.tables 
-                WHERE table_schema = 'public' 
-                ORDER BY table_name;
-            `);
-                console.log("Database schema updated successfully. Available tables:");
-                tablesResult.rows.forEach((row, index) => {
-                    console.log(`${index + 1}. ${row.table_name}`);
-                });
             }
             catch (error) {
-                console.error("Error initializing database schema:", error);
+                console.error('Error initializing database schema:', error);
                 throw error;
             }
             finally {
@@ -85,90 +70,180 @@ class DatabaseUtils {
             }
         });
     }
-    insertDustTransaction(transaction_1) {
-        return __awaiter(this, arguments, void 0, function* (transaction, maxRetries = 3) {
-            console.log(`Attempting to insert dust transaction: ${transaction.signature}`);
-            // SQL query for insertion with conflict handling
+    insertDustTransaction(tx) {
+        return __awaiter(this, void 0, void 0, function* () {
+            var _a;
             const query = `
-          INSERT INTO dust_transactions (
-            signature, timestamp, slot, success, sender, recipient, amount, fee, token_type, token_address, is_potential_dust, is_potential_poisoning, risk_score
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-          ON CONFLICT (signature, timestamp) DO UPDATE SET
-            slot = EXCLUDED.slot,
-            success = EXCLUDED.success,
-            sender = EXCLUDED.sender,
-            recipient = EXCLUDED.recipient,
-            amount = EXCLUDED.amount,
-            fee = EXCLUDED.fee,
-            token_type = EXCLUDED.token_type,
-            token_address = EXCLUDED.token_address,
-            is_potential_dust = EXCLUDED.is_potential_dust,
-            is_potential_poisoning = EXCLUDED.is_potential_poisoning,
-            risk_score = EXCLUDED.risk_score
-          RETURNING *;
-        `;
-            // Parameters for the query
-            const params = [
-                transaction.signature,
-                transaction.timestamp,
-                transaction.slot,
-                transaction.success,
-                transaction.sender,
-                transaction.recipient,
-                transaction.amount,
-                transaction.fee,
-                transaction.tokenType,
-                transaction.tokenAddress,
-                transaction.isPotentialDust,
-                transaction.isPotentialPoisoning,
-                transaction.riskScore
-            ];
-            try {
-                // Use the pool's executeQuery method which has built-in retry logic
-                const result = yield config_1.default.executeQuery(query, params, maxRetries);
-                console.log(`Successfully inserted/updated dust transaction: ${transaction.signature}`);
-                return result;
-            }
-            catch (error) {
-                console.error(`Failed to insert dust transaction after ${maxRetries} retries:`, error);
-                throw error;
-            }
+      INSERT INTO dust_transactions (
+        signature, timestamp, slot, success, sender, recipient, amount, fee, token_type, token_address, is_potential_dust, is_potential_poisoning, risk_score
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+      ON CONFLICT (signature, timestamp) DO UPDATE SET
+        slot = EXCLUDED.slot,
+        success = EXCLUDED.success,
+        sender = EXCLUDED.sender,
+        recipient = EXCLUDED.recipient,
+        amount = EXCLUDED.amount,
+        fee = EXCLUDED.fee,
+        token_type = EXCLUDED.token_type,
+        token_address = EXCLUDED.token_address,
+        is_potential_dust = EXCLUDED.is_potential_dust,
+        is_potential_poisoning = EXCLUDED.is_potential_poisoning,
+        risk_score = EXCLUDED.risk_score
+      RETURNING *;
+    `;
+            return this.pool.executeQuery(query, [
+                tx.signature,
+                tx.timestamp,
+                tx.slot,
+                tx.success,
+                tx.sender,
+                tx.recipient,
+                tx.amount,
+                tx.fee,
+                tx.tokenType,
+                tx.tokenAddress,
+                tx.isPotentialDust,
+                tx.isPotentialPoisoning,
+                (_a = tx.riskScore) !== null && _a !== void 0 ? _a : null
+            ]);
+        });
+    }
+    insertOrUpdateDustingAttacker(attacker) {
+        return __awaiter(this, void 0, void 0, function* () {
+            var _a, _b, _c, _d, _e, _f, _g, _h, _j;
+            const query = `
+      INSERT INTO dusting_attackers (
+        address, small_transfers_count, unique_victims_count, unique_victims, timestamps,
+        risk_score, wallet_age_days, total_transaction_volume, known_labels, related_addresses,
+        previous_attack_patterns, time_patterns, temporal_pattern, network_pattern,
+        behavioral_indicators, ml_features, ml_prediction, last_updated
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,CURRENT_TIMESTAMP)
+      ON CONFLICT (address) DO UPDATE SET
+        small_transfers_count = EXCLUDED.small_transfers_count,
+        unique_victims_count = EXCLUDED.unique_victims_count,
+        unique_victims = EXCLUDED.unique_victims,
+        timestamps = EXCLUDED.timestamps,
+        risk_score = EXCLUDED.risk_score,
+        wallet_age_days = EXCLUDED.wallet_age_days,
+        total_transaction_volume = EXCLUDED.total_transaction_volume,
+        known_labels = EXCLUDED.known_labels,
+        related_addresses = EXCLUDED.related_addresses,
+        previous_attack_patterns = EXCLUDED.previous_attack_patterns,
+        time_patterns = EXCLUDED.time_patterns,
+        temporal_pattern = EXCLUDED.temporal_pattern,
+        network_pattern = EXCLUDED.network_pattern,
+        behavioral_indicators = EXCLUDED.behavioral_indicators,
+        ml_features = EXCLUDED.ml_features,
+        ml_prediction = EXCLUDED.ml_prediction,
+        last_updated = CURRENT_TIMESTAMP
+      RETURNING *;
+    `;
+            return this.pool.executeQuery(query, [
+                attacker.address,
+                attacker.smallTransfersCount,
+                attacker.uniqueVictimsCount,
+                attacker.uniqueVictims,
+                attacker.timestamps,
+                attacker.riskScore,
+                (_a = attacker.walletAgeDays) !== null && _a !== void 0 ? _a : null,
+                (_b = attacker.totalTransactionVolume) !== null && _b !== void 0 ? _b : null,
+                (_c = attacker.knownLabels) !== null && _c !== void 0 ? _c : null,
+                (_d = attacker.relatedAddresses) !== null && _d !== void 0 ? _d : null,
+                (_e = attacker.previousAttackPatterns) !== null && _e !== void 0 ? _e : null,
+                (_f = attacker.timePatterns) !== null && _f !== void 0 ? _f : null,
+                attacker.temporalPattern,
+                attacker.networkPattern,
+                (_g = attacker.behavioralIndicators) !== null && _g !== void 0 ? _g : null,
+                (_h = attacker.mlFeatures) !== null && _h !== void 0 ? _h : null,
+                (_j = attacker.mlPrediction) !== null && _j !== void 0 ? _j : null
+            ]);
+        });
+    }
+    insertOrUpdateDustingVictim(victim) {
+        return __awaiter(this, void 0, void 0, function* () {
+            var _a, _b, _c, _d, _e, _f;
+            const query = `
+      INSERT INTO dusting_victims (
+        address, dust_transactions_count, unique_attackers_count, unique_attackers, timestamps,
+        risk_score, wallet_age_days, wallet_value_estimate, time_patterns, vulnerability_assessment,
+        ml_features, ml_prediction, last_updated
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,CURRENT_TIMESTAMP)
+      ON CONFLICT (address) DO UPDATE SET
+        dust_transactions_count = EXCLUDED.dust_transactions_count,
+        unique_attackers_count = EXCLUDED.unique_attackers_count,
+        unique_attackers = EXCLUDED.unique_attackers,
+        timestamps = EXCLUDED.timestamps,
+        risk_score = EXCLUDED.risk_score,
+        wallet_age_days = EXCLUDED.wallet_age_days,
+        wallet_value_estimate = EXCLUDED.wallet_value_estimate,
+        time_patterns = EXCLUDED.time_patterns,
+        vulnerability_assessment = EXCLUDED.vulnerability_assessment,
+        ml_features = EXCLUDED.ml_features,
+        ml_prediction = EXCLUDED.ml_prediction,
+        last_updated = CURRENT_TIMESTAMP
+      RETURNING *;
+    `;
+            return this.pool.executeQuery(query, [
+                victim.address,
+                victim.dustTransactionsCount,
+                victim.uniqueAttackersCount,
+                victim.uniqueAttackers,
+                victim.timestamps,
+                victim.riskScore,
+                (_a = victim.walletAgeDays) !== null && _a !== void 0 ? _a : null,
+                (_b = victim.walletValueEstimate) !== null && _b !== void 0 ? _b : null,
+                (_c = victim.timePatterns) !== null && _c !== void 0 ? _c : null,
+                (_d = victim.vulnerabilityAssessment) !== null && _d !== void 0 ? _d : null,
+                (_e = victim.mlFeatures) !== null && _e !== void 0 ? _e : null,
+                (_f = victim.mlPrediction) !== null && _f !== void 0 ? _f : null
+            ]);
         });
     }
     updateRiskAnalysis(analysis) {
         return __awaiter(this, void 0, void 0, function* () {
+            var _a, _b;
             const query = `
-            INSERT INTO risk_analysis (
-                address, risk_score, chain_analysis_data, trm_labs_data,
-                temporal_pattern, network_pattern, last_updated
-            ) VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
-            ON CONFLICT (address) DO UPDATE SET
-                risk_score = EXCLUDED.risk_score,
-                chain_analysis_data = EXCLUDED.chain_analysis_data,
-                trm_labs_data = EXCLUDED.trm_labs_data,
-                temporal_pattern = EXCLUDED.temporal_pattern,
-                network_pattern = EXCLUDED.network_pattern,
-                last_updated = CURRENT_TIMESTAMP
-            RETURNING *;
-        `;
-            return this.pool.query(query, [
+      INSERT INTO risk_analysis (
+        address, risk_score, chain_analysis_data, trm_labs_data,
+        temporal_pattern, network_pattern, last_updated
+      ) VALUES ($1,$2,$3,$4,$5,$6,CURRENT_TIMESTAMP)
+      ON CONFLICT (address) DO UPDATE SET
+        risk_score = EXCLUDED.risk_score,
+        chain_analysis_data = EXCLUDED.chain_analysis_data,
+        trm_labs_data = EXCLUDED.trm_labs_data,
+        temporal_pattern = EXCLUDED.temporal_pattern,
+        network_pattern = EXCLUDED.network_pattern,
+        last_updated = CURRENT_TIMESTAMP
+      RETURNING *;
+    `;
+            return this.pool.executeQuery(query, [
                 analysis.address,
                 analysis.riskScore,
-                analysis.chainAnalysisData,
-                analysis.trmLabsData,
+                (_a = analysis.chainAnalysisData) !== null && _a !== void 0 ? _a : null,
+                (_b = analysis.trmLabsData) !== null && _b !== void 0 ? _b : null,
                 analysis.temporalPattern,
                 analysis.networkPattern
             ]);
         });
     }
-    getHighRiskAddresses() {
-        return __awaiter(this, arguments, void 0, function* (minRiskScore = 0.7) {
-            return this.pool.query('SELECT * FROM risk_analysis WHERE risk_score >= $1 ORDER BY risk_score DESC', [minRiskScore]);
-        });
-    }
     getAddressTransactions(address) {
         return __awaiter(this, void 0, void 0, function* () {
-            return this.pool.query('SELECT * FROM dust_transactions WHERE sender = $1 OR recipient = $1 ORDER BY timestamp DESC', [address]);
+            return this.pool.executeQuery('SELECT * FROM dust_transactions WHERE sender = $1 OR recipient = $1 ORDER BY timestamp DESC', [address]);
+        });
+    }
+    getHighRiskAddresses() {
+        return __awaiter(this, arguments, void 0, function* (minRiskScore = 0.7) {
+            return this.pool.executeQuery('SELECT * FROM risk_analysis WHERE risk_score >= $1 ORDER BY risk_score DESC', [minRiskScore]);
+        });
+    }
+    getDustingAttackers() {
+        return __awaiter(this, arguments, void 0, function* (minRiskScore = 0.5) {
+            return this.pool.executeQuery('SELECT * FROM dusting_attackers WHERE risk_score >= $1 ORDER BY risk_score DESC', [minRiskScore]);
+        });
+    }
+    getDustingVictims() {
+        return __awaiter(this, arguments, void 0, function* (minRiskScore = 0.5) {
+            return this.pool.executeQuery('SELECT * FROM dusting_victims WHERE risk_score >= $1 ORDER BY risk_score DESC', [minRiskScore]);
         });
     }
     close() {
@@ -176,175 +251,130 @@ class DatabaseUtils {
             yield this.pool.end();
         });
     }
-    /**
-     * Find transaction by signature and timestamp
-     */
-    findTransactionBySignature(signature_1) {
-        return __awaiter(this, arguments, void 0, function* (signature, timestamp = null) {
-            try {
-                // If timestamp is provided, use both for exact match
-                if (timestamp) {
-                    const result = yield config_1.default.query('SELECT * FROM dust_transactions WHERE signature = $1 AND timestamp = $2', [signature, timestamp]);
-                    return result.rows[0];
-                }
-                else {
-                    // Otherwise just search by signature
-                    const result = yield config_1.default.query('SELECT * FROM dust_transactions WHERE signature = $1 ORDER BY timestamp DESC LIMIT 1', [signature]);
-                    return result.rows[0];
-                }
-            }
-            catch (error) {
-                console.error('Database error finding transaction:', error);
-                return null;
-            }
-        });
-    }
-    /**
-     * Update existing transaction
-     */
-    updateTransaction(signature, updateFields) {
+    getOverviewStatistics() {
         return __awaiter(this, void 0, void 0, function* () {
-            try {
-                // Build the SET part of the query dynamically based on provided fields
-                const setEntries = Object.entries(updateFields).map(([key, _], index) => {
-                    // Convert camelCase to snake_case for SQL column names
-                    const column = key.replace(/([A-Z])/g, '_$1').toLowerCase();
-                    return `${column} = $${index + 2}`;
-                });
-                const query = `
-                UPDATE dust_transactions 
-                SET ${setEntries.join(', ')} 
-                WHERE signature = $1
-            `;
-                const values = [signature, ...Object.values(updateFields)];
-                const result = yield config_1.default.query(query, values);
-                return result.rowCount !== null && result.rowCount > 0;
-            }
-            catch (error) {
-                console.error('Error updating transaction:', error);
-                throw error;
-            }
-        });
-    }
-    insertOrUpdateDustingAttacker(attacker) {
-        return __awaiter(this, void 0, void 0, function* () {
-            try {
-                const { address, smallTransfersCount, uniqueVictimsCount, uniqueVictims, timestamps, riskScore, temporalPattern, networkPattern, walletAgeDays, totalTransactionVolume, knownLabels, relatedAddresses, previousAttackPatterns, timePatterns, behavioralIndicators, mlFeatures, mlPrediction } = attacker;
-                // Use ON CONFLICT to handle duplicates based on address
-                const result = yield config_1.default.query(`INSERT INTO dusting_attackers 
-                (address, small_transfers_count, unique_victims_count, unique_victims, timestamps, 
-                    risk_score, temporal_pattern, network_pattern, wallet_age_days, total_transaction_volume,
-                    known_labels, related_addresses, previous_attack_patterns, time_patterns,
-                    behavioral_indicators, ml_features, ml_prediction, last_updated) 
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, CURRENT_TIMESTAMP)
-                ON CONFLICT (address) DO UPDATE SET
-                    small_transfers_count = EXCLUDED.small_transfers_count,
-                    unique_victims_count = EXCLUDED.unique_victims_count,
-                    unique_victims = EXCLUDED.unique_victims,
-                    timestamps = EXCLUDED.timestamps,
-                    risk_score = EXCLUDED.risk_score,
-                    temporal_pattern = EXCLUDED.temporal_pattern,
-                    network_pattern = EXCLUDED.network_pattern,
-                    wallet_age_days = EXCLUDED.wallet_age_days,
-                    total_transaction_volume = EXCLUDED.total_transaction_volume,
-                    known_labels = EXCLUDED.known_labels,
-                    related_addresses = EXCLUDED.related_addresses,
-                    previous_attack_patterns = EXCLUDED.previous_attack_patterns,
-                    time_patterns = EXCLUDED.time_patterns,
-                    behavioral_indicators = EXCLUDED.behavioral_indicators,
-                    ml_features = EXCLUDED.ml_features,
-                    ml_prediction = EXCLUDED.ml_prediction,
-                    last_updated = CURRENT_TIMESTAMP
-                RETURNING *`, [
-                    address,
-                    smallTransfersCount,
-                    uniqueVictimsCount,
-                    uniqueVictims,
-                    timestamps,
-                    riskScore,
-                    temporalPattern,
-                    networkPattern,
-                    walletAgeDays || null,
-                    totalTransactionVolume || null,
-                    knownLabels || null,
-                    relatedAddresses || null,
-                    previousAttackPatterns || null,
-                    timePatterns || null,
-                    behavioralIndicators || null,
-                    mlFeatures || null,
-                    mlPrediction || null
-                ]);
-                return result.rows[0];
-            }
-            catch (error) {
-                if (error instanceof Error) {
-                    console.error('Error inserting/updating dusting attacker:', error.message);
-                }
-                else {
-                    console.error('Error inserting/updating dusting attacker:', error);
-                }
-                throw error;
-            }
-        });
-    }
-    insertOrUpdateDustingVictim(victim) {
-        return __awaiter(this, void 0, void 0, function* () {
-            try {
-                const { address, dustTransactionsCount, uniqueAttackersCount, uniqueAttackers, timestamps, riskScore, walletAgeDays, walletValueEstimate, timePatterns, vulnerabilityAssessment, mlFeatures, mlPrediction } = victim;
-                // Use ON CONFLICT to handle duplicates based on address
-                const result = yield config_1.default.query(`INSERT INTO dusting_victims 
-                (address, dust_transactions_count, unique_attackers_count, unique_attackers, timestamps, 
-                    risk_score, wallet_age_days, wallet_value_estimate, time_patterns, vulnerability_assessment,
-                    ml_features, ml_prediction, last_updated) 
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP)
-                ON CONFLICT (address) DO UPDATE SET
-                    dust_transactions_count = EXCLUDED.dust_transactions_count,
-                    unique_attackers_count = EXCLUDED.unique_attackers_count,
-                    unique_attackers = EXCLUDED.unique_attackers,
-                    timestamps = EXCLUDED.timestamps,
-                    risk_score = EXCLUDED.risk_score,
-                    wallet_age_days = EXCLUDED.wallet_age_days,
-                    wallet_value_estimate = EXCLUDED.wallet_value_estimate,
-                    time_patterns = EXCLUDED.time_patterns,
-                    vulnerability_assessment = EXCLUDED.vulnerability_assessment,
-                    ml_features = EXCLUDED.ml_features,
-                    ml_prediction = EXCLUDED.ml_prediction,
-                    last_updated = CURRENT_TIMESTAMP
-                RETURNING *`, [
-                    address,
-                    dustTransactionsCount,
-                    uniqueAttackersCount,
-                    uniqueAttackers,
-                    timestamps,
-                    riskScore,
-                    walletAgeDays || null,
-                    walletValueEstimate || null,
-                    timePatterns || null,
-                    vulnerabilityAssessment || null,
-                    mlFeatures || null,
-                    mlPrediction || null
-                ]);
-                return result.rows[0];
-            }
-            catch (error) {
-                if (error instanceof Error) {
-                    console.error('Error inserting/updating dusting victim:', error.message);
-                }
-                else {
-                    console.error('Error inserting/updating dusting victim:', error);
-                }
-                throw error;
-            }
-        });
-    }
-    getDustingAttackers() {
-        return __awaiter(this, arguments, void 0, function* (minRiskScore = 0.5) {
-            return this.pool.query('SELECT * FROM dusting_attackers WHERE risk_score >= $1 ORDER BY risk_score DESC', [minRiskScore]);
-        });
-    }
-    getDustingVictims() {
-        return __awaiter(this, arguments, void 0, function* (minRiskScore = 0.5) {
-            return this.pool.query('SELECT * FROM dusting_victims WHERE risk_score >= $1 ORDER BY risk_score DESC', [minRiskScore]);
+            // Query for total transactions count
+            const totalTransactionsQuery = "SELECT COUNT(*) as total FROM dust_transactions";
+            const totalTransactionsResult = yield this.pool.executeQuery(totalTransactionsQuery);
+            const totalTransactions = parseInt(totalTransactionsResult.rows[0].total || '0');
+            // Query for successful transactions count
+            const successfulTransactionsQuery = "SELECT COUNT(*) as successful FROM dust_transactions WHERE success = true";
+            const successfulTransactionsResult = yield this.pool.executeQuery(successfulTransactionsQuery);
+            const successfulTransactions = parseInt(successfulTransactionsResult.rows[0].successful || '0');
+            // Calculate failed transactions
+            const failedTransactions = totalTransactions - successfulTransactions;
+            // Query for dusted transactions count
+            const dustedTransactionsQuery = "SELECT COUNT(*) as dusted FROM dust_transactions WHERE is_potential_dust = true";
+            const dustedTransactionsResult = yield this.pool.executeQuery(dustedTransactionsQuery);
+            const dustedTransactions = parseInt(dustedTransactionsResult.rows[0].dusted || '0');
+            // Query for poisoned transactions count
+            const poisonedTransactionsQuery = "SELECT COUNT(*) as poisoned FROM dust_transactions WHERE is_potential_poisoning = true";
+            const poisonedTransactionsResult = yield this.pool.executeQuery(poisonedTransactionsQuery);
+            const poisonedTransactions = parseInt(poisonedTransactionsResult.rows[0].poisoned || '0');
+            // Query for total volume in SOL
+            const volumeQuery = "SELECT SUM(amount) as total_volume FROM dust_transactions WHERE token_type = 'SOL' AND success = true";
+            const volumeResult = yield this.pool.executeQuery(volumeQuery);
+            const volume = parseFloat(volumeResult.rows[0].total_volume || '0');
+            // Query for average transaction amount
+            const avgAmountQuery = "SELECT AVG(amount) as avg_amount FROM dust_transactions WHERE token_type = 'SOL' AND success = true";
+            const avgAmountResult = yield this.pool.executeQuery(avgAmountQuery);
+            const avgTransactionAmount = parseFloat(avgAmountResult.rows[0].avg_amount || '0');
+            // Query for average fee
+            const avgFeeQuery = "SELECT AVG(fee::numeric) as avg_fee FROM dust_transactions WHERE success = true";
+            const avgFeeResult = yield this.pool.executeQuery(avgFeeQuery);
+            const avgTransactionFee = parseFloat(avgFeeResult.rows[0].avg_fee || '0');
+            // Query for token type distribution
+            const tokenDistributionQuery = "SELECT token_type, COUNT(*) as count FROM dust_transactions GROUP BY token_type ORDER BY count DESC";
+            const tokenDistributionResult = yield this.pool.executeQuery(tokenDistributionQuery);
+            const tokenDistribution = tokenDistributionResult.rows;
+            // Query for unique senders and recipients
+            const uniqueAddressesQuery = "SELECT COUNT(DISTINCT sender) as unique_senders, COUNT(DISTINCT recipient) as unique_recipients FROM dust_transactions";
+            const uniqueAddressesResult = yield this.pool.executeQuery(uniqueAddressesQuery);
+            const uniqueSenders = parseInt(uniqueAddressesResult.rows[0].unique_senders || '0');
+            const uniqueRecipients = parseInt(uniqueAddressesResult.rows[0].unique_recipients || '0');
+            // Query for top dusting senders (potential attackers)
+            const topDustingSourcesQuery = "SELECT sender as address, COUNT(*) as small_transfers_count, COUNT(DISTINCT recipient) as unique_victims_count, AVG(amount) as avg_amount, MAX(timestamp) as last_activity FROM dust_transactions WHERE is_potential_dust = true AND sender IS NOT NULL GROUP BY sender ORDER BY small_transfers_count DESC LIMIT 10";
+            const topDustingSourcesResult = yield this.pool.executeQuery(topDustingSourcesQuery);
+            const attackerPatterns = topDustingSourcesResult.rows.map((row) => ({
+                address: row.address,
+                small_transfers_count: parseInt(row.small_transfers_count),
+                unique_victims_count: parseInt(row.unique_victims_count),
+                avg_amount: parseFloat(row.avg_amount || '0'),
+                last_updated: row.last_activity,
+                // Adding placeholder values for compatibility
+                risk_score: 0.7,
+                regularity_score: 0.5,
+                centrality_score: 0.5,
+                uses_scripts: false
+            }));
+            // Query for top dusted recipients (potential victims)
+            const topDustedRecipientsQuery = "SELECT recipient as address, COUNT(*) as dust_transactions_count, COUNT(DISTINCT sender) as unique_attackers_count, SUM(amount) as total_received, MAX(timestamp) as last_activity FROM dust_transactions WHERE is_potential_dust = true AND recipient IS NOT NULL GROUP BY recipient ORDER BY dust_transactions_count DESC LIMIT 10";
+            const topDustedRecipientsResult = yield this.pool.executeQuery(topDustedRecipientsQuery);
+            const victimExposure = topDustedRecipientsResult.rows.map((row) => ({
+                address: row.address,
+                dust_transactions_count: parseInt(row.dust_transactions_count),
+                unique_attackers_count: parseInt(row.unique_attackers_count),
+                total_received: parseFloat(row.total_received || '0'),
+                last_updated: row.last_activity,
+                // Adding placeholder values for compatibility
+                risk_score: 0.5,
+                risk_exposure: 0.6,
+                wallet_activity: "medium",
+                asset_value: "unknown"
+            }));
+            // Query for daily transaction summary
+            const dailySummaryQuery = "SELECT DATE(timestamp) as day, COUNT(*) as total_transactions, COUNT(CASE WHEN is_potential_dust = true THEN 1 END) as total_dust_transactions, COUNT(DISTINCT sender) as unique_senders, COUNT(DISTINCT recipient) as unique_recipients, AVG(amount) as avg_amount FROM dust_transactions GROUP BY DATE(timestamp) ORDER BY day DESC LIMIT 30";
+            const dailySummaryResult = yield this.pool.executeQuery(dailySummaryQuery);
+            const dailySummary = dailySummaryResult.rows.map((row) => ({
+                day: row.day,
+                total_transactions: parseInt(row.total_transactions),
+                total_dust_transactions: parseInt(row.total_dust_transactions),
+                unique_attackers: parseInt(row.unique_senders),
+                unique_victims: parseInt(row.unique_recipients),
+                avg_dust_amount: parseFloat(row.avg_amount || '0')
+            }));
+            // Query for recent transactions (limit to 10)
+            const recentTransactionsQuery = "SELECT * FROM dust_transactions ORDER BY timestamp DESC LIMIT 10";
+            const recentTransactionsResult = yield this.pool.executeQuery(recentTransactionsQuery);
+            const recentTransactions = recentTransactionsResult.rows.map((tx) => ({
+                id: tx.id,
+                signature: tx.signature,
+                timestamp: tx.timestamp,
+                slot: tx.slot,
+                success: tx.success,
+                sender: tx.sender,
+                recipient: tx.recipient,
+                amount: String(parseFloat(tx.amount)),
+                fee: String(parseFloat(tx.fee)),
+                token_type: tx.token_type,
+                token_address: tx.token_address,
+                is_potential_dust: tx.is_potential_dust,
+                is_potential_poisoning: tx.is_potential_poisoning,
+                risk_score: String(tx.risk_score || 0.5),
+                created_at: tx.created_at || tx.timestamp
+            }));
+            // Query for dusting sources count (addresses that are potential dusting sources)
+            const dustingSourcesQuery = "SELECT COUNT(DISTINCT sender) as sources FROM dust_transactions WHERE is_potential_dust = true";
+            const dustingSourcesResult = yield this.pool.executeQuery(dustingSourcesQuery);
+            const dustingSources = parseInt(dustingSourcesResult.rows[0].sources || '0');
+            return {
+                totalTransactions,
+                successfulTransactions,
+                failedTransactions,
+                dustedTransactions,
+                poisonedTransactions,
+                volume,
+                dustingSources,
+                avgTransactionAmount,
+                avgTransactionFee,
+                tokenDistribution,
+                uniqueSenders,
+                uniqueRecipients,
+                attackerPatterns,
+                victimExposure,
+                dailySummary,
+                recentTransactions
+            };
         });
     }
 }
