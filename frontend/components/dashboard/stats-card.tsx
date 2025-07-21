@@ -1,5 +1,6 @@
-import { Card, CardContent } from "@/components/ui/card";
-import { ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ArrowUpRight, ArrowDownRight, TrendingUp } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export interface StatsCardProps {
   title: string;
@@ -23,35 +24,36 @@ export function StatsCard({
     : value.toLocaleString();
 
   return (
-    <Card>
-      <CardContent className="pt-6">
-        <div className="flex justify-between items-start">
-          <div>
-            <p className="text-sm text-muted-foreground">{title}</p>
-            <p className="text-2xl font-bold mt-1">{formattedValue}</p>
-          </div>
-          <div className="rounded-full bg-muted p-2">{icon}</div>
+    <Card className="hover:shadow-md transition-shadow">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        <div className={cn(
+          "rounded-full p-2",
+          trend === "up" && "bg-green-100 text-green-600",
+          trend === "down" && "bg-red-100 text-red-600",
+          trend === "neutral" && "bg-muted text-muted-foreground"
+        )}>
+          {icon}
         </div>
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">{formattedValue}</div>
         {change !== 0 && (
-          <div
-            className={`mt-4 flex items-center text-sm ${
-              trend === "up"
-                ? "text-green-600"
-                : trend === "down"
-                ? "text-red-600"
-                : "text-gray-600"
-            }`}
-          >
+          <p className={cn(
+            "text-xs flex items-center mt-1",
+            trend === "up" && "text-green-600",
+            trend === "down" && "text-red-600",
+            trend === "neutral" && "text-muted-foreground"
+          )}>
             {trend === "up" ? (
-              <ArrowUpRight className="h-4 w-4 mr-1" />
+              <TrendingUp className="h-3 w-3 mr-1" />
             ) : trend === "down" ? (
-              <ArrowDownRight className="h-4 w-4 mr-1" />
-            ) : null}
-            <span>
-              {Math.abs(change).toFixed(1)}%{" "}
-              {trend === "up" ? "increase" : "decrease"}
-            </span>
-          </div>
+              <ArrowDownRight className="h-3 w-3 mr-1" />
+            ) : (
+              <ArrowUpRight className="h-3 w-3 mr-1" />
+            )}
+            {Math.abs(change).toFixed(1)}% from last month
+          </p>
         )}
       </CardContent>
     </Card>
