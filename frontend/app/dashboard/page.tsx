@@ -16,16 +16,14 @@ import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { AlertTriangle } from "lucide-react";
-import { useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
+import { useEffect, useState, Suspense } from "react";
 import { DashboardData } from "../types/transactions";
 import { useSearchParams } from "next/navigation";
 import ApiKeysTab from "@/components/dashboard/api-keys-tab";
 
-export default function Dashboard() {
-  const { data: session } = useSession();
+function DashboardContent() {
   const searchParams = useSearchParams();
-  const activeTab = searchParams.get('tab') || 'overview';
+  const activeTab = searchParams.get("tab") || "overview";
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(
@@ -132,7 +130,9 @@ export default function Dashboard() {
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="text-center">
             <Progress value={33} className="w-64 mb-4" />
-            <p className="text-lg text-muted-foreground">Loading dashboard...</p>
+            <p className="text-lg text-muted-foreground">
+              Loading dashboard...
+            </p>
           </div>
         </div>
       </DashboardLayout>
@@ -145,7 +145,9 @@ export default function Dashboard() {
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="text-center">
             <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold mb-2">Error Loading Dashboard</h2>
+            <h2 className="text-xl font-semibold mb-2">
+              Error Loading Dashboard
+            </h2>
             <p className="text-muted-foreground mb-4">{error}</p>
             <Button onClick={fetchDashboardData}>Try Again</Button>
           </div>
@@ -156,19 +158,24 @@ export default function Dashboard() {
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'transactions':
+      case "transactions":
         return <TransactionsTab dashboardData={dashboardData} />;
-      case 'dusting':
-        return <DustingAnalysisTab dashboardData={dashboardData} topDusters={topDusters} />;
-      case 'api-keys':
+      case "dusting":
+        return (
+          <DustingAnalysisTab
+            dashboardData={dashboardData}
+            topDusters={topDusters}
+          />
+        );
+      case "api-keys":
         return <ApiKeysTab />;
-      case 'poisoning':
+      case "poisoning":
         return <PoisoningDetectionTab />;
-      case 'attackers':
+      case "attackers":
         return <AttackersTab />;
-      case 'victims':
+      case "victims":
         return <VictimsTab />;
-      case 'alerts':
+      case "alerts":
         return <AlertsTab />;
       default:
         return <OverviewTab dashboardData={dashboardData} />;
@@ -177,9 +184,26 @@ export default function Dashboard() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        {renderContent()}
-      </div>
+      <div className="space-y-6">{renderContent()}</div>
     </DashboardLayout>
+  );
+}
+
+export default function Dashboard() {
+  return (
+    <Suspense fallback={
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <Progress value={33} className="w-64 mb-4" />
+            <p className="text-lg text-muted-foreground">
+              Loading dashboard...
+            </p>
+          </div>
+        </div>
+      </DashboardLayout>
+    }>
+      <DashboardContent />
+    </Suspense>
   );
 }

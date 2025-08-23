@@ -3,7 +3,6 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
   Tooltip,
@@ -24,7 +23,7 @@ import {
 import { SidebarUser } from "./sidebar-user";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import Image from "next/image";
 import logo from "@/public/lavinth-logo.png";
 
@@ -83,7 +82,7 @@ interface SidebarProps {
   className?: string;
 }
 
-export function Sidebar({ className }: SidebarProps) {
+function SidebarContent({ className }: SidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const activeTab = searchParams.get("tab") || "overview";
@@ -193,6 +192,30 @@ export function Sidebar({ className }: SidebarProps) {
       </div>
       <SidebarUser />
     </div>
+  );
+}
+
+export function Sidebar({ className }: SidebarProps) {
+  return (
+    <Suspense fallback={
+      <div className={cn("flex h-full w-full flex-col bg-muted/40", className)}>
+        <div className="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
+          <div className="h-8 w-32 bg-muted rounded animate-pulse" />
+        </div>
+        <div className="flex-1">
+          <div className="grid items-start px-2 text-sm font-medium lg:px-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-lg px-3 py-4">
+                <div className="h-4 w-4 bg-muted rounded animate-pulse" />
+                <div className="h-4 w-20 bg-muted rounded animate-pulse" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    }>
+      <SidebarContent className={className} />
+    </Suspense>
   );
 }
 

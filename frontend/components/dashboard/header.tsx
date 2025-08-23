@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Shield, Menu, PanelLeftClose } from "lucide-react";
@@ -28,7 +28,7 @@ const getTabTitle = (activeTab: string | null) => {
   }
 };
 
-export function Header() {
+function HeaderContent() {
   const [isWalletCheckOpen, setIsWalletCheckOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const searchParams = useSearchParams();
@@ -85,5 +85,18 @@ export function Header() {
         onClose={() => setIsWalletCheckOpen(false)}
       />
     </header>
+  );
+}
+
+export function Header() {
+  return (
+    <Suspense fallback={
+      <header className="flex h-14 items-center gap-4 border-b bg-muted/40 px-4 lg:h-[60px] lg:px-6">
+        <div className="flex-1" />
+        <div className="h-8 w-24 bg-muted rounded animate-pulse" />
+      </header>
+    }>
+      <HeaderContent />
+    </Suspense>
   );
 }
