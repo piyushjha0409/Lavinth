@@ -70,7 +70,7 @@ export default function TransactionsTab({ dashboardData }: { dashboardData: Dash
       setIsTableLoading(true); // Set table loading state to true
       const offset = (currentPage - 1) * pageSize;
       const response = await fetch(
-        `https://api.lavinth.com/api/dust-transactions?limit=${pageSize}&offset=${offset}`
+        `/api/transactions?limit=${pageSize}&offset=${offset}`
       );
 
       if (!response.ok) {

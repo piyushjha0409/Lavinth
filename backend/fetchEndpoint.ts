@@ -1,8 +1,8 @@
-
 import cors from "cors";
 import dotenv from "dotenv";
 import express, { Application, Request, Response } from "express";
 import db from "./db/db-utils";
+import { validateToken } from "./middlewares/validateToken";
 
 // Load environment variables
 dotenv.config();
@@ -11,8 +11,15 @@ const app: Application = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
-app.use(cors());
+app.use(
+  cors({
+    origin: "https://www.lavinth.com",
+    methods: ["GET"],
+    allowedHeaders: ["Content-Type", "x-access-token"],
+  })
+);
 app.use(express.json());
+app.use(validateToken);
 
 /**
  * Get all dust transactions with optional filtering
@@ -333,7 +340,7 @@ app.get("/api/overview", async (req: Request, res: Response) => {
   try {
     // Use the new getOverviewStatistics method to fetch all statistics at once
     const statistics = await db.getOverviewStatistics();
-    
+
     // Return all statistics
     res.status(200).json({
       status: "success",
@@ -358,78 +365,86 @@ app.get("/api/overview", async (req: Request, res: Response) => {
  * - attackerDetails: detailed information if found in dusting_attackers table
  * - message: description of the result
  */
-app.get("/api/check-wallet/:address", async (req: Request, res: Response): Promise<any> => {
-  try {
-    const { address } = req.params;
+app.get(
+  "/api/check-wallet/:address",
+  async (req: Request, res: Response): Promise<any> => {
+    try {
+      const { address } = req.params;
 
-    // Validate the address format (basic validation for Solana address)
-    if (!address) {
-      return res.status(400).json({
+      // Validate the address format (basic validation for Solana address)
+      if (!address) {
+        return res.status(400).json({
+          status: "error",
+          message: "Invalid wallet address format",
+        });
+      }
+
+      // Check both dusting_candidates and dusting_attackers tables
+      const candidateQuery =
+        "SELECT address, risk_score FROM dusting_candidates WHERE address = $1";
+      const attackerQuery =
+        "SELECT * FROM dusting_attackers WHERE address = $1";
+
+      const [candidateResult, attackerResult] = await Promise.all([
+        db.pool.executeQuery(candidateQuery, [address]),
+        db.pool.executeQuery(attackerQuery, [address]),
+      ]);
+
+      // Check if address exists in dusting_attackers (more detailed information)
+      if (attackerResult.rowCount && attackerResult.rowCount > 0) {
+        const attacker = attackerResult.rows[0];
+        const riskScore = parseFloat(attacker.risk_score);
+
+        return res.status(200).json({
+          status: "success",
+          isDusted: true,
+          riskScore,
+          attackerDetails: {
+            smallTransfersCount: attacker.small_transfers_count,
+            uniqueVictimsCount: attacker.unique_victims_count,
+            temporalPattern: attacker.temporal_pattern,
+            networkPattern: attacker.network_pattern,
+            behavioralIndicators: attacker.behavioral_indicators,
+            lastUpdated: attacker.last_updated,
+          },
+          message: `This wallet address is flagged as a confirmed dusting attacker with a risk score of ${riskScore.toFixed(
+            4
+          )}.`,
+        });
+      }
+
+      // Check if address exists in dusting_candidates (basic information)
+      if (candidateResult.rowCount && candidateResult.rowCount > 0) {
+        const riskScore = parseFloat(candidateResult.rows[0].risk_score);
+
+        return res.status(200).json({
+          status: "success",
+          isDusted: true,
+          riskScore,
+          message: `This wallet address is flagged as a potential dusting source with a risk score of ${riskScore.toFixed(
+            4
+          )}.`,
+        });
+      } else {
+        // Address does not exist in the dusting_candidates table
+        return res.status(200).json({
+          status: "success",
+          isDusted: false,
+          riskScore: 0,
+          message:
+            "This wallet address is not flagged as a dusting source and appears to be safe.",
+        });
+      }
+    } catch (error) {
+      console.error("Error checking wallet address:", error);
+      res.status(500).json({
         status: "error",
-        message: "Invalid wallet address format",
+        message: "Failed to check wallet address",
+        error: (error as Error).message,
       });
     }
-
-    // Check both dusting_candidates and dusting_attackers tables
-    const candidateQuery = "SELECT address, risk_score FROM dusting_candidates WHERE address = $1";
-    const attackerQuery = "SELECT * FROM dusting_attackers WHERE address = $1";
-    
-    const [candidateResult, attackerResult] = await Promise.all([
-      db.pool.executeQuery(candidateQuery, [address]),
-      db.pool.executeQuery(attackerQuery, [address])
-    ]);
-    
-    // Check if address exists in dusting_attackers (more detailed information)
-    if (attackerResult.rowCount && attackerResult.rowCount > 0) {
-      const attacker = attackerResult.rows[0];
-      const riskScore = parseFloat(attacker.risk_score);
-      
-      return res.status(200).json({
-        status: "success",
-        isDusted: true,
-        riskScore,
-        attackerDetails: {
-          smallTransfersCount: attacker.small_transfers_count,
-          uniqueVictimsCount: attacker.unique_victims_count,
-          temporalPattern: attacker.temporal_pattern,
-          networkPattern: attacker.network_pattern,
-          behavioralIndicators: attacker.behavioral_indicators,
-          lastUpdated: attacker.last_updated
-        },
-        message: `This wallet address is flagged as a confirmed dusting attacker with a risk score of ${riskScore.toFixed(4)}.`,
-      });
-    }
-    
-    // Check if address exists in dusting_candidates (basic information)
-    if (candidateResult.rowCount && candidateResult.rowCount > 0) {
-      const riskScore = parseFloat(candidateResult.rows[0].risk_score);
-      
-      return res.status(200).json({
-        status: "success",
-        isDusted: true,
-        riskScore,
-        message: `This wallet address is flagged as a potential dusting source with a risk score of ${riskScore.toFixed(4)}.`,
-      });
-    } else {
-      // Address does not exist in the dusting_candidates table
-      return res.status(200).json({
-        status: "success",
-        isDusted: false,
-        riskScore: 0,
-        message: "This wallet address is not flagged as a dusting source and appears to be safe.",
-      });
-    }
-  } catch (error) {
-    console.error("Error checking wallet address:", error);
-    res.status(500).json({
-      status: "error",
-      message: "Failed to check wallet address",
-      error: (error as Error).message,
-    });
   }
-});
-
-
+);
 
 /**
  * Get dusting attackers with pagination and filtering
@@ -452,7 +467,8 @@ app.get("/api/dusting-attackers", async (req: Request, res: Response) => {
 
     // Build the main query with filters
     let queryBase = "SELECT * FROM dusting_attackers WHERE 1=1";
-    let countQueryBase = "SELECT COUNT(*) as total FROM dusting_attackers WHERE 1=1";
+    let countQueryBase =
+      "SELECT COUNT(*) as total FROM dusting_attackers WHERE 1=1";
     const params: any[] = [];
     let paramIndex = 1;
 
@@ -470,7 +486,7 @@ app.get("/api/dusting-attackers", async (req: Request, res: Response) => {
       "small_transfers_count",
       "unique_victims_count",
       "last_updated",
-      "wallet_age_days"
+      "wallet_age_days",
     ];
     const sortField = validSortFields.includes(sortBy as string)
       ? sortBy
@@ -540,7 +556,8 @@ app.get("/api/dusting-victims", async (req: Request, res: Response) => {
 
     // Build the main query with filters
     let queryBase = "SELECT * FROM dusting_victims WHERE 1=1";
-    let countQueryBase = "SELECT COUNT(*) as total FROM dusting_victims WHERE 1=1";
+    let countQueryBase =
+      "SELECT COUNT(*) as total FROM dusting_victims WHERE 1=1";
     const params: any[] = [];
     let paramIndex = 1;
 
@@ -558,7 +575,7 @@ app.get("/api/dusting-victims", async (req: Request, res: Response) => {
       "dust_transactions_count",
       "unique_attackers_count",
       "last_updated",
-      "wallet_age_days"
+      "wallet_age_days",
     ];
     const sortField = validSortFields.includes(sortBy as string)
       ? sortBy
@@ -610,80 +627,86 @@ app.get("/api/dusting-victims", async (req: Request, res: Response) => {
 /**
  * Get detailed information about a specific dusting attacker
  */
-app.get("/api/dusting-attackers/:address", async (req: Request, res: Response): Promise<any> => {
-  try {
-    const { address } = req.params;
+app.get(
+  "/api/dusting-attackers/:address",
+  async (req: Request, res: Response): Promise<any> => {
+    try {
+      const { address } = req.params;
 
-    // Validate the address format (basic validation for Solana address)
-    if (!address || address.length !== 44) {
-      return res.status(400).json({
+      // Validate the address format (basic validation for Solana address)
+      if (!address || address.length !== 44) {
+        return res.status(400).json({
+          status: "error",
+          message: "Invalid wallet address format",
+        });
+      }
+
+      const query = "SELECT * FROM dusting_attackers WHERE address = $1";
+      const result = await db.pool.executeQuery(query, [address]);
+
+      if (result.rowCount === 0) {
+        return res.status(404).json({
+          status: "error",
+          message: "Dusting attacker not found",
+        });
+      }
+
+      res.status(200).json({
+        status: "success",
+        data: result.rows[0],
+      });
+    } catch (error) {
+      console.error("Error fetching dusting attacker details:", error);
+      res.status(500).json({
         status: "error",
-        message: "Invalid wallet address format",
+        message: "Failed to fetch dusting attacker details",
+        error: (error as Error).message,
       });
     }
-
-    const query = "SELECT * FROM dusting_attackers WHERE address = $1";
-    const result = await db.pool.executeQuery(query, [address]);
-
-    if (result.rowCount === 0) {
-      return res.status(404).json({
-        status: "error",
-        message: "Dusting attacker not found",
-      });
-    }
-
-    res.status(200).json({
-      status: "success",
-      data: result.rows[0],
-    });
-  } catch (error) {
-    console.error("Error fetching dusting attacker details:", error);
-    res.status(500).json({
-      status: "error",
-      message: "Failed to fetch dusting attacker details",
-      error: (error as Error).message,
-    });
   }
-});
+);
 
 /**
  * Get detailed information about a specific dusting victim
  */
-app.get("/api/dusting-victims/:address", async (req: Request, res: Response): Promise<any> => {
-  try {
-    const { address } = req.params;
+app.get(
+  "/api/dusting-victims/:address",
+  async (req: Request, res: Response): Promise<any> => {
+    try {
+      const { address } = req.params;
 
-    // Validate the address format (basic validation for Solana address)
-    if (!address || address.length !== 44) {
-      return res.status(400).json({
+      // Validate the address format (basic validation for Solana address)
+      if (!address || address.length !== 44) {
+        return res.status(400).json({
+          status: "error",
+          message: "Invalid wallet address format",
+        });
+      }
+
+      const query = "SELECT * FROM dusting_victims WHERE address = $1";
+      const result = await db.pool.executeQuery(query, [address]);
+
+      if (result.rowCount === 0) {
+        return res.status(404).json({
+          status: "error",
+          message: "Dusting victim not found",
+        });
+      }
+
+      res.status(200).json({
+        status: "success",
+        data: result.rows[0],
+      });
+    } catch (error) {
+      console.error("Error fetching dusting victim details:", error);
+      res.status(500).json({
         status: "error",
-        message: "Invalid wallet address format",
+        message: "Failed to fetch dusting victim details",
+        error: (error as Error).message,
       });
     }
-
-    const query = "SELECT * FROM dusting_victims WHERE address = $1";
-    const result = await db.pool.executeQuery(query, [address]);
-
-    if (result.rowCount === 0) {
-      return res.status(404).json({
-        status: "error",
-        message: "Dusting victim not found",
-      });
-    }
-
-    res.status(200).json({
-      status: "success",
-      data: result.rows[0],
-    });
-  } catch (error) {
-    console.error("Error fetching dusting victim details:", error);
-    res.status(500).json({
-      status: "error",
-      message: "Failed to fetch dusting victim details",
-      error: (error as Error).message,
-    });
   }
-});
+);
 
 // Start the server
 app.listen(PORT, () => {

@@ -105,84 +105,13 @@ export default function SuspiciousTransactionsPage() {
     try {
       const offset = (page - 1) * pageSize;
 
-      // Build API endpoint based on filter type
-      let endpoint;
-
-      if (filterType === "dust") {
-        endpoint = `https://api.lavinth.com/api/dust-transactions/potential-dust?limit=${pageSize}&offset=${offset}`;
-      } else if (filterType === "poisoning") {
-        endpoint = `https://api.lavinth.com/api/dust-transactions/potential-poisoning?limit=${pageSize}&offset=${offset}`;
-      } else if (filterType === "attackers") {
-        endpoint = `https://api.lavinth.com/api/dusting-attackers?limit=${pageSize}&offset=${offset}`;
-      } else if (filterType === "victims") {
-        endpoint = `https://api.lavinth.com/api/dusting-victims?limit=${pageSize}&offset=${offset}`;
-      } else {
-        // For 'all', we need to fetch both dust and poisoning transactions and combine them
-        const dustEndpoint = `https://api.lavinth.com/api/dust-transactions/potential-dust?limit=${pageSize}&offset=${offset}`;
-        const poisoningEndpoint = `https://api.lavinth.com/api/dust-transactions/potential-poisoning?limit=${pageSize}&offset=${offset}`;
-
-        const [dustResponse, poisoningResponse] = await Promise.all([
-          fetch(dustEndpoint),
-          fetch(poisoningEndpoint),
-        ]);
-
-        if (!dustResponse.ok && !poisoningResponse.ok) {
-          throw new Error("Failed to fetch transaction data");
-        }
-
-        // Process dust transactions
-        const dustData = dustResponse.ok
-          ? ((await dustResponse.json()) as ApiResponse)
-          : { data: [], pagination: { total: 0, totalPages: 0 } };
-
-        // Process poisoning transactions
-        const poisoningData = poisoningResponse.ok
-          ? ((await poisoningResponse.json()) as ApiResponse)
-          : { data: [], pagination: { total: 0, totalPages: 0 } };
-
-        // Combine data from both endpoints
-        const combinedTransactions = [
-          ...(dustData.data || []),
-          ...(poisoningData.data || []),
-        ];
-
-        // Remove duplicates based on signature (some transactions might be both dust and poisoning)
-        const uniqueTransactions = Array.from(
-          new Map(combinedTransactions.map((tx) => [tx.signature, tx])).values()
-        );
-
-        // Sort by timestamp descending (most recent first) - client-side sorting only
-        uniqueTransactions.sort(
-          (a, b) =>
-            new Date(b.timestamp || Date.now()).getTime() - new Date(a.timestamp || Date.now()).getTime()
-        );
-
-        // Slice to match the page size
-        const paginatedTransactions = uniqueTransactions.slice(0, pageSize);
-
-        setTransactions(paginatedTransactions);
-
-        // Use the combined total for pagination estimation
-        const totalItems =
-          (dustData.pagination?.total || 0) +
-          (poisoningData.pagination?.total || 0);
-
-        setTotalItems(totalItems);
-
-        // Calculate pages based on the estimated total
-        const maxPages = Math.ceil(totalItems / pageSize);
-        setTotalPages(maxPages || 1);
-        setCurrentPage(page);
-
-        setIsTableLoading(false);
-        return;
-      }
-
-      // For single-type filters (dust or poisoning)
-      const response = await fetch(endpoint);
+      // Call our internal API route
+      const response = await fetch(
+        `/api/transactions/suspicious?type=${filterType}&limit=${pageSize}&offset=${offset}`
+      );
 
       if (!response.ok) {
-        throw new Error("Failed to fetch transaction data");
+        throw new Error(`Failed to fetch transaction data: ${response.status}`);
       }
 
       const data = (await response.json()) as ApiResponse;

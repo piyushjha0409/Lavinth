@@ -91,9 +91,7 @@ export function WalletCheckModal({ isOpen, onClose }: WalletCheckModalProps) {
     setResult(null);
 
     try {
-      const response = await fetch(
-        `https://api.lavinth.com/api/check-wallet/${walletAddress}`
-      );
+      const response = await fetch(`/api/wallet-check/${walletAddress}`);
       const data = await response.json();
 
       if (data.status === "error") {

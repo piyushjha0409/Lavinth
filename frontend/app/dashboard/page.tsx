@@ -1,10 +1,6 @@
 "use client";
 
-import {
-  AttackerPattern,
-  DailySummary,
-  VictimExposure,
-} from "@/app/types/dashboard";
+// Direct API call to dashboard route
 import AlertsTab from "@/components/dashboard/alerts-tab";
 import AttackersTab from "@/components/dashboard/attackers-tab";
 import DustingAnalysisTab from "@/components/dashboard/dusting-analysis-tab";
@@ -34,84 +30,37 @@ function DashboardContent() {
   const fetchDashboardData = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch("https://api.lavinth.com/api/overview");
+
+      // Direct API call to dashboard route
+      const response = await fetch("/api/dashboard");
 
       if (!response.ok) {
-        throw new Error("Failed to fetch dashboard data");
+        throw new Error(`Failed to fetch dashboard data: ${response.status}`);
       }
 
       const result = await response.json();
-      if (result.status === "success") {
-        const attackerPatterns = (result.data.attackerPatterns ||
-          []) as AttackerPattern[];
-        const victimExposure = (result.data.victimExposure ||
-          []) as VictimExposure[];
-        const dailySummary = (result.data.dailySummary || []) as DailySummary[];
+      const data = result.data;
 
-        const tokenDistribution = (result.data.tokenDistribution || []).map(
-          (item: { token_type: string; count: string | number }) => ({
-            token_type: item.token_type,
-            count: Number(item.count),
-          })
+      // Set dashboard data
+      setDashboardData(data);
+
+      // Transform attacker data for top dusters if available
+      if (data.attackerPatterns && data.attackerPatterns.length > 0) {
+        setTopDusters(
+          data.attackerPatterns.map(
+            (attacker: {
+              address: string;
+              small_transfers_count?: number;
+              unique_victims_count?: number;
+            }) => ({
+              address: attacker.address,
+              smallTransfersCount: attacker.small_transfers_count || 0,
+              uniqueRecipients: attacker.unique_victims_count || 0,
+            })
+          )
         );
-
-        if (attackerPatterns.length > 0) {
-          setTopDusters(
-            attackerPatterns.map(
-              (attacker: {
-                address: string;
-                small_transfers_count?: number;
-                unique_victims_count?: number;
-              }) => ({
-                address: attacker.address,
-                smallTransfersCount: attacker.small_transfers_count || 0,
-                uniqueRecipients: attacker.unique_victims_count || 0,
-              })
-            )
-          );
-        }
-
-        setDashboardData({
-          activeTransactions: result.data.totalTransactions || 0,
-          successfulTransactions: result.data.successfulTransactions || 0,
-          failedTransactions: result.data.failedTransactions || 0,
-          totalVolume: result.data.volume || 0,
-          averageTransactionSize:
-            result.data.avgTransactionAmount ||
-            (result.data.volume > 0 && result.data.totalTransactions > 0
-              ? result.data.volume / result.data.totalTransactions
-              : 0),
-          potentialDustCount: result.data.dustedTransactions || 0,
-          poisoningAttempts: result.data.poisonedTransactions || 0,
-          dustingSources: result.data.dustingSources || 0,
-          pendingTransactions: 0,
-          transactionsOverTime: [],
-          attackerPatterns,
-          victimExposure,
-          dailySummary,
-          avgTransactionFee: result.data.avgTransactionFee || 0,
-          uniqueSenders: result.data.uniqueSenders || 0,
-          uniqueRecipients: result.data.uniqueRecipients || 0,
-          tokenDistribution,
-        });
-      } else {
-        setDashboardData({
-          activeTransactions: result.data.totalTransactions || 0,
-          successfulTransactions: result.data.successfulTransactions || 0,
-          failedTransactions: result.data.failedTransactions || 0,
-          totalVolume: result.data.volume || 0,
-          averageTransactionSize:
-            result.data.volume > 0 && result.data.totalTransactions > 0
-              ? result.data.volume / result.data.totalTransactions
-              : 0,
-          potentialDustCount: result.data.dustedTransactions || 0,
-          poisoningAttempts: result.data.poisonedTransactions || 0,
-          dustingSources: result.data.dustingSources || 0,
-          pendingTransactions: 0,
-          transactionsOverTime: [],
-          tokenDistribution: [],
-        });
       }
+
       setIsLoading(false);
     } catch (err) {
       console.error("Error fetching dashboard data:", err);
@@ -191,18 +140,20 @@ function DashboardContent() {
 
 export default function Dashboard() {
   return (
-    <Suspense fallback={
-      <DashboardLayout>
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="text-center">
-            <Progress value={33} className="w-64 mb-4" />
-            <p className="text-lg text-muted-foreground">
-              Loading dashboard...
-            </p>
+    <Suspense
+      fallback={
+        <DashboardLayout>
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <div className="text-center">
+              <Progress value={33} className="w-64 mb-4" />
+              <p className="text-lg text-muted-foreground">
+                Loading dashboard...
+              </p>
+            </div>
           </div>
-        </div>
-      </DashboardLayout>
-    }>
+        </DashboardLayout>
+      }
+    >
       <DashboardContent />
     </Suspense>
   );

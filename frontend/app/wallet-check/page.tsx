@@ -85,9 +85,7 @@ const WalletCheckWithParams = () => {
     setResult(null);
 
     try {
-      const response = await fetch(
-        `https://api.lavinth.com/api/check-wallet/${address}`
-      );
+      const response = await fetch(`/api/wallet-check/${address}`);
       const data = await response.json();
 
       if (data.status === "error") {
