@@ -55,10 +55,6 @@ Lavinth addresses critical security challenges in the Solana ecosystem:
    npm run build
    npm start
    ```
-   For development with hot-reloading:
-   ```bash
-   npm run dev
-   ```
 
 ### Frontend Setup
 
