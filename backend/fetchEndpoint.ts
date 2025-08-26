@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import express, { Application, Request, Response } from "express";
 import db from "./db/db-utils";
 import { validateToken } from "./middlewares/validateToken";
+import { validateApiKey } from "./middlewares/validateApiKey";
 
 // Load environment variables
 dotenv.config();
@@ -15,11 +16,10 @@ app.use(
   cors({
     origin: "https://www.lavinth.com",
     methods: ["GET"],
-    allowedHeaders: ["Content-Type", "x-access-token"],
+    allowedHeaders: ["Content-Type", "x-access-token", "x-api-key"],
   })
 );
 app.use(express.json());
-app.use(validateToken);
 
 /**
  * Get all dust transactions with optional filtering
@@ -36,133 +36,137 @@ app.use(validateToken);
  * - sortBy: field to sort by (default: timestamp)
  * - sortOrder: asc or desc (default: desc)
  */
-app.get("/api/dust-transactions", async (req: Request, res: Response) => {
-  try {
-    const {
-      limit = 10,
-      offset = 0,
-      sender,
-      recipient,
-      minRiskScore,
-      isPotentialDust,
-      isPotentialPoisoning,
-      startDate,
-      endDate,
-      sortBy = "timestamp",
-      sortOrder = "desc",
-    } = req.query;
+app.get(
+  "/api/dust-transactions",
+  validateToken,
+  async (req: Request, res: Response) => {
+    try {
+      const {
+        limit = 10,
+        offset = 0,
+        sender,
+        recipient,
+        minRiskScore,
+        isPotentialDust,
+        isPotentialPoisoning,
+        startDate,
+        endDate,
+        sortBy = "timestamp",
+        sortOrder = "desc",
+      } = req.query;
 
-    // Build the main query with filters
-    let queryBase = "SELECT * FROM dust_transactions WHERE 1=1";
-    let countQueryBase =
-      "SELECT COUNT(*) as total FROM dust_transactions WHERE 1=1";
-    const params: any[] = [];
-    let paramIndex = 1;
+      // Build the main query with filters
+      let queryBase = "SELECT * FROM dust_transactions WHERE 1=1";
+      let countQueryBase =
+        "SELECT COUNT(*) as total FROM dust_transactions WHERE 1=1";
+      const params: any[] = [];
+      let paramIndex = 1;
 
-    // Add filters if provided
-    if (sender) {
-      const filterClause = ` AND sender = $${paramIndex++}`;
-      queryBase += filterClause;
-      countQueryBase += filterClause;
-      params.push(sender);
+      // Add filters if provided
+      if (sender) {
+        const filterClause = ` AND sender = $${paramIndex++}`;
+        queryBase += filterClause;
+        countQueryBase += filterClause;
+        params.push(sender);
+      }
+
+      if (recipient) {
+        const filterClause = ` AND recipient = $${paramIndex++}`;
+        queryBase += filterClause;
+        countQueryBase += filterClause;
+        params.push(recipient);
+      }
+
+      if (minRiskScore !== undefined) {
+        const filterClause = ` AND risk_score >= $${paramIndex++}`;
+        queryBase += filterClause;
+        countQueryBase += filterClause;
+        params.push(minRiskScore);
+      }
+
+      if (isPotentialDust !== undefined) {
+        const filterClause = ` AND is_potential_dust = $${paramIndex++}`;
+        queryBase += filterClause;
+        countQueryBase += filterClause;
+        params.push(isPotentialDust === "true");
+      }
+
+      if (isPotentialPoisoning !== undefined) {
+        const filterClause = ` AND is_potential_poisoning = $${paramIndex++}`;
+        queryBase += filterClause;
+        countQueryBase += filterClause;
+        params.push(isPotentialPoisoning === "true");
+      }
+
+      if (startDate) {
+        const filterClause = ` AND timestamp >= $${paramIndex++}`;
+        queryBase += filterClause;
+        countQueryBase += filterClause;
+        params.push(new Date(startDate as string));
+      }
+
+      if (endDate) {
+        const filterClause = ` AND timestamp <= $${paramIndex++}`;
+        queryBase += filterClause;
+        countQueryBase += filterClause;
+        params.push(new Date(endDate as string));
+      }
+
+      // Add sorting and pagination to the main query
+      const validSortFields = [
+        "timestamp",
+        "amount",
+        "risk_score",
+        "slot",
+        "fee",
+      ];
+      const sortField = validSortFields.includes(sortBy as string)
+        ? sortBy
+        : "timestamp";
+      const order = sortOrder === "asc" ? "ASC" : "DESC";
+
+      queryBase += ` ORDER BY ${sortField} ${order}`;
+      queryBase += ` LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
+
+      const limitValue = Number(limit);
+      const offsetValue = Number(offset);
+      const paginationParams = [limitValue, offsetValue];
+      const queryParams = [...params, ...paginationParams];
+
+      // Execute the main query
+      const result = await db.pool.executeQuery(queryBase, queryParams);
+
+      // Execute count query to get total records (for pagination metadata)
+      const countResult = await db.pool.executeQuery(countQueryBase, params);
+      const totalCount = parseInt(countResult.rows[0].total);
+      const totalPages = Math.ceil(totalCount / limitValue);
+      const currentPage = Math.floor(offsetValue / limitValue) + 1;
+
+      // Return the results with pagination metadata
+      res.status(200).json({
+        status: "success",
+        count: result.rowCount,
+        pagination: {
+          total: totalCount,
+          totalPages,
+          currentPage,
+          limit: limitValue,
+          offset: offsetValue,
+          hasNextPage: currentPage < totalPages,
+          hasPrevPage: currentPage > 1,
+        },
+        data: result.rows,
+      });
+    } catch (error) {
+      console.error("Error fetching dust transactions:", error);
+      res.status(500).json({
+        status: "error",
+        message: "Failed to fetch dust transactions",
+        error: (error as Error).message,
+      });
     }
-
-    if (recipient) {
-      const filterClause = ` AND recipient = $${paramIndex++}`;
-      queryBase += filterClause;
-      countQueryBase += filterClause;
-      params.push(recipient);
-    }
-
-    if (minRiskScore !== undefined) {
-      const filterClause = ` AND risk_score >= $${paramIndex++}`;
-      queryBase += filterClause;
-      countQueryBase += filterClause;
-      params.push(minRiskScore);
-    }
-
-    if (isPotentialDust !== undefined) {
-      const filterClause = ` AND is_potential_dust = $${paramIndex++}`;
-      queryBase += filterClause;
-      countQueryBase += filterClause;
-      params.push(isPotentialDust === "true");
-    }
-
-    if (isPotentialPoisoning !== undefined) {
-      const filterClause = ` AND is_potential_poisoning = $${paramIndex++}`;
-      queryBase += filterClause;
-      countQueryBase += filterClause;
-      params.push(isPotentialPoisoning === "true");
-    }
-
-    if (startDate) {
-      const filterClause = ` AND timestamp >= $${paramIndex++}`;
-      queryBase += filterClause;
-      countQueryBase += filterClause;
-      params.push(new Date(startDate as string));
-    }
-
-    if (endDate) {
-      const filterClause = ` AND timestamp <= $${paramIndex++}`;
-      queryBase += filterClause;
-      countQueryBase += filterClause;
-      params.push(new Date(endDate as string));
-    }
-
-    // Add sorting and pagination to the main query
-    const validSortFields = [
-      "timestamp",
-      "amount",
-      "risk_score",
-      "slot",
-      "fee",
-    ];
-    const sortField = validSortFields.includes(sortBy as string)
-      ? sortBy
-      : "timestamp";
-    const order = sortOrder === "asc" ? "ASC" : "DESC";
-
-    queryBase += ` ORDER BY ${sortField} ${order}`;
-    queryBase += ` LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
-
-    const limitValue = Number(limit);
-    const offsetValue = Number(offset);
-    const paginationParams = [limitValue, offsetValue];
-    const queryParams = [...params, ...paginationParams];
-
-    // Execute the main query
-    const result = await db.pool.executeQuery(queryBase, queryParams);
-
-    // Execute count query to get total records (for pagination metadata)
-    const countResult = await db.pool.executeQuery(countQueryBase, params);
-    const totalCount = parseInt(countResult.rows[0].total);
-    const totalPages = Math.ceil(totalCount / limitValue);
-    const currentPage = Math.floor(offsetValue / limitValue) + 1;
-
-    // Return the results with pagination metadata
-    res.status(200).json({
-      status: "success",
-      count: result.rowCount,
-      pagination: {
-        total: totalCount,
-        totalPages,
-        currentPage,
-        limit: limitValue,
-        offset: offsetValue,
-        hasNextPage: currentPage < totalPages,
-        hasPrevPage: currentPage > 1,
-      },
-      data: result.rows,
-    });
-  } catch (error) {
-    console.error("Error fetching dust transactions:", error);
-    res.status(500).json({
-      status: "error",
-      message: "Failed to fetch dust transactions",
-      error: (error as Error).message,
-    });
   }
-});
+);
 
 /**
  * Get all potential dust transactions
@@ -174,6 +178,7 @@ app.get("/api/dust-transactions", async (req: Request, res: Response) => {
  */
 app.get(
   "/api/dust-transactions/potential-dust",
+  validateToken,
   async (req: Request, res: Response) => {
     try {
       const {
@@ -254,6 +259,7 @@ app.get(
  */
 app.get(
   "/api/dust-transactions/potential-poisoning",
+  validateToken,
   async (req: Request, res: Response) => {
     try {
       const {
@@ -336,7 +342,7 @@ app.get(
  * 7. Suspicious wallet count
  * 8. Dusting sources count
  */
-app.get("/api/overview", async (req: Request, res: Response) => {
+app.get("/api/overview", validateToken, async (req: Request, res: Response) => {
   try {
     // Use the new getOverviewStatistics method to fetch all statistics at once
     const statistics = await db.getOverviewStatistics();
@@ -367,6 +373,7 @@ app.get("/api/overview", async (req: Request, res: Response) => {
  */
 app.get(
   "/api/check-wallet/:address",
+  validateApiKey,
   async (req: Request, res: Response): Promise<any> => {
     try {
       const { address } = req.params;
@@ -455,85 +462,89 @@ app.get(
  * - sortBy: field to sort by (default: risk_score)
  * - sortOrder: asc or desc (default: desc)
  */
-app.get("/api/dusting-attackers", async (req: Request, res: Response) => {
-  try {
-    const {
-      limit = 10,
-      offset = 0,
-      minRiskScore,
-      sortBy = "risk_score",
-      sortOrder = "desc",
-    } = req.query;
+app.get(
+  "/api/dusting-attackers",
+  validateToken,
+  async (req: Request, res: Response) => {
+    try {
+      const {
+        limit = 10,
+        offset = 0,
+        minRiskScore,
+        sortBy = "risk_score",
+        sortOrder = "desc",
+      } = req.query;
 
-    // Build the main query with filters
-    let queryBase = "SELECT * FROM dusting_attackers WHERE 1=1";
-    let countQueryBase =
-      "SELECT COUNT(*) as total FROM dusting_attackers WHERE 1=1";
-    const params: any[] = [];
-    let paramIndex = 1;
+      // Build the main query with filters
+      let queryBase = "SELECT * FROM dusting_attackers WHERE 1=1";
+      let countQueryBase =
+        "SELECT COUNT(*) as total FROM dusting_attackers WHERE 1=1";
+      const params: any[] = [];
+      let paramIndex = 1;
 
-    // Add filters if provided
-    if (minRiskScore !== undefined) {
-      const filterClause = ` AND risk_score >= $${paramIndex++}`;
-      queryBase += filterClause;
-      countQueryBase += filterClause;
-      params.push(minRiskScore);
+      // Add filters if provided
+      if (minRiskScore !== undefined) {
+        const filterClause = ` AND risk_score >= $${paramIndex++}`;
+        queryBase += filterClause;
+        countQueryBase += filterClause;
+        params.push(minRiskScore);
+      }
+
+      // Add sorting and pagination to the main query
+      const validSortFields = [
+        "risk_score",
+        "small_transfers_count",
+        "unique_victims_count",
+        "last_updated",
+        "wallet_age_days",
+      ];
+      const sortField = validSortFields.includes(sortBy as string)
+        ? sortBy
+        : "risk_score";
+      const order = sortOrder === "asc" ? "ASC" : "DESC";
+
+      queryBase += ` ORDER BY ${sortField} ${order}`;
+      queryBase += ` LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
+
+      const limitValue = Number(limit);
+      const offsetValue = Number(offset);
+      const paginationParams = [limitValue, offsetValue];
+      const queryParams = [...params, ...paginationParams];
+
+      // Execute the main query
+      const result = await db.pool.executeQuery(queryBase, queryParams);
+
+      // Execute count query to get total records (for pagination metadata)
+      const countResult = await db.pool.executeQuery(countQueryBase, params);
+      const totalCount = parseInt(countResult.rows[0].total);
+      const totalPages = Math.ceil(totalCount / limitValue);
+      const currentPage = Math.floor(offsetValue / limitValue) + 1;
+
+      // Return the results with pagination metadata
+      res.status(200).json({
+        status: "success",
+        count: result.rowCount,
+        pagination: {
+          total: totalCount,
+          totalPages,
+          currentPage,
+          limit: limitValue,
+          offset: offsetValue,
+          hasNextPage: currentPage < totalPages,
+          hasPrevPage: currentPage > 1,
+        },
+        data: result.rows,
+      });
+    } catch (error) {
+      console.error("Error fetching dusting attackers:", error);
+      res.status(500).json({
+        status: "error",
+        message: "Failed to fetch dusting attackers",
+        error: (error as Error).message,
+      });
     }
-
-    // Add sorting and pagination to the main query
-    const validSortFields = [
-      "risk_score",
-      "small_transfers_count",
-      "unique_victims_count",
-      "last_updated",
-      "wallet_age_days",
-    ];
-    const sortField = validSortFields.includes(sortBy as string)
-      ? sortBy
-      : "risk_score";
-    const order = sortOrder === "asc" ? "ASC" : "DESC";
-
-    queryBase += ` ORDER BY ${sortField} ${order}`;
-    queryBase += ` LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
-
-    const limitValue = Number(limit);
-    const offsetValue = Number(offset);
-    const paginationParams = [limitValue, offsetValue];
-    const queryParams = [...params, ...paginationParams];
-
-    // Execute the main query
-    const result = await db.pool.executeQuery(queryBase, queryParams);
-
-    // Execute count query to get total records (for pagination metadata)
-    const countResult = await db.pool.executeQuery(countQueryBase, params);
-    const totalCount = parseInt(countResult.rows[0].total);
-    const totalPages = Math.ceil(totalCount / limitValue);
-    const currentPage = Math.floor(offsetValue / limitValue) + 1;
-
-    // Return the results with pagination metadata
-    res.status(200).json({
-      status: "success",
-      count: result.rowCount,
-      pagination: {
-        total: totalCount,
-        totalPages,
-        currentPage,
-        limit: limitValue,
-        offset: offsetValue,
-        hasNextPage: currentPage < totalPages,
-        hasPrevPage: currentPage > 1,
-      },
-      data: result.rows,
-    });
-  } catch (error) {
-    console.error("Error fetching dusting attackers:", error);
-    res.status(500).json({
-      status: "error",
-      message: "Failed to fetch dusting attackers",
-      error: (error as Error).message,
-    });
   }
-});
+);
 
 /**
  * Get dusting victims with pagination and filtering
@@ -544,91 +555,96 @@ app.get("/api/dusting-attackers", async (req: Request, res: Response) => {
  * - sortBy: field to sort by (default: risk_score)
  * - sortOrder: asc or desc (default: desc)
  */
-app.get("/api/dusting-victims", async (req: Request, res: Response) => {
-  try {
-    const {
-      limit = 10,
-      offset = 0,
-      minRiskScore,
-      sortBy = "risk_score",
-      sortOrder = "desc",
-    } = req.query;
+app.get(
+  "/api/dusting-victims",
+  validateToken,
+  async (req: Request, res: Response) => {
+    try {
+      const {
+        limit = 10,
+        offset = 0,
+        minRiskScore,
+        sortBy = "risk_score",
+        sortOrder = "desc",
+      } = req.query;
 
-    // Build the main query with filters
-    let queryBase = "SELECT * FROM dusting_victims WHERE 1=1";
-    let countQueryBase =
-      "SELECT COUNT(*) as total FROM dusting_victims WHERE 1=1";
-    const params: any[] = [];
-    let paramIndex = 1;
+      // Build the main query with filters
+      let queryBase = "SELECT * FROM dusting_victims WHERE 1=1";
+      let countQueryBase =
+        "SELECT COUNT(*) as total FROM dusting_victims WHERE 1=1";
+      const params: any[] = [];
+      let paramIndex = 1;
 
-    // Add filters if provided
-    if (minRiskScore !== undefined) {
-      const filterClause = ` AND risk_score >= $${paramIndex++}`;
-      queryBase += filterClause;
-      countQueryBase += filterClause;
-      params.push(minRiskScore);
+      // Add filters if provided
+      if (minRiskScore !== undefined) {
+        const filterClause = ` AND risk_score >= $${paramIndex++}`;
+        queryBase += filterClause;
+        countQueryBase += filterClause;
+        params.push(minRiskScore);
+      }
+
+      // Add sorting and pagination to the main query
+      const validSortFields = [
+        "risk_score",
+        "dust_transactions_count",
+        "unique_attackers_count",
+        "last_updated",
+        "wallet_age_days",
+      ];
+      const sortField = validSortFields.includes(sortBy as string)
+        ? sortBy
+        : "risk_score";
+      const order = sortOrder === "asc" ? "ASC" : "DESC";
+
+      queryBase += ` ORDER BY ${sortField} ${order}`;
+      queryBase += ` LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
+
+      const limitValue = Number(limit);
+      const offsetValue = Number(offset);
+      const paginationParams = [limitValue, offsetValue];
+      const queryParams = [...params, ...paginationParams];
+
+      // Execute the main query
+      const result = await db.pool.executeQuery(queryBase, queryParams);
+
+      // Execute count query to get total records (for pagination metadata)
+      const countResult = await db.pool.executeQuery(countQueryBase, params);
+      const totalCount = parseInt(countResult.rows[0].total);
+      const totalPages = Math.ceil(totalCount / limitValue);
+      const currentPage = Math.floor(offsetValue / limitValue) + 1;
+
+      // Return the results with pagination metadata
+      res.status(200).json({
+        status: "success",
+        count: result.rowCount,
+        pagination: {
+          total: totalCount,
+          totalPages,
+          currentPage,
+          limit: limitValue,
+          offset: offsetValue,
+          hasNextPage: currentPage < totalPages,
+          hasPrevPage: currentPage > 1,
+        },
+        data: result.rows,
+      });
+    } catch (error) {
+      console.error("Error fetching dusting victims:", error);
+      res.status(500).json({
+        status: "error",
+        message: "Failed to fetch dusting victims",
+        error: (error as Error).message,
+      });
     }
-
-    // Add sorting and pagination to the main query
-    const validSortFields = [
-      "risk_score",
-      "dust_transactions_count",
-      "unique_attackers_count",
-      "last_updated",
-      "wallet_age_days",
-    ];
-    const sortField = validSortFields.includes(sortBy as string)
-      ? sortBy
-      : "risk_score";
-    const order = sortOrder === "asc" ? "ASC" : "DESC";
-
-    queryBase += ` ORDER BY ${sortField} ${order}`;
-    queryBase += ` LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
-
-    const limitValue = Number(limit);
-    const offsetValue = Number(offset);
-    const paginationParams = [limitValue, offsetValue];
-    const queryParams = [...params, ...paginationParams];
-
-    // Execute the main query
-    const result = await db.pool.executeQuery(queryBase, queryParams);
-
-    // Execute count query to get total records (for pagination metadata)
-    const countResult = await db.pool.executeQuery(countQueryBase, params);
-    const totalCount = parseInt(countResult.rows[0].total);
-    const totalPages = Math.ceil(totalCount / limitValue);
-    const currentPage = Math.floor(offsetValue / limitValue) + 1;
-
-    // Return the results with pagination metadata
-    res.status(200).json({
-      status: "success",
-      count: result.rowCount,
-      pagination: {
-        total: totalCount,
-        totalPages,
-        currentPage,
-        limit: limitValue,
-        offset: offsetValue,
-        hasNextPage: currentPage < totalPages,
-        hasPrevPage: currentPage > 1,
-      },
-      data: result.rows,
-    });
-  } catch (error) {
-    console.error("Error fetching dusting victims:", error);
-    res.status(500).json({
-      status: "error",
-      message: "Failed to fetch dusting victims",
-      error: (error as Error).message,
-    });
   }
-});
+);
 
 /**
  * Get detailed information about a specific dusting attacker
  */
 app.get(
   "/api/dusting-attackers/:address",
+  validateToken,
   async (req: Request, res: Response): Promise<any> => {
     try {
       const { address } = req.params;
@@ -671,6 +687,7 @@ app.get(
  */
 app.get(
   "/api/dusting-victims/:address",
+  validateToken,
   async (req: Request, res: Response): Promise<any> => {
     try {
       const { address } = req.params;

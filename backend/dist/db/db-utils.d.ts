@@ -1,5 +1,5 @@
-import { QueryResult } from 'pg';
-import { CustomPool } from './config';
+import { QueryResult } from "pg";
+import { CustomPool } from "./config";
 export interface DustTransaction {
     signature: string;
     timestamp: Date;

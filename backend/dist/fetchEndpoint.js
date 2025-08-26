@@ -17,6 +17,7 @@ const dotenv_1 = __importDefault(require("dotenv"));
 const express_1 = __importDefault(require("express"));
 const db_utils_1 = __importDefault(require("./db/db-utils"));
 const validateToken_1 = require("./middlewares/validateToken");
+const validateApiKey_1 = require("./middlewares/validateApiKey");
 // Load environment variables
 dotenv_1.default.config();
 const app = (0, express_1.default)();
@@ -25,10 +26,9 @@ const PORT = process.env.PORT || 3001;
 app.use((0, cors_1.default)({
     origin: "https://www.lavinth.com",
     methods: ["GET"],
-    allowedHeaders: ["Content-Type", "x-access-token"],
+    allowedHeaders: ["Content-Type", "x-access-token", "x-api-key"],
 }));
 app.use(express_1.default.json());
-app.use(validateToken_1.validateToken);
 /**
  * Get all dust transactions with optional filtering
  * Query parameters:
@@ -44,7 +44,7 @@ app.use(validateToken_1.validateToken);
  * - sortBy: field to sort by (default: timestamp)
  * - sortOrder: asc or desc (default: desc)
  */
-app.get("/api/dust-transactions", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+app.get("/api/dust-transactions", validateToken_1.validateToken, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { limit = 10, offset = 0, sender, recipient, minRiskScore, isPotentialDust, isPotentialPoisoning, startDate, endDate, sortBy = "timestamp", sortOrder = "desc", } = req.query;
         // Build the main query with filters
@@ -153,7 +153,7 @@ app.get("/api/dust-transactions", (req, res) => __awaiter(void 0, void 0, void 0
  * - sortBy: field to sort by (default: timestamp)
  * - sortOrder: asc or desc (default: desc)
  */
-app.get("/api/dust-transactions/potential-dust", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+app.get("/api/dust-transactions/potential-dust", validateToken_1.validateToken, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { limit = 10, offset = 0, sortBy = "timestamp", sortOrder = "desc", } = req.query;
         // Build the query for potential dust transactions
@@ -216,7 +216,7 @@ app.get("/api/dust-transactions/potential-dust", (req, res) => __awaiter(void 0,
  * - sortBy: field to sort by (default: timestamp)
  * - sortOrder: asc or desc (default: desc)
  */
-app.get("/api/dust-transactions/potential-poisoning", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+app.get("/api/dust-transactions/potential-poisoning", validateToken_1.validateToken, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { limit = 10, offset = 0, sortBy = "timestamp", sortOrder = "desc", } = req.query;
         // Build the query for potential poisoning transactions
@@ -283,7 +283,7 @@ app.get("/api/dust-transactions/potential-poisoning", (req, res) => __awaiter(vo
  * 7. Suspicious wallet count
  * 8. Dusting sources count
  */
-app.get("/api/overview", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+app.get("/api/overview", validateToken_1.validateToken, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         // Use the new getOverviewStatistics method to fetch all statistics at once
         const statistics = yield db_utils_1.default.getOverviewStatistics();
@@ -311,7 +311,7 @@ app.get("/api/overview", (req, res) => __awaiter(void 0, void 0, void 0, functio
  * - attackerDetails: detailed information if found in dusting_attackers table
  * - message: description of the result
  */
-app.get("/api/check-wallet/:address", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+app.get("/api/check-wallet/:address", validateApiKey_1.validateApiKey, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { address } = req.params;
         // Validate the address format (basic validation for Solana address)
@@ -385,7 +385,7 @@ app.get("/api/check-wallet/:address", (req, res) => __awaiter(void 0, void 0, vo
  * - sortBy: field to sort by (default: risk_score)
  * - sortOrder: asc or desc (default: desc)
  */
-app.get("/api/dusting-attackers", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+app.get("/api/dusting-attackers", validateToken_1.validateToken, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { limit = 10, offset = 0, minRiskScore, sortBy = "risk_score", sortOrder = "desc", } = req.query;
         // Build the main query with filters
@@ -459,7 +459,7 @@ app.get("/api/dusting-attackers", (req, res) => __awaiter(void 0, void 0, void 0
  * - sortBy: field to sort by (default: risk_score)
  * - sortOrder: asc or desc (default: desc)
  */
-app.get("/api/dusting-victims", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+app.get("/api/dusting-victims", validateToken_1.validateToken, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { limit = 10, offset = 0, minRiskScore, sortBy = "risk_score", sortOrder = "desc", } = req.query;
         // Build the main query with filters
@@ -527,7 +527,7 @@ app.get("/api/dusting-victims", (req, res) => __awaiter(void 0, void 0, void 0, 
 /**
  * Get detailed information about a specific dusting attacker
  */
-app.get("/api/dusting-attackers/:address", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+app.get("/api/dusting-attackers/:address", validateToken_1.validateToken, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { address } = req.params;
         // Validate the address format (basic validation for Solana address)
@@ -562,7 +562,7 @@ app.get("/api/dusting-attackers/:address", (req, res) => __awaiter(void 0, void 
 /**
  * Get detailed information about a specific dusting victim
  */
-app.get("/api/dusting-victims/:address", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+app.get("/api/dusting-victims/:address", validateToken_1.validateToken, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { address } = req.params;
         // Validate the address format (basic validation for Solana address)

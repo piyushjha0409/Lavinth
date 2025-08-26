@@ -64,14 +64,14 @@ const adaptive_thresholds_1 = require("./adaptive-thresholds");
 const ml_detection_1 = require("./ml-detection");
 const dust_alert_system_1 = require("./dust-alert-system");
 // Initialize the database schema with retry logic
-console.log('Initializing database schema with all required tables...');
+console.log("Initializing database schema with all required tables...");
 db_utils_1.default.initializeDatabase()
     .then(() => {
-    console.log('Database schema initialization completed successfully');
+    console.log("Database schema initialization completed successfully");
 })
     .catch((error) => {
-    console.error('Error during database schema initialization:', error);
-    console.log('Continuing execution despite schema initialization error...');
+    console.error("Error during database schema initialization:", error);
+    console.log("Continuing execution despite schema initialization error...");
 });
 // Third-party API configurations
 const CHAINALYSIS_API_KEY = process.env.CHAINALYSIS_API_KEY || "";
@@ -80,7 +80,7 @@ const TRM_LABS_API_KEY = process.env.TRM_LABS_API_KEY || "";
 const scam_url_service_1 = require("./scam-url-service");
 const HELIUS_API_KEYS = (process.env.HELIUS_API_KEYS || "")
     .split(",")
-    .map(key => key.trim())
+    .map((key) => key.trim())
     .filter((key) => key.length > 0);
 console.log("Parsed HELIUS_API_KEYS array:", HELIUS_API_KEYS);
 // Helper to extract URLs from a string (e.g., memo or metadata)
@@ -97,7 +97,7 @@ function isScamUrlPresent(text, apiKey) {
         if (urls.length === 0)
             return false;
         const scamList = yield (0, scam_url_service_1.getCombinedScamUrlList)(apiKey);
-        return urls.some(url => scamList.some(scam => url.includes(scam)));
+        return urls.some((url) => scamList.some((scam) => url.includes(scam)));
     });
 }
 console.log(`Found ${HELIUS_API_KEYS.length} Helius API keys`);
@@ -105,7 +105,7 @@ if (HELIUS_API_KEYS.length === 0) {
     throw new Error("No Helius API keys configured. Please set HELIUS_API_KEYS in .env file");
 }
 // Parse Helius API keys from environment variable
-const RPC_ENDPOINTS = HELIUS_API_KEYS.map(apiKey => `https://mainnet.helius-rpc.com/?api-key=${apiKey}`);
+const RPC_ENDPOINTS = HELIUS_API_KEYS.map((apiKey) => `https://mainnet.helius-rpc.com/?api-key=${apiKey}`);
 // Advanced configuration
 const CONFIG = {
     output: {
@@ -224,21 +224,24 @@ function findActiveAddresses() {
                                     maxSupportedTransactionVersion: 0,
                                     commitment: "confirmed",
                                 }),
-                                timeoutPromise
+                                timeoutPromise,
                             ]));
                             // If successful, break out of retry loop
                             break;
                         }
-                        catch (err) { // Using any here for error handling
+                        catch (err) {
+                            // Using any here for error handling
                             lastError = err;
                             // Check if it's a JSON parsing error or timeout
                             if ((err instanceof SyntaxError &&
-                                (err.message.includes('JSON') || err.message.includes('position'))) ||
-                                err.message.includes('timed out')) {
+                                (err.message.includes("JSON") ||
+                                    err.message.includes("position"))) ||
+                                err.message.includes("timed out")) {
                                 retryCount++;
                                 if (retryCount <= maxRetries) {
                                     // Exponential backoff
-                                    const backoffTime = CONFIG.processing.initialBackoff * Math.pow(2, retryCount - 1);
+                                    const backoffTime = CONFIG.processing.initialBackoff *
+                                        Math.pow(2, retryCount - 1);
                                     console.log(`Error processing block: ${err.message}, retrying in ${backoffTime}ms (attempt ${retryCount}/${maxRetries})`);
                                     yield sleep(backoffTime);
                                 }
@@ -591,13 +594,18 @@ function updateDustingCandidates(sender, recipient, timestamp) {
         let attackerRiskScore = 0;
         if (attacker.smallTransfersCount >= CONFIG.thresholds.detection.minTransfers) {
             // Basic risk scoring - can be enhanced with more sophisticated algorithms
-            attackerRiskScore = Math.min(0.3 + (attacker.smallTransfersCount / 100) + (attacker.uniqueVictims.size / 50), 1.0);
+            attackerRiskScore = Math.min(0.3 +
+                attacker.smallTransfersCount / 100 +
+                attacker.uniqueVictims.size / 50, 1.0);
         }
         attacker.riskScore = attackerRiskScore;
         // Calculate risk score for victim based on number of dust transactions received
         let victimRiskScore = 0;
-        if (victim.dustTransactionsCount >= 2) { // Even a few dust transactions can be concerning
-            victimRiskScore = Math.min(0.2 + (victim.dustTransactionsCount / 20) + (victim.uniqueAttackers.size / 10), 1.0);
+        if (victim.dustTransactionsCount >= 2) {
+            // Even a few dust transactions can be concerning
+            victimRiskScore = Math.min(0.2 +
+                victim.dustTransactionsCount / 20 +
+                victim.uniqueAttackers.size / 10, 1.0);
         }
         victim.riskScore = victimRiskScore;
         // If this sender has sent many small transfers to different recipients, it's a strong dusting attacker indicator
@@ -617,12 +625,12 @@ function updateDustingCandidates(sender, recipient, timestamp) {
                     temporalPattern: JSON.stringify({
                         burstCount: attacker.patterns.temporal.burstCount,
                         averageTimeBetweenTransfers: attacker.patterns.temporal.averageTimeBetweenTransfers,
-                        regularityScore: attacker.patterns.temporal.regularityScore
+                        regularityScore: attacker.patterns.temporal.regularityScore,
                     }),
                     networkPattern: JSON.stringify({
                         clusterSize: attacker.patterns.network.clusterSize,
                         centralityScore: attacker.patterns.network.centralityScore,
-                        recipientOverlap: attacker.patterns.network.recipientOverlap
+                        recipientOverlap: attacker.patterns.network.recipientOverlap,
                     }),
                     // Add optional fields with default values to match the database schema
                     walletAgeDays: null,
@@ -632,18 +640,21 @@ function updateDustingCandidates(sender, recipient, timestamp) {
                     previousAttackPatterns: null,
                     // Use default JSON structures for required fields that don't accept NULL
                     timePatterns: JSON.stringify({
-                        hourlyDistribution: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                        hourlyDistribution: [
+                            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                            0,
+                        ],
                         weekdayDistribution: [0, 0, 0, 0, 0, 0, 0],
-                        burstDetection: { burstThreshold: 300000, burstWindows: [] }
+                        burstDetection: { burstThreshold: 300000, burstWindows: [] },
                     }),
                     behavioralIndicators: JSON.stringify({
                         usesNewAccounts: false,
                         hasAbnormalFundingPattern: false,
                         targetsPremiumWallets: false,
-                        usesScriptedTransactions: false
+                        usesScriptedTransactions: false,
                     }),
                     mlFeatures: null,
-                    mlPrediction: null
+                    mlPrediction: null,
                 };
                 console.log(`Attempting to store dusting attacker in database: ${sender}`);
                 // Use the robust connection pool with retry logic
@@ -690,7 +701,7 @@ function updateDustingCandidates(sender, recipient, timestamp) {
                     dbAttacker.timePatterns,
                     dbAttacker.behavioralIndicators,
                     dbAttacker.mlFeatures,
-                    dbAttacker.mlPrediction
+                    dbAttacker.mlPrediction,
                 ];
                 // Use the executeQuery method with built-in retry logic
                 yield db_utils_1.default.pool.executeQuery(query, params, 3);
@@ -718,18 +729,21 @@ function updateDustingCandidates(sender, recipient, timestamp) {
                     walletValueEstimate: null,
                     // Use default JSON structures for required fields that don't accept NULL
                     timePatterns: JSON.stringify({
-                        hourlyDistribution: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                        hourlyDistribution: [
+                            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                            0,
+                        ],
                         weekdayDistribution: [0, 0, 0, 0, 0, 0, 0],
-                        burstDetection: { burstThreshold: 300000, burstWindows: [] }
+                        burstDetection: { burstThreshold: 300000, burstWindows: [] },
                     }),
                     vulnerabilityAssessment: JSON.stringify({
                         walletActivity: "low",
                         assetValue: "low",
                         previousInteractions: false,
-                        riskExposure: 0
+                        riskExposure: 0,
                     }),
                     mlFeatures: null,
-                    mlPrediction: null
+                    mlPrediction: null,
                 };
                 console.log(`Attempting to store dusting victim in database: ${recipient}`);
                 // Use the robust connection pool with retry logic
@@ -765,7 +779,7 @@ function updateDustingCandidates(sender, recipient, timestamp) {
                     dbVictim.timePatterns,
                     dbVictim.vulnerabilityAssessment,
                     dbVictim.mlFeatures,
-                    dbVictim.mlPrediction
+                    dbVictim.mlPrediction,
                 ];
                 // Use the executeQuery method with built-in retry logic
                 yield db_utils_1.default.pool.executeQuery(query, params, 3);
@@ -784,7 +798,7 @@ function updateDustingCandidates(sender, recipient, timestamp) {
 function checkForAddressPoisoning(address) {
     // Add the address to our candidates for analysis
     addressPoisoningCandidates.add(address);
-    // Log the current set of addresses for debugging purposes 
+    // Log the current set of addresses for debugging purposes
     console.log("addresses poisoning", addressPoisoningCandidates);
     // We'll use the addressPoisoningCandidates set to check for similar addresses
     for (const existingAddress of addressPoisoningCandidates) {
@@ -895,8 +909,7 @@ function analyzeTransactions(transactions) {
     // Extract potential attackers (addresses making many small transfers)
     const potentialAttackers = Array.from(dustingAttackers.values()).filter((attacker) => attacker.smallTransfersCount >=
         CONFIG.thresholds.detection.minTransfers &&
-        attacker.uniqueVictims.size >=
-            CONFIG.thresholds.detection.minTransfers);
+        attacker.uniqueVictims.size >= CONFIG.thresholds.detection.minTransfers);
     // Extract potential victims (addresses receiving dust transactions)
     const potentialVictims = Array.from(dustingVictims.values()).filter((victim) => victim.dustTransactionsCount >= 2);
     // Find potentially similar addresses for poisoning detection
@@ -1014,47 +1027,6 @@ function expandInvestigation(initialTransactions_1, potentialAttackers_1) {
         return uniqueTransactions;
     });
 }
-/**
- * Save results to a file
- */
-function saveResults(transactions, analysis) {
-    const results = {
-        metadata: {
-            timestamp: new Date().toISOString(),
-            totalTransactions: transactions.length,
-            dustThreshold: CONFIG.thresholds.dust.sol,
-            minTransfersForDusting: CONFIG.thresholds.detection.minTransfers,
-            dustTransactionCount: analysis.dustTransactionCount,
-            potentialAttackersCount: analysis.potentialAttackers.length,
-            potentialVictimsCount: analysis.potentialVictims.length,
-            similarAddressGroupsCount: Object.keys(analysis.addressSimilarities)
-                .length,
-        },
-        potentialAttackers: analysis.potentialAttackers,
-        potentialVictims: analysis.potentialVictims,
-        similarAddressGroups: analysis.addressSimilarities,
-        transactions: transactions.slice(0, 1000), // Limit to first 1000 to keep file size manageable
-    };
-    fs.writeFileSync(CONFIG.output.file, JSON.stringify(results, (key, value) => {
-        // Convert Sets to Arrays for JSON serialization
-        if (value instanceof Set)
-            return Array.from(value);
-        return value;
-    }, 2));
-    console.log(`Results saved to ${CONFIG.output.file}`);
-    // Save full transaction data to a separate file if needed
-    if (transactions.length > 1000) {
-        const fullDataFile = "full_transaction_data.json";
-        fs.writeFileSync(fullDataFile, JSON.stringify({
-            transactions: transactions,
-        }, (key, value) => {
-            if (value instanceof Set)
-                return Array.from(value);
-            return value;
-        }, 2));
-        console.log(`Full transaction data saved to ${fullDataFile}`);
-    }
-}
 // Dynamic threshold management
 let currentDustThreshold = CONFIG.thresholds.dust.sol;
 function updateDustThreshold() {
@@ -1084,13 +1056,14 @@ function updateDustThreshold() {
                     console.log(`Successfully retrieved current network fee: ${currentFee} SOL`);
                 }
                 else {
-                    console.warn('Fee response value is null or undefined, using fallback fee');
+                    console.warn("Fee response value is null or undefined, using fallback fee");
                 }
             }
             catch (error) {
-                console.warn(`Error getting fee for message, using fallback fee: ${(error === null || error === void 0 ? void 0 : error.message) || 'Unknown error'}`);
+                console.warn(`Error getting fee for message, using fallback fee: ${(error === null || error === void 0 ? void 0 : error.message) || "Unknown error"}`);
             }
-            currentDustThreshold = currentFee * CONFIG.thresholds.dust.networkFeeMultiplier;
+            currentDustThreshold =
+                currentFee * CONFIG.thresholds.dust.networkFeeMultiplier;
             console.log(`Updated dust threshold to ${currentDustThreshold} SOL`);
         }
         catch (error) {
@@ -1269,8 +1242,9 @@ class NetworkAnalyzer {
         }
         // Normalize by the maximum possible betweenness
         const n = nodes.size;
-        if (n > 2) { // Avoid division by zero
-            betweenness = betweenness / ((n - 1) * (n - 2) / 2);
+        if (n > 2) {
+            // Avoid division by zero
+            betweenness = betweenness / (((n - 1) * (n - 2)) / 2);
         }
         // Cache the result
         this.betweennessCentralityCache.set(address, betweenness);
@@ -1306,7 +1280,9 @@ class NetworkAnalyzer {
     findAllShortestPaths(source, target) {
         // Use BFS to find all shortest paths between source and target
         const visited = new Set();
-        const queue = [{ node: source, path: [source] }];
+        const queue = [
+            { node: source, path: [source] },
+        ];
         const shortestPaths = [];
         let shortestLength = Infinity;
         visited.add(source);
@@ -1406,12 +1382,13 @@ class NetworkAnalyzer {
                 }
                 // Calculate standard deviation
                 const mean = allAmounts.reduce((sum, val) => sum + val, 0) / allAmounts.length;
-                const variance = allAmounts.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / allAmounts.length;
+                const variance = allAmounts.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) /
+                    allAmounts.length;
                 const stdDev = Math.sqrt(variance);
                 // Calculate coefficient of variation (lower means more regular)
                 const cv = mean > 0 ? stdDev / mean : 0;
                 // Convert to regularity score (1 - normalized CV)
-                patternRegularity = Math.max(0, Math.min(1, 1 - (cv / (1 + cv))));
+                patternRegularity = Math.max(0, Math.min(1, 1 - cv / (1 + cv)));
             }
         }
         return {
@@ -1421,37 +1398,37 @@ class NetworkAnalyzer {
             uniqueSources,
             averageOutgoingAmount,
             averageIncomingAmount,
-            patternRegularity
+            patternRegularity,
         };
     }
 }
 // Enhanced address similarity detection for poisoning
 const HOMOGLYPHS = {
     "0": ["O", "o", "Q", "D"],
-    "O": ["0", "o", "Q", "D"],
-    "o": ["0", "O", "Q", "a"],
-    "l": ["I", "1", "|", "i"],
-    "I": ["l", "1", "|", "i"],
+    O: ["0", "o", "Q", "D"],
+    o: ["0", "O", "Q", "a"],
+    l: ["I", "1", "|", "i"],
+    I: ["l", "1", "|", "i"],
     "1": ["l", "I", "|", "i"],
     "|": ["l", "I", "1", "i"],
-    "i": ["l", "I", "1", "|"],
+    i: ["l", "I", "1", "|"],
     "5": ["S", "s"],
-    "S": ["5", "s"],
-    "s": ["5", "S"],
-    "B": ["8", "b"],
+    S: ["5", "s"],
+    s: ["5", "S"],
+    B: ["8", "b"],
     "8": ["B", "b"],
-    "b": ["B", "8"],
-    "n": ["m", "r"],
-    "m": ["n", "w"],
-    "w": ["vv", "W", "m"],
-    "vv": ["w", "W"],
-    "W": ["w", "vv"],
-    "g": ["q", "9"],
-    "q": ["g", "9"],
+    b: ["B", "8"],
+    n: ["m", "r"],
+    m: ["n", "w"],
+    w: ["vv", "W", "m"],
+    vv: ["w", "W"],
+    W: ["w", "vv"],
+    g: ["q", "9"],
+    q: ["g", "9"],
     "9": ["g", "q"],
-    "Z": ["2", "z"],
-    "z": ["Z", "2"],
-    "2": ["Z", "z"]
+    Z: ["2", "z"],
+    z: ["Z", "2"],
+    "2": ["Z", "z"],
 };
 // Keyboard layout for typosquatting detection
 const KEYBOARD_ADJACENCY = {
@@ -1465,32 +1442,32 @@ const KEYBOARD_ADJACENCY = {
     "8": ["7", "9", "u", "i", "o"],
     "9": ["8", "0", "i", "o", "p"],
     "0": ["9", "o", "p"],
-    "q": ["1", "2", "w", "a", "s"],
-    "w": ["1", "2", "3", "q", "e", "a", "s", "d"],
-    "e": ["2", "3", "4", "w", "r", "s", "d", "f"],
-    "r": ["3", "4", "5", "e", "t", "d", "f", "g"],
-    "t": ["4", "5", "6", "r", "y", "f", "g", "h"],
-    "y": ["5", "6", "7", "t", "u", "g", "h", "j"],
-    "u": ["6", "7", "8", "y", "i", "h", "j", "k"],
-    "i": ["7", "8", "9", "u", "o", "j", "k", "l"],
-    "o": ["8", "9", "0", "i", "p", "k", "l"],
-    "p": ["9", "0", "o", "l"],
-    "a": ["q", "w", "s", "z", "x"],
-    "s": ["q", "w", "e", "a", "d", "z", "x", "c"],
-    "d": ["w", "e", "r", "s", "f", "x", "c", "v"],
-    "f": ["e", "r", "t", "d", "g", "c", "v", "b"],
-    "g": ["r", "t", "y", "f", "h", "v", "b", "n"],
-    "h": ["t", "y", "u", "g", "j", "b", "n", "m"],
-    "j": ["y", "u", "i", "h", "k", "n", "m"],
-    "k": ["u", "i", "o", "j", "l", "m"],
-    "l": ["i", "o", "p", "k"],
-    "z": ["a", "s", "x"],
-    "x": ["z", "a", "s", "d", "c"],
-    "c": ["x", "s", "d", "f", "v"],
-    "v": ["c", "d", "f", "g", "b"],
-    "b": ["v", "f", "g", "h", "n"],
-    "n": ["b", "g", "h", "j", "m"],
-    "m": ["n", "h", "j", "k"]
+    q: ["1", "2", "w", "a", "s"],
+    w: ["1", "2", "3", "q", "e", "a", "s", "d"],
+    e: ["2", "3", "4", "w", "r", "s", "d", "f"],
+    r: ["3", "4", "5", "e", "t", "d", "f", "g"],
+    t: ["4", "5", "6", "r", "y", "f", "g", "h"],
+    y: ["5", "6", "7", "t", "u", "g", "h", "j"],
+    u: ["6", "7", "8", "y", "i", "h", "j", "k"],
+    i: ["7", "8", "9", "u", "o", "j", "k", "l"],
+    o: ["8", "9", "0", "i", "p", "k", "l"],
+    p: ["9", "0", "o", "l"],
+    a: ["q", "w", "s", "z", "x"],
+    s: ["q", "w", "e", "a", "d", "z", "x", "c"],
+    d: ["w", "e", "r", "s", "f", "x", "c", "v"],
+    f: ["e", "r", "t", "d", "g", "c", "v", "b"],
+    g: ["r", "t", "y", "f", "h", "v", "b", "n"],
+    h: ["t", "y", "u", "g", "j", "b", "n", "m"],
+    j: ["y", "u", "i", "h", "k", "n", "m"],
+    k: ["u", "i", "o", "j", "l", "m"],
+    l: ["i", "o", "p", "k"],
+    z: ["a", "s", "x"],
+    x: ["z", "a", "s", "d", "c"],
+    c: ["x", "s", "d", "f", "v"],
+    v: ["c", "d", "f", "g", "b"],
+    b: ["v", "f", "g", "h", "n"],
+    n: ["b", "g", "h", "j", "m"],
+    m: ["n", "h", "j", "k"],
 };
 function findHomoglyphPatterns(address) {
     const patterns = [];
@@ -1555,7 +1532,7 @@ function calculateAddressSimilarity(address1, address2) {
     // Calculate Levenshtein distance-based similarity
     const levDistance = levenshteinDistance(address1, address2);
     const maxLength = Math.max(address1.length, address2.length);
-    const levenshteinSimilarity = 1 - (levDistance / maxLength);
+    const levenshteinSimilarity = 1 - levDistance / maxLength;
     // Calculate prefix/suffix similarity
     let prefixSimilarity = 0;
     let suffixSimilarity = 0;
@@ -1623,35 +1600,40 @@ function main() {
         const adaptiveThresholds = new adaptive_thresholds_1.AdaptiveThresholds(getNextConnection());
         yield adaptiveThresholds.updateThresholds();
         const thresholds = adaptiveThresholds.getCurrentThresholds();
-        console.log('Using adaptive thresholds:', thresholds);
+        console.log("Using adaptive thresholds:", thresholds);
         // Initialize ML model
         const mlModel = new ml_detection_1.DustDetectionModel();
         // Initialize alert system if enabled
-        const alertSystem = process.env.ENABLE_ALERTS === 'true' ?
-            new dust_alert_system_1.DustingAlertSystem({
+        const alertSystem = process.env.ENABLE_ALERTS === "true"
+            ? new dust_alert_system_1.DustingAlertSystem({
                 enabled: true,
                 channels: {
-                    discord: process.env.DISCORD_WEBHOOK_URL ? {
-                        webhookUrl: process.env.DISCORD_WEBHOOK_URL
-                    } : undefined,
-                    email: process.env.EMAIL_RECIPIENTS ? {
-                        recipients: process.env.EMAIL_RECIPIENTS.split(','),
-                        smtpConfig: {
-                            host: process.env.SMTP_HOST || '',
-                            port: parseInt(process.env.SMTP_PORT || '587'),
-                            secure: process.env.SMTP_SECURE === 'true',
-                            auth: {
-                                user: process.env.SMTP_USER || '',
-                                pass: process.env.SMTP_PASS || ''
-                            }
+                    discord: process.env.DISCORD_WEBHOOK_URL
+                        ? {
+                            webhookUrl: process.env.DISCORD_WEBHOOK_URL,
                         }
-                    } : undefined
-                }
-            }) : null;
+                        : undefined,
+                    email: process.env.EMAIL_RECIPIENTS
+                        ? {
+                            recipients: process.env.EMAIL_RECIPIENTS.split(","),
+                            smtpConfig: {
+                                host: process.env.SMTP_HOST || "",
+                                port: parseInt(process.env.SMTP_PORT || "587"),
+                                secure: process.env.SMTP_SECURE === "true",
+                                auth: {
+                                    user: process.env.SMTP_USER || "",
+                                    pass: process.env.SMTP_PASS || "",
+                                },
+                            },
+                        }
+                        : undefined,
+                },
+            })
+            : null;
         // Start alert monitoring if enabled
         if (alertSystem) {
-            alertSystem.monitorInRealTime().catch(error => {
-                console.error('Error starting alert system:', error);
+            alertSystem.monitorInRealTime().catch((error) => {
+                console.error("Error starting alert system:", error);
             });
         }
         // Initialize dust threshold

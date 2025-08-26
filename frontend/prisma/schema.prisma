@@ -75,4 +75,6 @@ model ApiKey {
   currentUsage  Int       @default(0) 
   ipRestrictions String[]  @default([]) 
   description   String?   
+
+  @@map("api_keys")
 }
