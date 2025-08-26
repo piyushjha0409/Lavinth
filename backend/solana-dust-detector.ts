@@ -21,19 +21,19 @@ const createLimiter = require("./p-limit-wrapper");
 dotenv.config();
 
 // Import enhanced features
-import { AdaptiveThresholds } from './adaptive-thresholds';
-import { DustDetectionModel } from './ml-detection';
-import { DustingAlertSystem } from './dust-alert-system';
+import { AdaptiveThresholds } from "./adaptive-thresholds";
+import { DustDetectionModel } from "./ml-detection";
+import { DustingAlertSystem } from "./dust-alert-system";
 
 // Initialize the database schema with retry logic
-console.log('Initializing database schema with all required tables...');
+console.log("Initializing database schema with all required tables...");
 db.initializeDatabase()
   .then(() => {
-    console.log('Database schema initialization completed successfully');
+    console.log("Database schema initialization completed successfully");
   })
   .catch((error) => {
-    console.error('Error during database schema initialization:', error);
-    console.log('Continuing execution despite schema initialization error...');
+    console.error("Error during database schema initialization:", error);
+    console.log("Continuing execution despite schema initialization error...");
   });
 
 // Third-party API configurations
@@ -45,7 +45,7 @@ import { getCombinedScamUrlList } from "./scam-url-service";
 
 const HELIUS_API_KEYS = (process.env.HELIUS_API_KEYS || "")
   .split(",")
-  .map(key => key.trim())
+  .map((key) => key.trim())
   .filter((key) => key.length > 0);
 
 console.log("Parsed HELIUS_API_KEYS array:", HELIUS_API_KEYS);
@@ -58,11 +58,14 @@ function extractUrls(text: string): string[] {
 }
 
 // Check if any extracted URLs match the scam blocklist
-async function isScamUrlPresent(text: string, apiKey: string): Promise<boolean> {
+async function isScamUrlPresent(
+  text: string,
+  apiKey: string
+): Promise<boolean> {
   const urls = extractUrls(text);
   if (urls.length === 0) return false;
   const scamList = await getCombinedScamUrlList(apiKey);
-  return urls.some(url => scamList.some(scam => url.includes(scam)));
+  return urls.some((url) => scamList.some((scam) => url.includes(scam)));
 }
 
 console.log(`Found ${HELIUS_API_KEYS.length} Helius API keys`);
@@ -75,10 +78,8 @@ if (HELIUS_API_KEYS.length === 0) {
 
 // Parse Helius API keys from environment variable
 
-
-
-const RPC_ENDPOINTS = HELIUS_API_KEYS.map(apiKey => 
-  `https://mainnet.helius-rpc.com/?api-key=${apiKey}`
+const RPC_ENDPOINTS = HELIUS_API_KEYS.map(
+  (apiKey) => `https://mainnet.helius-rpc.com/?api-key=${apiKey}`
 );
 
 // Advanced configuration
@@ -164,8 +165,8 @@ interface TimePattern {
   weekdayDistribution: number[]; // 7-element array showing activity by day of week
   burstDetection: {
     burstThreshold: number;
-    burstWindows: Array<{start: number, end: number}>;
-  }
+    burstWindows: Array<{ start: number; end: number }>;
+  };
 }
 
 interface BehavioralIndicators {
@@ -190,8 +191,8 @@ interface MLPrediction {
 }
 
 interface VulnerabilityAssessment {
-  walletActivity: 'high' | 'medium' | 'low';
-  assetValue: 'high' | 'medium' | 'low';
+  walletActivity: "high" | "medium" | "low";
+  assetValue: "high" | "medium" | "low";
   previousInteractions: boolean;
   riskExposure: number;
 }
@@ -279,7 +280,7 @@ let currentEndpointIndex = 0;
 const connections = RPC_ENDPOINTS.map((endpoint) => {
   // Create connection with custom fetch options to handle large responses
   const connection = new Connection(endpoint, "confirmed");
-  
+
   // We can't directly modify the Connection's fetch method in TypeScript,
   // so we'll use a more robust approach with retry logic in our block processing code
   return connection;
@@ -329,43 +330,50 @@ async function findActiveAddresses(): Promise<Set<string>> {
         let retryCount = 0;
         const maxRetries = CONFIG.processing.maxRetries;
         let lastError: Error | null = null;
-        
+
         while (retryCount <= maxRetries) {
           try {
             // Try different connections on each retry
             const connection = getNextConnection();
-            
+
             // Add a timeout to the getBlock call
             const timeoutPromise = new Promise<null>((_, reject) => {
               setTimeout(() => {
                 reject(new Error(`Request timed out after ${30000}ms`));
               }, 30000); // 30 second timeout
             });
-            
+
             // Race the getBlock call with a timeout
-            block = await Promise.race([
+            block = (await Promise.race([
               connection.getBlock(blockSlot, {
                 maxSupportedTransactionVersion: 0,
                 commitment: "confirmed",
               }),
-              timeoutPromise
-            ]) as BlockResponse | null;
-            
+              timeoutPromise,
+            ])) as BlockResponse | null;
+
             // If successful, break out of retry loop
             break;
-          } catch (err: any) { // Using any here for error handling
+          } catch (err: any) {
+            // Using any here for error handling
             lastError = err;
-            
+
             // Check if it's a JSON parsing error or timeout
-            if ((err instanceof SyntaxError && 
-                (err.message.includes('JSON') || err.message.includes('position'))) ||
-                err.message.includes('timed out')) {
-              
+            if (
+              (err instanceof SyntaxError &&
+                (err.message.includes("JSON") ||
+                  err.message.includes("position"))) ||
+              err.message.includes("timed out")
+            ) {
               retryCount++;
               if (retryCount <= maxRetries) {
                 // Exponential backoff
-                const backoffTime = CONFIG.processing.initialBackoff * Math.pow(2, retryCount - 1);
-                console.log(`Error processing block: ${err.message}, retrying in ${backoffTime}ms (attempt ${retryCount}/${maxRetries})`);
+                const backoffTime =
+                  CONFIG.processing.initialBackoff *
+                  Math.pow(2, retryCount - 1);
+                console.log(
+                  `Error processing block: ${err.message}, retrying in ${backoffTime}ms (attempt ${retryCount}/${maxRetries})`
+                );
                 await sleep(backoffTime);
               }
             } else {
@@ -374,7 +382,7 @@ async function findActiveAddresses(): Promise<Set<string>> {
             }
           }
         }
-        
+
         // If we've exhausted retries, throw the last error
         if (retryCount > maxRetries && lastError) {
           throw lastError;
@@ -673,7 +681,10 @@ async function processTransaction(
       try {
         isScamUrl = await isScamUrlPresent(memoContent, HELIUS_API_KEYS[0]);
         if (isScamUrl) {
-          console.warn(`Scam URL detected in transaction ${signature}:`, memoContent);
+          console.warn(
+            `Scam URL detected in transaction ${signature}:`,
+            memoContent
+          );
         }
       } catch (err) {
         console.error("Error checking scam URL in memoContent:", err);
@@ -798,10 +809,14 @@ async function updateDustingCandidates(
 
   // Calculate risk score for attacker based on activity
   let attackerRiskScore = 0;
-  if (attacker.smallTransfersCount >= CONFIG.thresholds.detection.minTransfers) {
+  if (
+    attacker.smallTransfersCount >= CONFIG.thresholds.detection.minTransfers
+  ) {
     // Basic risk scoring - can be enhanced with more sophisticated algorithms
     attackerRiskScore = Math.min(
-      0.3 + (attacker.smallTransfersCount / 100) + (attacker.uniqueVictims.size / 50),
+      0.3 +
+        attacker.smallTransfersCount / 100 +
+        attacker.uniqueVictims.size / 50,
       1.0
     );
   }
@@ -809,9 +824,12 @@ async function updateDustingCandidates(
 
   // Calculate risk score for victim based on number of dust transactions received
   let victimRiskScore = 0;
-  if (victim.dustTransactionsCount >= 2) { // Even a few dust transactions can be concerning
+  if (victim.dustTransactionsCount >= 2) {
+    // Even a few dust transactions can be concerning
     victimRiskScore = Math.min(
-      0.2 + (victim.dustTransactionsCount / 20) + (victim.uniqueAttackers.size / 10),
+      0.2 +
+        victim.dustTransactionsCount / 20 +
+        victim.uniqueAttackers.size / 10,
       1.0
     );
   }
@@ -825,7 +843,7 @@ async function updateDustingCandidates(
     console.log(
       `Potential dusting attacker detected: ${sender} (${attacker.smallTransfersCount} transfers to ${attacker.uniqueVictims.size} victims)`
     );
-    
+
     // Store the attacker in the database
     try {
       // Create a database-compatible attacker object with default values for required fields
@@ -838,13 +856,14 @@ async function updateDustingCandidates(
         riskScore: attacker.riskScore,
         temporalPattern: JSON.stringify({
           burstCount: attacker.patterns.temporal.burstCount,
-          averageTimeBetweenTransfers: attacker.patterns.temporal.averageTimeBetweenTransfers,
-          regularityScore: attacker.patterns.temporal.regularityScore
+          averageTimeBetweenTransfers:
+            attacker.patterns.temporal.averageTimeBetweenTransfers,
+          regularityScore: attacker.patterns.temporal.regularityScore,
         }),
         networkPattern: JSON.stringify({
           clusterSize: attacker.patterns.network.clusterSize,
           centralityScore: attacker.patterns.network.centralityScore,
-          recipientOverlap: attacker.patterns.network.recipientOverlap
+          recipientOverlap: attacker.patterns.network.recipientOverlap,
         }),
         // Add optional fields with default values to match the database schema
         walletAgeDays: null,
@@ -854,22 +873,27 @@ async function updateDustingCandidates(
         previousAttackPatterns: null,
         // Use default JSON structures for required fields that don't accept NULL
         timePatterns: JSON.stringify({
-          hourlyDistribution: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], 
-          weekdayDistribution: [0,0,0,0,0,0,0], 
-          burstDetection: {burstThreshold: 300000, burstWindows: []}
+          hourlyDistribution: [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0,
+          ],
+          weekdayDistribution: [0, 0, 0, 0, 0, 0, 0],
+          burstDetection: { burstThreshold: 300000, burstWindows: [] },
         }),
         behavioralIndicators: JSON.stringify({
-          usesNewAccounts: false, 
-          hasAbnormalFundingPattern: false, 
-          targetsPremiumWallets: false, 
-          usesScriptedTransactions: false
+          usesNewAccounts: false,
+          hasAbnormalFundingPattern: false,
+          targetsPremiumWallets: false,
+          usesScriptedTransactions: false,
         }),
         mlFeatures: null,
-        mlPrediction: null
+        mlPrediction: null,
       };
-      
-      console.log(`Attempting to store dusting attacker in database: ${sender}`);
-      
+
+      console.log(
+        `Attempting to store dusting attacker in database: ${sender}`
+      );
+
       // Use the robust connection pool with retry logic
       const query = `
         INSERT INTO dusting_attackers 
@@ -897,13 +921,13 @@ async function updateDustingCandidates(
             ml_prediction = EXCLUDED.ml_prediction,
             last_updated = CURRENT_TIMESTAMP
         RETURNING *`;
-      
+
       const params = [
-        dbAttacker.address, 
-        dbAttacker.smallTransfersCount, 
+        dbAttacker.address,
+        dbAttacker.smallTransfersCount,
         dbAttacker.uniqueVictimsCount,
-        dbAttacker.uniqueVictims, 
-        dbAttacker.timestamps, 
+        dbAttacker.uniqueVictims,
+        dbAttacker.timestamps,
         dbAttacker.riskScore,
         dbAttacker.temporalPattern,
         dbAttacker.networkPattern,
@@ -915,14 +939,17 @@ async function updateDustingCandidates(
         dbAttacker.timePatterns,
         dbAttacker.behavioralIndicators,
         dbAttacker.mlFeatures,
-        dbAttacker.mlPrediction
+        dbAttacker.mlPrediction,
       ];
-      
+
       // Use the executeQuery method with built-in retry logic
       await db.pool.executeQuery(query, params, 3);
       console.log(`Stored dusting attacker in database: ${sender}`);
     } catch (error) {
-      console.error(`Error storing dusting attacker in database: ${sender}`, error);
+      console.error(
+        `Error storing dusting attacker in database: ${sender}`,
+        error
+      );
     }
   }
 
@@ -931,7 +958,7 @@ async function updateDustingCandidates(
     console.log(
       `Potential dusting victim detected: ${recipient} (${victim.dustTransactionsCount} dust transactions from ${victim.uniqueAttackers.size} attackers)`
     );
-    
+
     // Store the victim in the database
     try {
       // Create a database-compatible victim object with default values for required fields
@@ -947,22 +974,27 @@ async function updateDustingCandidates(
         walletValueEstimate: null,
         // Use default JSON structures for required fields that don't accept NULL
         timePatterns: JSON.stringify({
-          hourlyDistribution: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], 
-          weekdayDistribution: [0,0,0,0,0,0,0], 
-          burstDetection: {burstThreshold: 300000, burstWindows: []}
+          hourlyDistribution: [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0,
+          ],
+          weekdayDistribution: [0, 0, 0, 0, 0, 0, 0],
+          burstDetection: { burstThreshold: 300000, burstWindows: [] },
         }),
         vulnerabilityAssessment: JSON.stringify({
-          walletActivity: "low", 
-          assetValue: "low", 
-          previousInteractions: false, 
-          riskExposure: 0
+          walletActivity: "low",
+          assetValue: "low",
+          previousInteractions: false,
+          riskExposure: 0,
         }),
         mlFeatures: null,
-        mlPrediction: null
+        mlPrediction: null,
       };
-      
-      console.log(`Attempting to store dusting victim in database: ${recipient}`);
-      
+
+      console.log(
+        `Attempting to store dusting victim in database: ${recipient}`
+      );
+
       // Use the robust connection pool with retry logic
       const query = `
         INSERT INTO dusting_victims 
@@ -984,27 +1016,32 @@ async function updateDustingCandidates(
             ml_prediction = EXCLUDED.ml_prediction,
             last_updated = CURRENT_TIMESTAMP
         RETURNING *`;
-      
+
       const params = [
-        dbVictim.address, 
-        dbVictim.dustTransactionsCount, 
+        dbVictim.address,
+        dbVictim.dustTransactionsCount,
         dbVictim.uniqueAttackersCount,
-        dbVictim.uniqueAttackers, 
-        dbVictim.timestamps, 
+        dbVictim.uniqueAttackers,
+        dbVictim.timestamps,
         dbVictim.riskScore,
         dbVictim.walletAgeDays,
         dbVictim.walletValueEstimate,
         dbVictim.timePatterns,
         dbVictim.vulnerabilityAssessment,
         dbVictim.mlFeatures,
-        dbVictim.mlPrediction
+        dbVictim.mlPrediction,
       ];
-      
+
       // Use the executeQuery method with built-in retry logic
       await db.pool.executeQuery(query, params, 3);
-      console.log(`Successfully stored dusting victim in database: ${recipient}`);
+      console.log(
+        `Successfully stored dusting victim in database: ${recipient}`
+      );
     } catch (error) {
-      console.error(`Error storing dusting victim in database: ${recipient}`, error);
+      console.error(
+        `Error storing dusting victim in database: ${recipient}`,
+        error
+      );
     }
   }
 }
@@ -1017,25 +1054,27 @@ function checkForAddressPoisoning(address: string): boolean {
   // Add the address to our candidates for analysis
   addressPoisoningCandidates.add(address);
 
-  // Log the current set of addresses for debugging purposes 
+  // Log the current set of addresses for debugging purposes
   console.log("addresses poisoning", addressPoisoningCandidates);
-  
+
   // We'll use the addressPoisoningCandidates set to check for similar addresses
   for (const existingAddress of addressPoisoningCandidates) {
     // Skip comparing with itself
     if (existingAddress === address) continue;
-    
+
     // Check if addresses are similar but not identical
     const distance = levenshteinDistance(address, existingAddress);
-    
+
     // If addresses are very similar (differ by just a few characters)
     // but not identical, this might be address poisoning
     if (distance > 0 && distance <= 3) {
-      console.log(`Potential address poisoning detected: ${address} similar to ${existingAddress} (distance: ${distance})`);
+      console.log(
+        `Potential address poisoning detected: ${address} similar to ${existingAddress} (distance: ${distance})`
+      );
       return true;
     }
   }
-  
+
   // No suspicious similarity found
   return false;
 }
@@ -1164,10 +1203,9 @@ function analyzeTransactions(transactions: TransactionData[]): {
     (attacker) =>
       attacker.smallTransfersCount >=
         CONFIG.thresholds.detection.minTransfers &&
-      attacker.uniqueVictims.size >=
-        CONFIG.thresholds.detection.minTransfers
+      attacker.uniqueVictims.size >= CONFIG.thresholds.detection.minTransfers
   );
-  
+
   // Extract potential victims (addresses receiving dust transactions)
   const potentialVictims = Array.from(dustingVictims.values()).filter(
     (victim) => victim.dustTransactionsCount >= 2
@@ -1265,7 +1303,7 @@ async function expandInvestigation(
   potentialAttackers.forEach((attacker) => {
     addressesToInvestigate.add(attacker.address);
   });
-  
+
   // Add selected victims to investigation list (optional)
   // Limiting to top 10 victims with highest risk scores to avoid excessive API calls
   potentialVictims
@@ -1336,76 +1374,19 @@ async function expandInvestigation(
   return uniqueTransactions;
 }
 
-/**
- * Save results to a file
- */
-function saveResults(transactions: TransactionData[], analysis: any): void {
-  const results = {
-    metadata: {
-      timestamp: new Date().toISOString(),
-      totalTransactions: transactions.length,
-      dustThreshold: CONFIG.thresholds.dust.sol,
-      minTransfersForDusting: CONFIG.thresholds.detection.minTransfers,
-      dustTransactionCount: analysis.dustTransactionCount,
-      potentialAttackersCount: analysis.potentialAttackers.length,
-      potentialVictimsCount: analysis.potentialVictims.length,
-      similarAddressGroupsCount: Object.keys(analysis.addressSimilarities)
-        .length,
-    },
-    potentialAttackers: analysis.potentialAttackers,
-    potentialVictims: analysis.potentialVictims,
-    similarAddressGroups: analysis.addressSimilarities,
-    transactions: transactions.slice(0, 1000), // Limit to first 1000 to keep file size manageable
-  };
-
-  fs.writeFileSync(
-    CONFIG.output.file,
-    JSON.stringify(
-      results,
-      (key, value) => {
-        // Convert Sets to Arrays for JSON serialization
-        if (value instanceof Set) return Array.from(value);
-        return value;
-      },
-      2
-    )
-  );
-
-  console.log(`Results saved to ${CONFIG.output.file}`);
-
-  // Save full transaction data to a separate file if needed
-  if (transactions.length > 1000) {
-    const fullDataFile = "full_transaction_data.json";
-    fs.writeFileSync(
-      fullDataFile,
-      JSON.stringify(
-        {
-          transactions: transactions,
-        },
-        (key, value) => {
-          if (value instanceof Set) return Array.from(value);
-          return value;
-        },
-        2
-      )
-    );
-    console.log(`Full transaction data saved to ${fullDataFile}`);
-  }
-}
-
 // Dynamic threshold management
 let currentDustThreshold = CONFIG.thresholds.dust.sol;
 
 async function updateDustThreshold() {
   try {
     const connection = getNextConnection();
-    
+
     // Get current network fee using the newer getFeeForMessage API
     const { blockhash } = await connection.getLatestBlockhash();
-    
+
     // Create a dummy keypair for fee calculation
     const payer = web3.Keypair.generate();
-    
+
     // Create a simple transfer transaction
     const transaction = new web3.Transaction().add(
       web3.SystemProgram.transfer({
@@ -1416,27 +1397,36 @@ async function updateDustThreshold() {
     );
     transaction.recentBlockhash = blockhash;
     transaction.feePayer = payer.publicKey;
-    
+
     // Get the message from the transaction
     const message = transaction.compileMessage();
-    
+
     // Get the fee for this message
     let currentFee = 0.000005; // Default fallback fee (5000 lamports) if API call fails
-    
+
     try {
       const feeResponse = await connection.getFeeForMessage(message);
-      
+
       if (feeResponse && feeResponse.value) {
         currentFee = feeResponse.value / 1e9; // Convert lamports to SOL
-        console.log(`Successfully retrieved current network fee: ${currentFee} SOL`);
+        console.log(
+          `Successfully retrieved current network fee: ${currentFee} SOL`
+        );
       } else {
-        console.warn('Fee response value is null or undefined, using fallback fee');
+        console.warn(
+          "Fee response value is null or undefined, using fallback fee"
+        );
       }
     } catch (error: any) {
-      console.warn(`Error getting fee for message, using fallback fee: ${error?.message || 'Unknown error'}`);
+      console.warn(
+        `Error getting fee for message, using fallback fee: ${
+          error?.message || "Unknown error"
+        }`
+      );
     }
-    
-    currentDustThreshold = currentFee * CONFIG.thresholds.dust.networkFeeMultiplier;
+
+    currentDustThreshold =
+      currentFee * CONFIG.thresholds.dust.networkFeeMultiplier;
     console.log(`Updated dust threshold to ${currentDustThreshold} SOL`);
   } catch (error) {
     console.error("Error updating dust threshold:", error);
@@ -1511,7 +1501,7 @@ class NetworkAnalyzer {
       this.graph.set(sender, new Set());
     }
     this.graph.get(sender)!.add(recipient);
-    
+
     // Track edge weights (transaction amounts)
     if (!this.edgeWeights.has(sender)) {
       this.edgeWeights.set(sender, new Map());
@@ -1520,10 +1510,10 @@ class NetworkAnalyzer {
       this.edgeWeights.get(sender)!.set(recipient, []);
     }
     this.edgeWeights.get(sender)!.get(recipient)!.push(amount);
-    
+
     // Update multi-hop connections (up to 2 hops)
     this.updateMultiHopConnections(sender, recipient);
-    
+
     // Invalidate centrality cache when graph changes
     this.betweennessCentralityCache.clear();
   }
@@ -1533,10 +1523,10 @@ class NetworkAnalyzer {
     if (!this.multiHopConnections.has(sender)) {
       this.multiHopConnections.set(sender, new Set());
     }
-    
+
     // Add direct connection
     this.multiHopConnections.get(sender)!.add(recipient);
-    
+
     // Find all addresses that the recipient connects to (2nd hop)
     const recipientConnections = this.graph.get(recipient);
     if (recipientConnections) {
@@ -1544,7 +1534,7 @@ class NetworkAnalyzer {
         this.multiHopConnections.get(sender)!.add(secondHop);
       }
     }
-    
+
     // Update connections for addresses that connect to sender (reverse 2nd hop)
     for (const [address, connections] of this.graph.entries()) {
       if (connections.has(sender)) {
@@ -1560,7 +1550,12 @@ class NetworkAnalyzer {
     const clusters = new Map<string, Set<string>>();
     const visited = new Set<string>();
 
-    const dfs = (address: string, cluster: Set<string>, depth: number = 0, maxDepth: number = 3) => {
+    const dfs = (
+      address: string,
+      cluster: Set<string>,
+      depth: number = 0,
+      maxDepth: number = 3
+    ) => {
       if (visited.has(address) || depth > maxDepth) return;
       visited.add(address);
       cluster.add(address);
@@ -1593,18 +1588,19 @@ class NetworkAnalyzer {
 
     for (const recipient of connections) {
       const recipientConnections = this.graph.get(recipient);
-      if (recipientConnections) secondDegreeConnections += recipientConnections.size;
+      if (recipientConnections)
+        secondDegreeConnections += recipientConnections.size;
     }
 
     return directConnections + secondDegreeConnections * 0.5;
   }
-  
+
   calculateBetweennessCentrality(address: string): number {
     // Check cache first
     if (this.betweennessCentralityCache.has(address)) {
       return this.betweennessCentralityCache.get(address)!;
     }
-    
+
     // Get all nodes in the graph
     const nodes = new Set<string>();
     for (const [node, connections] of this.graph.entries()) {
@@ -1613,32 +1609,32 @@ class NetworkAnalyzer {
         nodes.add(connection);
       }
     }
-    
+
     // If there are too many nodes, use an approximation
     if (nodes.size > 1000) {
       const approximation = this.approximateBetweennessCentrality(address);
       this.betweennessCentralityCache.set(address, approximation);
       return approximation;
     }
-    
+
     // Calculate betweenness centrality (number of shortest paths that pass through this node)
     let betweenness = 0;
     const nodeArray = Array.from(nodes);
-    
+
     for (let i = 0; i < nodeArray.length; i++) {
       for (let j = i + 1; j < nodeArray.length; j++) {
         if (i === j) continue;
-        
+
         const source = nodeArray[i];
         const target = nodeArray[j];
-        
+
         // Skip if source or target is the address we're calculating for
         if (source === address || target === address) continue;
-        
+
         // Find all shortest paths between source and target
         const paths = this.findAllShortestPaths(source, target);
         if (paths.length === 0) continue;
-        
+
         // Count paths that pass through address
         let pathsThroughAddress = 0;
         for (const path of paths) {
@@ -1646,71 +1642,74 @@ class NetworkAnalyzer {
             pathsThroughAddress++;
           }
         }
-        
+
         // Add contribution to betweenness
         betweenness += pathsThroughAddress / paths.length;
       }
     }
-    
+
     // Normalize by the maximum possible betweenness
     const n = nodes.size;
-    if (n > 2) {  // Avoid division by zero
-      betweenness = betweenness / ((n - 1) * (n - 2) / 2);
+    if (n > 2) {
+      // Avoid division by zero
+      betweenness = betweenness / (((n - 1) * (n - 2)) / 2);
     }
-    
+
     // Cache the result
     this.betweennessCentralityCache.set(address, betweenness);
     return betweenness;
   }
-  
+
   private approximateBetweennessCentrality(address: string): number {
     // For large graphs, use an approximation based on local structure
     const connections = this.graph.get(address);
     if (!connections || connections.size === 0) return 0;
-    
+
     // Calculate how many pairs of neighbors would need to go through this node
     let pairs = 0;
     const neighbors = Array.from(connections);
-    
+
     for (let i = 0; i < neighbors.length; i++) {
       for (let j = i + 1; j < neighbors.length; j++) {
         const neighbor1 = neighbors[i];
         const neighbor2 = neighbors[j];
-        
+
         // Check if these neighbors are directly connected
         const neighbor1Connections = this.graph.get(neighbor1);
         if (neighbor1Connections && neighbor1Connections.has(neighbor2)) {
           // They're directly connected, so they don't need to go through address
           continue;
         }
-        
+
         // These neighbors would need to go through address to reach each other
         pairs++;
       }
     }
-    
+
     // Normalize by the maximum possible pairs
     const n = connections.size;
-    const maxPairs = (n * (n - 1)) / 2;  // n choose 2
-    
+    const maxPairs = (n * (n - 1)) / 2; // n choose 2
+
     return maxPairs > 0 ? pairs / maxPairs : 0;
   }
-  
+
   private findAllShortestPaths(source: string, target: string): string[][] {
     // Use BFS to find all shortest paths between source and target
     const visited = new Set<string>();
-    const queue: { node: string; path: string[] }[] = [{ node: source, path: [source] }];
+    const queue: { node: string; path: string[] }[] = [
+      { node: source, path: [source] },
+    ];
     const shortestPaths: string[][] = [];
     let shortestLength = Infinity;
-    
+
     visited.add(source);
-    
+
     while (queue.length > 0) {
       const { node, path } = queue.shift()!;
-      
+
       // If we've found paths longer than the shortest one, stop searching
       if (path.length > shortestLength) break;
-      
+
       // If we've reached the target
       if (node === target) {
         if (path.length < shortestLength) {
@@ -1721,7 +1720,7 @@ class NetworkAnalyzer {
         shortestPaths.push(path);
         continue;
       }
-      
+
       // Explore neighbors
       const neighbors = this.graph.get(node) || new Set();
       for (const neighbor of neighbors) {
@@ -1731,34 +1730,36 @@ class NetworkAnalyzer {
         }
       }
     }
-    
+
     return shortestPaths;
   }
-  
+
   // Find common funding sources for a set of addresses
-  async findCommonFundingSources(addresses: string[]): Promise<Map<string, string[]>> {
+  async findCommonFundingSources(
+    addresses: string[]
+  ): Promise<Map<string, string[]>> {
     const commonSources = new Map<string, string[]>();
     const addressSet = new Set(addresses);
-    
+
     // For each address in the graph, check if it's a source for multiple addresses in our set
     for (const [source, targets] of this.graph.entries()) {
       const connectedAddresses: string[] = [];
-      
+
       for (const target of targets) {
         if (addressSet.has(target)) {
           connectedAddresses.push(target);
         }
       }
-      
+
       // If this source connects to multiple addresses in our set, it's a common source
       if (connectedAddresses.length > 1) {
         commonSources.set(source, connectedAddresses);
       }
     }
-    
+
     return commonSources;
   }
-  
+
   // Analyze transaction patterns for an address
   analyzeTransactionPatterns(address: string): {
     outgoingCount: number;
@@ -1775,41 +1776,49 @@ class NetworkAnalyzer {
     let uniqueSources = 0;
     let totalOutgoingAmount = 0;
     let totalIncomingAmount = 0;
-    
+
     // Outgoing transactions
     const outgoingConnections = this.graph.get(address);
     if (outgoingConnections) {
       uniqueTargets = outgoingConnections.size;
-      
+
       // Calculate total outgoing amount
       const outgoingAmounts = this.edgeWeights.get(address);
       if (outgoingAmounts) {
         for (const [_, amounts] of outgoingAmounts) {
           outgoingCount += amounts.length;
-          totalOutgoingAmount += amounts.reduce((sum, amount) => sum + amount, 0);
+          totalOutgoingAmount += amounts.reduce(
+            (sum, amount) => sum + amount,
+            0
+          );
         }
       }
     }
-    
+
     // Incoming transactions
     for (const [source, targets] of this.graph.entries()) {
       if (targets.has(address)) {
         uniqueSources++;
-        
+
         // Calculate total incoming amount
         const sourceAmounts = this.edgeWeights.get(source);
         if (sourceAmounts && sourceAmounts.has(address)) {
           const amounts = sourceAmounts.get(address)!;
           incomingCount += amounts.length;
-          totalIncomingAmount += amounts.reduce((sum, amount) => sum + amount, 0);
+          totalIncomingAmount += amounts.reduce(
+            (sum, amount) => sum + amount,
+            0
+          );
         }
       }
     }
-    
+
     // Calculate averages
-    const averageOutgoingAmount = outgoingCount > 0 ? totalOutgoingAmount / outgoingCount : 0;
-    const averageIncomingAmount = incomingCount > 0 ? totalIncomingAmount / incomingCount : 0;
-    
+    const averageOutgoingAmount =
+      outgoingCount > 0 ? totalOutgoingAmount / outgoingCount : 0;
+    const averageIncomingAmount =
+      incomingCount > 0 ? totalIncomingAmount / incomingCount : 0;
+
     // Calculate pattern regularity (0-1) based on consistency of transaction amounts
     let patternRegularity = 0;
     if (outgoingCount > 1) {
@@ -1820,20 +1829,23 @@ class NetworkAnalyzer {
         for (const [_, amounts] of outgoingAmounts) {
           allAmounts.push(...amounts);
         }
-        
+
         // Calculate standard deviation
-        const mean = allAmounts.reduce((sum, val) => sum + val, 0) / allAmounts.length;
-        const variance = allAmounts.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / allAmounts.length;
+        const mean =
+          allAmounts.reduce((sum, val) => sum + val, 0) / allAmounts.length;
+        const variance =
+          allAmounts.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) /
+          allAmounts.length;
         const stdDev = Math.sqrt(variance);
-        
+
         // Calculate coefficient of variation (lower means more regular)
         const cv = mean > 0 ? stdDev / mean : 0;
-        
+
         // Convert to regularity score (1 - normalized CV)
-        patternRegularity = Math.max(0, Math.min(1, 1 - (cv / (1 + cv))));
+        patternRegularity = Math.max(0, Math.min(1, 1 - cv / (1 + cv)));
       }
     }
-    
+
     return {
       outgoingCount,
       incomingCount,
@@ -1841,7 +1853,7 @@ class NetworkAnalyzer {
       uniqueSources,
       averageOutgoingAmount,
       averageIncomingAmount,
-      patternRegularity
+      patternRegularity,
     };
   }
 }
@@ -1849,30 +1861,30 @@ class NetworkAnalyzer {
 // Enhanced address similarity detection for poisoning
 const HOMOGLYPHS: Record<string, string[]> = {
   "0": ["O", "o", "Q", "D"],
-  "O": ["0", "o", "Q", "D"],
-  "o": ["0", "O", "Q", "a"],
-  "l": ["I", "1", "|", "i"],
-  "I": ["l", "1", "|", "i"],
+  O: ["0", "o", "Q", "D"],
+  o: ["0", "O", "Q", "a"],
+  l: ["I", "1", "|", "i"],
+  I: ["l", "1", "|", "i"],
   "1": ["l", "I", "|", "i"],
   "|": ["l", "I", "1", "i"],
-  "i": ["l", "I", "1", "|"],
+  i: ["l", "I", "1", "|"],
   "5": ["S", "s"],
-  "S": ["5", "s"],
-  "s": ["5", "S"],
-  "B": ["8", "b"],
+  S: ["5", "s"],
+  s: ["5", "S"],
+  B: ["8", "b"],
   "8": ["B", "b"],
-  "b": ["B", "8"],
-  "n": ["m", "r"],
-  "m": ["n", "w"],
-  "w": ["vv", "W", "m"],
-  "vv": ["w", "W"],
-  "W": ["w", "vv"],
-  "g": ["q", "9"],
-  "q": ["g", "9"],
+  b: ["B", "8"],
+  n: ["m", "r"],
+  m: ["n", "w"],
+  w: ["vv", "W", "m"],
+  vv: ["w", "W"],
+  W: ["w", "vv"],
+  g: ["q", "9"],
+  q: ["g", "9"],
   "9": ["g", "q"],
-  "Z": ["2", "z"],
-  "z": ["Z", "2"],
-  "2": ["Z", "z"]
+  Z: ["2", "z"],
+  z: ["Z", "2"],
+  "2": ["Z", "z"],
 };
 
 // Keyboard layout for typosquatting detection
@@ -1887,32 +1899,32 @@ const KEYBOARD_ADJACENCY: Record<string, string[]> = {
   "8": ["7", "9", "u", "i", "o"],
   "9": ["8", "0", "i", "o", "p"],
   "0": ["9", "o", "p"],
-  "q": ["1", "2", "w", "a", "s"],
-  "w": ["1", "2", "3", "q", "e", "a", "s", "d"],
-  "e": ["2", "3", "4", "w", "r", "s", "d", "f"],
-  "r": ["3", "4", "5", "e", "t", "d", "f", "g"],
-  "t": ["4", "5", "6", "r", "y", "f", "g", "h"],
-  "y": ["5", "6", "7", "t", "u", "g", "h", "j"],
-  "u": ["6", "7", "8", "y", "i", "h", "j", "k"],
-  "i": ["7", "8", "9", "u", "o", "j", "k", "l"],
-  "o": ["8", "9", "0", "i", "p", "k", "l"],
-  "p": ["9", "0", "o", "l"],
-  "a": ["q", "w", "s", "z", "x"],
-  "s": ["q", "w", "e", "a", "d", "z", "x", "c"],
-  "d": ["w", "e", "r", "s", "f", "x", "c", "v"],
-  "f": ["e", "r", "t", "d", "g", "c", "v", "b"],
-  "g": ["r", "t", "y", "f", "h", "v", "b", "n"],
-  "h": ["t", "y", "u", "g", "j", "b", "n", "m"],
-  "j": ["y", "u", "i", "h", "k", "n", "m"],
-  "k": ["u", "i", "o", "j", "l", "m"],
-  "l": ["i", "o", "p", "k"],
-  "z": ["a", "s", "x"],
-  "x": ["z", "a", "s", "d", "c"],
-  "c": ["x", "s", "d", "f", "v"],
-  "v": ["c", "d", "f", "g", "b"],
-  "b": ["v", "f", "g", "h", "n"],
-  "n": ["b", "g", "h", "j", "m"],
-  "m": ["n", "h", "j", "k"]
+  q: ["1", "2", "w", "a", "s"],
+  w: ["1", "2", "3", "q", "e", "a", "s", "d"],
+  e: ["2", "3", "4", "w", "r", "s", "d", "f"],
+  r: ["3", "4", "5", "e", "t", "d", "f", "g"],
+  t: ["4", "5", "6", "r", "y", "f", "g", "h"],
+  y: ["5", "6", "7", "t", "u", "g", "h", "j"],
+  u: ["6", "7", "8", "y", "i", "h", "j", "k"],
+  i: ["7", "8", "9", "u", "o", "j", "k", "l"],
+  o: ["8", "9", "0", "i", "p", "k", "l"],
+  p: ["9", "0", "o", "l"],
+  a: ["q", "w", "s", "z", "x"],
+  s: ["q", "w", "e", "a", "d", "z", "x", "c"],
+  d: ["w", "e", "r", "s", "f", "x", "c", "v"],
+  f: ["e", "r", "t", "d", "g", "c", "v", "b"],
+  g: ["r", "t", "y", "f", "h", "v", "b", "n"],
+  h: ["t", "y", "u", "g", "j", "b", "n", "m"],
+  j: ["y", "u", "i", "h", "k", "n", "m"],
+  k: ["u", "i", "o", "j", "l", "m"],
+  l: ["i", "o", "p", "k"],
+  z: ["a", "s", "x"],
+  x: ["z", "a", "s", "d", "c"],
+  c: ["x", "s", "d", "f", "v"],
+  v: ["c", "d", "f", "g", "b"],
+  b: ["v", "f", "g", "h", "n"],
+  n: ["b", "g", "h", "j", "m"],
+  m: ["n", "h", "j", "k"],
 };
 
 function findHomoglyphPatterns(address: string): string[] {
@@ -1930,7 +1942,7 @@ function findHomoglyphPatterns(address: string): string[] {
       });
     }
   }
-  
+
   // Generate keyboard typo patterns (limited to 2 to avoid explosion)
   for (let i = 0; i < Math.min(chars.length, 8); i++) {
     const char = chars[i].toLowerCase();
@@ -1950,61 +1962,64 @@ function findHomoglyphPatterns(address: string): string[] {
 function calculateVisualSimilarity(address1: string, address2: string): number {
   if (address1 === address2) return 1.0;
   if (address1.length !== address2.length) return 0.0;
-  
+
   let matchCount = 0;
   const chars1 = address1.split("");
   const chars2 = address2.split("");
-  
+
   for (let i = 0; i < chars1.length; i++) {
     // Exact match
     if (chars1[i] === chars2[i]) {
       matchCount += 1;
       continue;
     }
-    
+
     // Homoglyph match
     const homoglyphs1 = HOMOGLYPHS[chars1[i]] || [];
     if (homoglyphs1.includes(chars2[i])) {
       matchCount += 0.8; // 80% similarity for homoglyphs
       continue;
     }
-    
+
     // Keyboard adjacency match
     const adjacent1 = KEYBOARD_ADJACENCY[chars1[i].toLowerCase()] || [];
     if (adjacent1.includes(chars2[i].toLowerCase())) {
       matchCount += 0.4; // 40% similarity for adjacent keys
     }
   }
-  
+
   return matchCount / chars1.length;
 }
 
 // Calculate comprehensive address similarity score
-function calculateAddressSimilarity(address1: string, address2: string): number {
+function calculateAddressSimilarity(
+  address1: string,
+  address2: string
+): number {
   // Calculate visual similarity score
   const visualSimilarity = calculateVisualSimilarity(address1, address2);
-  
+
   // Calculate Levenshtein distance-based similarity
   const levDistance = levenshteinDistance(address1, address2);
   const maxLength = Math.max(address1.length, address2.length);
-  const levenshteinSimilarity = 1 - (levDistance / maxLength);
-  
+  const levenshteinSimilarity = 1 - levDistance / maxLength;
+
   // Calculate prefix/suffix similarity
   let prefixSimilarity = 0;
   let suffixSimilarity = 0;
-  
+
   // Check for common prefix (first 4-8 chars)
   const prefixLength = Math.min(8, Math.min(address1.length, address2.length));
   const prefix1 = address1.substring(0, prefixLength);
   const prefix2 = address2.substring(0, prefixLength);
   prefixSimilarity = calculateVisualSimilarity(prefix1, prefix2);
-  
+
   // Check for common suffix (last 4-8 chars)
   const suffixLength = Math.min(8, Math.min(address1.length, address2.length));
   const suffix1 = address1.substring(address1.length - suffixLength);
   const suffix2 = address2.substring(address2.length - suffixLength);
   suffixSimilarity = calculateVisualSimilarity(suffix1, suffix2);
-  
+
   // Combine scores with appropriate weights
   // Prefix and suffix similarity are weighted higher for Solana addresses
   return (
@@ -2067,46 +2082,52 @@ async function main() {
 
   // Initialize network analyzer
   const networkAnalyzer = new NetworkAnalyzer();
-  
+
   // Initialize adaptive thresholds
   const adaptiveThresholds = new AdaptiveThresholds(getNextConnection());
   await adaptiveThresholds.updateThresholds();
   const thresholds = adaptiveThresholds.getCurrentThresholds();
-  console.log('Using adaptive thresholds:', thresholds);
-  
+  console.log("Using adaptive thresholds:", thresholds);
+
   // Initialize ML model
   const mlModel = new DustDetectionModel();
-  
+
   // Initialize alert system if enabled
-  const alertSystem = process.env.ENABLE_ALERTS === 'true' ? 
-    new DustingAlertSystem({
-      enabled: true,
-      channels: {
-        discord: process.env.DISCORD_WEBHOOK_URL ? {
-          webhookUrl: process.env.DISCORD_WEBHOOK_URL
-        } : undefined,
-        email: process.env.EMAIL_RECIPIENTS ? {
-          recipients: process.env.EMAIL_RECIPIENTS.split(','),
-          smtpConfig: {
-            host: process.env.SMTP_HOST || '',
-            port: parseInt(process.env.SMTP_PORT || '587'),
-            secure: process.env.SMTP_SECURE === 'true',
-            auth: {
-              user: process.env.SMTP_USER || '',
-              pass: process.env.SMTP_PASS || ''
-            }
-          }
-        } : undefined
-      }
-    }) : null;
-  
+  const alertSystem =
+    process.env.ENABLE_ALERTS === "true"
+      ? new DustingAlertSystem({
+          enabled: true,
+          channels: {
+            discord: process.env.DISCORD_WEBHOOK_URL
+              ? {
+                  webhookUrl: process.env.DISCORD_WEBHOOK_URL,
+                }
+              : undefined,
+            email: process.env.EMAIL_RECIPIENTS
+              ? {
+                  recipients: process.env.EMAIL_RECIPIENTS.split(","),
+                  smtpConfig: {
+                    host: process.env.SMTP_HOST || "",
+                    port: parseInt(process.env.SMTP_PORT || "587"),
+                    secure: process.env.SMTP_SECURE === "true",
+                    auth: {
+                      user: process.env.SMTP_USER || "",
+                      pass: process.env.SMTP_PASS || "",
+                    },
+                  },
+                }
+              : undefined,
+          },
+        })
+      : null;
+
   // Start alert monitoring if enabled
   if (alertSystem) {
-    alertSystem.monitorInRealTime().catch(error => {
-      console.error('Error starting alert system:', error);
+    alertSystem.monitorInRealTime().catch((error) => {
+      console.error("Error starting alert system:", error);
     });
   }
-  
+
   // Initialize dust threshold
   await updateDustThreshold();
 
@@ -2291,4 +2312,3 @@ main().catch((error) => {
 
 // Export for API server usage
 export { analyzeTransactions, processTransaction };
-

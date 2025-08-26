@@ -64,7 +64,7 @@ export default function VictimsTab() {
 
       const offset = (victimsPage - 1) * victimsPageSize;
       const response = await fetch(
-        `https://api.lavinth.com/api/dusting-victims?limit=${victimsPageSize}&offset=${offset}`
+        `/api/victims?limit=${victimsPageSize}&offset=${offset}`
       );
 
       if (!response.ok) {

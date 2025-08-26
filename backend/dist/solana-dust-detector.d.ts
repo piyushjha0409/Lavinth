@@ -55,8 +55,8 @@ interface MLPrediction {
     confidence: number;
 }
 interface VulnerabilityAssessment {
-    walletActivity: 'high' | 'medium' | 'low';
-    assetValue: 'high' | 'medium' | 'low';
+    walletActivity: "high" | "medium" | "low";
+    assetValue: "high" | "medium" | "low";
     previousInteractions: boolean;
     riskExposure: number;
 }

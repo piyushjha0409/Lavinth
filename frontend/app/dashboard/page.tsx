@@ -1,25 +1,25 @@
 "use client";
 
-import {
-  AttackerPattern,
-  DailySummary,
-  VictimExposure,
-} from "@/app/types/dashboard";
+// Direct API call to dashboard route
 import AlertsTab from "@/components/dashboard/alerts-tab";
 import AttackersTab from "@/components/dashboard/attackers-tab";
 import DustingAnalysisTab from "@/components/dashboard/dusting-analysis-tab";
 import OverviewTab from "@/components/dashboard/overview-tab";
 import PoisoningDetectionTab from "@/components/dashboard/poisoning-detection-tab";
 import TransactionsTab from "@/components/dashboard/transactions-tab";
+import VictimsTab from "@/components/dashboard/victims-tab";
+import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import VictimsTab from "@/components/dashboard/victims-tab";
-import { AlertTriangle, ArrowLeft } from "lucide-react";
-import { useEffect, useState } from "react";
+import { AlertTriangle } from "lucide-react";
+import { useEffect, useState, Suspense } from "react";
 import { DashboardData } from "../types/transactions";
+import { useSearchParams } from "next/navigation";
+import ApiKeysTab from "@/components/dashboard/api-keys-tab";
 
-export default function Dashboard() {
+function DashboardContent() {
+  const searchParams = useSearchParams();
+  const activeTab = searchParams.get("tab") || "overview";
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(
@@ -27,96 +27,40 @@ export default function Dashboard() {
   );
   const [topDusters, setTopDusters] = useState<any[]>([]);
 
-  // Centralized function to fetch dashboard data for all components
   const fetchDashboardData = async () => {
     try {
       setIsLoading(true);
-      // Use lavinth's endpoint for materialized view data
-      const response = await fetch("https://api.lavinth.com/api/overview");
+
+      // Direct API call to dashboard route
+      const response = await fetch("/api/dashboard");
 
       if (!response.ok) {
-        throw new Error("Failed to fetch dashboard data");
+        throw new Error(`Failed to fetch dashboard data: ${response.status}`);
       }
 
       const result = await response.json();
-      if (result.status === "success") {
-        // Extract all necessary data for both overview and transactions tabs
-        const attackerPatterns = (result.data.attackerPatterns ||
-          []) as AttackerPattern[];
-        const victimExposure = (result.data.victimExposure ||
-          []) as VictimExposure[];
-        const dailySummary = (result.data.dailySummary || []) as DailySummary[];
+      const data = result.data;
 
-        // Convert count values from strings to numbers for the token distribution
-        const tokenDistribution = (result.data.tokenDistribution || []).map(
-          (item: { token_type: string; count: string | number }) => ({
-            token_type: item.token_type,
-            count: Number(item.count),
-          })
+      // Set dashboard data
+      setDashboardData(data);
+
+      // Transform attacker data for top dusters if available
+      if (data.attackerPatterns && data.attackerPatterns.length > 0) {
+        setTopDusters(
+          data.attackerPatterns.map(
+            (attacker: {
+              address: string;
+              small_transfers_count?: number;
+              unique_victims_count?: number;
+            }) => ({
+              address: attacker.address,
+              smallTransfersCount: attacker.small_transfers_count || 0,
+              uniqueRecipients: attacker.unique_victims_count || 0,
+            })
+          )
         );
-
-        // Set top dusters if available - needed for DustingAnalysisTab
-        if (attackerPatterns.length > 0) {
-          setTopDusters(
-            attackerPatterns.map(
-              (attacker: {
-                address: string;
-                small_transfers_count?: number;
-                unique_victims_count?: number;
-              }) => ({
-                address: attacker.address,
-                smallTransfersCount: attacker.small_transfers_count || 0,
-                uniqueRecipients: attacker.unique_victims_count || 0,
-              })
-            )
-          );
-        }
-
-        // Create comprehensive DashboardData object for all components
-        setDashboardData({
-          activeTransactions: result.data.totalTransactions || 0,
-          successfulTransactions: result.data.successfulTransactions || 0,
-          failedTransactions: result.data.failedTransactions || 0,
-          totalVolume: result.data.volume || 0,
-          averageTransactionSize:
-            result.data.avgTransactionAmount ||
-            (result.data.volume > 0 && result.data.totalTransactions > 0
-              ? result.data.volume / result.data.totalTransactions
-              : 0),
-          potentialDustCount: result.data.dustedTransactions || 0,
-          poisoningAttempts: result.data.poisonedTransactions || 0,
-          dustingSources: result.data.dustingSources || 0,
-          pendingTransactions: 0,
-          transactionsOverTime: [],
-          // Include all data needed by child components
-          attackerPatterns,
-          victimExposure,
-          dailySummary,
-          // Additional metrics from enhanced API
-          avgTransactionFee: result.data.avgTransactionFee || 0,
-          uniqueSenders: result.data.uniqueSenders || 0,
-          uniqueRecipients: result.data.uniqueRecipients || 0,
-          tokenDistribution,
-        });
-      } else {
-        // Fallback to basic dashboard data
-        setDashboardData({
-          activeTransactions: result.data.totalTransactions || 0,
-          successfulTransactions: result.data.successfulTransactions || 0,
-          failedTransactions: result.data.failedTransactions || 0,
-          totalVolume: result.data.volume || 0,
-          averageTransactionSize:
-            result.data.volume > 0 && result.data.totalTransactions > 0
-              ? result.data.volume / result.data.totalTransactions
-              : 0,
-          potentialDustCount: result.data.dustedTransactions || 0,
-          poisoningAttempts: result.data.poisonedTransactions || 0,
-          dustingSources: result.data.dustingSources || 0,
-          pendingTransactions: 0,
-          transactionsOverTime: [],
-          tokenDistribution: [],
-        });
       }
+
       setIsLoading(false);
     } catch (err) {
       console.error("Error fetching dashboard data:", err);
@@ -131,87 +75,86 @@ export default function Dashboard() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold mb-4">Loading Dashboard Data...</h2>
-          <Progress value={45} className="w-80 mx-auto" />
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <Progress value={33} className="w-64 mb-4" />
+            <p className="text-lg text-muted-foreground">
+              Loading dashboard...
+            </p>
+          </div>
         </div>
-      </div>
+      </DashboardLayout>
     );
   }
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold mb-2">Error Loading Dashboard</h2>
-          <p className="text-muted-foreground">{error}</p>
-          <Button
-            variant="outline"
-            className="mt-4"
-            onClick={() => window.location.reload()}
-          >
-            Retry
-          </Button>
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+            <h2 className="text-xl font-semibold mb-2">
+              Error Loading Dashboard
+            </h2>
+            <p className="text-muted-foreground mb-4">{error}</p>
+            <Button onClick={fetchDashboardData}>Try Again</Button>
+          </div>
         </div>
-      </div>
+      </DashboardLayout>
     );
   }
 
-  return (
-    <div className="container mx-auto p-4 md:p-6 text-cyan-300">
-      <div className="flex items-center mb-6">
-        <a href="/" className="mr-4 hover:text-cyan-100 transition-colors">
-          <ArrowLeft className="h-6 w-6" />
-        </a>
-        <h1 className="text-3xl font-bold text-cyan-200">
-          Blockchain Security Dashboard
-        </h1>
-      </div>
-
-      <Tabs defaultValue="overview" className="space-y-6">
-        <TabsList className="grid grid-cols-3 md:grid-cols-7 gap-2">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="transactions">Transactions</TabsTrigger>
-          <TabsTrigger value="dusting">Dusting Analysis</TabsTrigger>
-          <TabsTrigger value="poisoning">Poisoning Detection</TabsTrigger>
-          <TabsTrigger value="attackers">Dusting Attackers</TabsTrigger>
-          <TabsTrigger value="victims">Dusting Victims</TabsTrigger>
-          <TabsTrigger value="alerts">Alerts</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="overview" className="space-y-6">
-          <OverviewTab dashboardData={dashboardData} />
-        </TabsContent>
-
-        <TabsContent value="transactions" className="space-y-6">
-          <TransactionsTab dashboardData={dashboardData} />
-        </TabsContent>
-
-        <TabsContent value="dusting" className="space-y-6">
+  const renderContent = () => {
+    switch (activeTab) {
+      case "transactions":
+        return <TransactionsTab dashboardData={dashboardData} />;
+      case "dusting":
+        return (
           <DustingAnalysisTab
             dashboardData={dashboardData}
             topDusters={topDusters}
           />
-        </TabsContent>
+        );
+      case "api-keys":
+        return <ApiKeysTab />;
+      case "poisoning":
+        return <PoisoningDetectionTab />;
+      case "attackers":
+        return <AttackersTab />;
+      case "victims":
+        return <VictimsTab />;
+      case "alerts":
+        return <AlertsTab />;
+      default:
+        return <OverviewTab dashboardData={dashboardData} />;
+    }
+  };
 
-        <TabsContent value="poisoning" className="space-y-6">
-          <PoisoningDetectionTab />
-        </TabsContent>
+  return (
+    <DashboardLayout>
+      <div className="space-y-6">{renderContent()}</div>
+    </DashboardLayout>
+  );
+}
 
-        <TabsContent value="attackers" className="space-y-6">
-          <AttackersTab />
-        </TabsContent>
-
-        <TabsContent value="victims" className="space-y-6">
-          <VictimsTab />
-        </TabsContent>
-
-        <TabsContent value="alerts" className="space-y-6">
-          <AlertsTab />
-        </TabsContent>
-      </Tabs>
-    </div>
+export default function Dashboard() {
+  return (
+    <Suspense
+      fallback={
+        <DashboardLayout>
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <div className="text-center">
+              <Progress value={33} className="w-64 mb-4" />
+              <p className="text-lg text-muted-foreground">
+                Loading dashboard...
+              </p>
+            </div>
+          </div>
+        </DashboardLayout>
+      }
+    >
+      <DashboardContent />
+    </Suspense>
   );
 }

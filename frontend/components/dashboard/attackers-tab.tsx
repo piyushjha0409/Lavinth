@@ -68,7 +68,7 @@ export default function AttackersTab() {
 
       const offset = (attackersPage - 1) * attackersPageSize;
       const response = await fetch(
-        `https://api.lavinth.com/api/dusting-attackers?limit=${attackersPageSize}&offset=${offset}`
+        `/api/attackers?limit=${attackersPageSize}&offset=${offset}`
       );
 
       if (!response.ok) {

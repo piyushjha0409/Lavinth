@@ -33,9 +33,8 @@ export default function OverviewTab({
   const router = useRouter();
 
   return (
-    <>
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4">
         <StatsCard
           title="Total Transactions"
           value={dashboardData?.activeTransactions || 0}
@@ -63,8 +62,7 @@ export default function OverviewTab({
         />
       </div>
 
-      {/* Security Stats - Now showing 3 cards in 2 columns grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <SecurityCard
           title="Dust Transactions"
           value={dashboardData?.potentialDustCount || 0}
@@ -88,8 +86,7 @@ export default function OverviewTab({
         />
       </div>
 
-      {/* Additional Metrics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatsCard
           title="Unique Senders"
           value={dashboardData?.uniqueSenders || 0}
@@ -124,138 +121,7 @@ export default function OverviewTab({
         />
       </div>
 
-      {/* Token Distribution */}
-      {/* <Card className="mt-6">
-        <CardHeader className="pb-2">
-          <h3 className="text-lg font-semibold text-cyan-200">
-            Token Distribution
-          </h3>
-        </CardHeader>
-        <CardContent>
-          <div className="h-80">
-            {" "}
-            {dashboardData?.tokenDistribution &&
-            dashboardData.tokenDistribution.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  layout="vertical"
-                  data={dashboardData.tokenDistribution
-                    .sort((a, b) => b.count - a.count)
-                    .slice(0, 8)}
-                  margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke="#444"
-                    horizontal={false}
-                  />
-                  <XAxis
-                    type="number"
-                    tickFormatter={(value) => {
-                      if (value >= 1000000)
-                        return `${(value / 1000000).toFixed(1)}M`;
-                      if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
-                      return value;
-                    }}
-                    stroke="#aaa"
-                  />
-                  <YAxis
-                    type="category"
-                    dataKey="token_type"
-                    width={100}
-                    tick={{
-                      fill: "#fff",
-                      fontSize: 12,
-                    }}
-                    tickFormatter={(value) => {
-                      return value === "SOL"
-                        ? value
-                        : value.length > 12
-                        ? `${value.substring(0, 6)}...${value.substring(
-                            value.length - 4
-                          )}`
-                        : value;
-                    }}
-                  />
-                  <Tooltip
-                    formatter={(value) => {
-                      const total =
-                        dashboardData.tokenDistribution?.reduce(
-                          (sum, item) => sum + item.count,
-                          0
-                        ) || 0;
-                      const percent =
-                        total > 0
-                          ? ((Number(value) / total) * 100).toFixed(1)
-                          : "0.0";
-                      return [`${value} (${percent}%)`];
-                    }}
-                    labelFormatter={(label) => {
-                      return label === "SOL"
-                        ? "SOL"
-                        : label.length > 20
-                        ? `${label.substring(0, 10)}...${label.substring(
-                            label.length - 10
-                          )}`
-                        : label;
-                    }}
-                    contentStyle={{
-                      backgroundColor: "#1e293b",
-                      borderColor: "#475569",
-                      color: "#fff",
-                    }}
-                  />
-                  <Bar dataKey="count" name="Count" animationDuration={1000}>
-                    {dashboardData.tokenDistribution?.map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={
-                          [
-                            "#0ea5e9",
-                            "#10b981",
-                            "#f59e0b",
-                            "#ef4444",
-                            "#8b5cf6",
-                            "#ec4899",
-                            "#06b6d4",
-                            "#14b8a6",
-                          ][index % 8]
-                        }
-                      />
-                    ))}
-                    <LabelList
-                      dataKey="count"
-                      position="right"
-                      style={{ fill: "#fff" }}
-                      formatter={(value: number) => {
-                        const total =
-                          dashboardData.tokenDistribution?.reduce(
-                            (sum, item) => sum + item.count,
-                            0
-                          ) || 0;
-                        const percent = ((Number(value) / total) * 100).toFixed(
-                          1
-                        );
-                        return `${percent}%`;
-                      }}
-                    />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex items-center justify-center h-full">
-                <p className="text-muted-foreground">
-                  No token distribution data available
-                </p>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card> */}
-
-      {/* Top Attackers and Victims Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-        {/* Top Attackers */}
+      <div className="grid gap-4 md:grid-cols-2 lg:gap-8">
         <Card>
           <CardHeader className="pb-2">
             <h3 className="text-lg font-semibold text-cyan-200">
@@ -306,7 +172,6 @@ export default function OverviewTab({
           </CardContent>
         </Card>
 
-        {/* Top Victims */}
         <Card>
           <CardHeader className="pb-2">
             <h3 className="text-lg font-semibold text-cyan-200">
@@ -354,7 +219,6 @@ export default function OverviewTab({
         </Card>
       </div>
 
-      {/* View Suspicious Transactions Button */}
       <div className="flex justify-center mt-6">
         <Button
           variant="default"
@@ -365,6 +229,6 @@ export default function OverviewTab({
           View Suspicious Transactions
         </Button>
       </div>
-    </>
+    </div>
   );
 }

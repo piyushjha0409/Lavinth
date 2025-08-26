@@ -1,7 +1,7 @@
-import { QueryResult } from 'pg';
-import * as fs from 'fs';
-import * as path from 'path';
-import pool, { CustomPool } from './config';
+import { QueryResult } from "pg";
+import * as fs from "fs";
+import * as path from "path";
+import pool, { CustomPool } from "./config";
 
 export interface DustTransaction {
   signature: string;
@@ -77,11 +77,11 @@ export class DatabaseUtils {
   async initializeDatabase(): Promise<void> {
     const client = await pool.connect();
     try {
-      const schemaPath = path.join(__dirname, 'schema.sql');
-      const schemaSql = fs.readFileSync(schemaPath, 'utf8');
+      const schemaPath = path.join(__dirname, "schema.sql");
+      const schemaSql = fs.readFileSync(schemaPath, "utf8");
       await client.query(schemaSql);
     } catch (error) {
-      console.error('Error initializing database schema:', error);
+      console.error("Error initializing database schema:", error);
       throw error;
     } finally {
       client.release();
@@ -120,11 +120,13 @@ export class DatabaseUtils {
       tx.tokenAddress,
       tx.isPotentialDust,
       tx.isPotentialPoisoning,
-      tx.riskScore ?? null
+      tx.riskScore ?? null,
     ]);
   }
 
-  async insertOrUpdateDustingAttacker(attacker: DustingAttacker): Promise<QueryResult> {
+  async insertOrUpdateDustingAttacker(
+    attacker: DustingAttacker
+  ): Promise<QueryResult> {
     const query = `
       INSERT INTO dusting_attackers (
         address, small_transfers_count, unique_victims_count, unique_victims, timestamps,
@@ -169,11 +171,13 @@ export class DatabaseUtils {
       attacker.networkPattern,
       attacker.behavioralIndicators ?? null,
       attacker.mlFeatures ?? null,
-      attacker.mlPrediction ?? null
+      attacker.mlPrediction ?? null,
     ]);
   }
 
-  async insertOrUpdateDustingVictim(victim: DustingVictim): Promise<QueryResult> {
+  async insertOrUpdateDustingVictim(
+    victim: DustingVictim
+  ): Promise<QueryResult> {
     const query = `
       INSERT INTO dusting_victims (
         address, dust_transactions_count, unique_attackers_count, unique_attackers, timestamps,
@@ -207,7 +211,7 @@ export class DatabaseUtils {
       victim.timePatterns ?? null,
       victim.vulnerabilityAssessment ?? null,
       victim.mlFeatures ?? null,
-      victim.mlPrediction ?? null
+      victim.mlPrediction ?? null,
     ]);
   }
 
@@ -232,34 +236,34 @@ export class DatabaseUtils {
       analysis.chainAnalysisData ?? null,
       analysis.trmLabsData ?? null,
       analysis.temporalPattern,
-      analysis.networkPattern
+      analysis.networkPattern,
     ]);
   }
 
   async getAddressTransactions(address: string): Promise<QueryResult> {
     return this.pool.executeQuery(
-      'SELECT * FROM dust_transactions WHERE sender = $1 OR recipient = $1 ORDER BY timestamp DESC',
+      "SELECT * FROM dust_transactions WHERE sender = $1 OR recipient = $1 ORDER BY timestamp DESC",
       [address]
     );
   }
 
   async getHighRiskAddresses(minRiskScore: number = 0.7): Promise<QueryResult> {
     return this.pool.executeQuery(
-      'SELECT * FROM risk_analysis WHERE risk_score >= $1 ORDER BY risk_score DESC',
+      "SELECT * FROM risk_analysis WHERE risk_score >= $1 ORDER BY risk_score DESC",
       [minRiskScore]
     );
   }
 
   async getDustingAttackers(minRiskScore: number = 0.5): Promise<QueryResult> {
     return this.pool.executeQuery(
-      'SELECT * FROM dusting_attackers WHERE risk_score >= $1 ORDER BY risk_score DESC',
+      "SELECT * FROM dusting_attackers WHERE risk_score >= $1 ORDER BY risk_score DESC",
       [minRiskScore]
     );
   }
 
   async getDustingVictims(minRiskScore: number = 0.5): Promise<QueryResult> {
     return this.pool.executeQuery(
-      'SELECT * FROM dusting_victims WHERE risk_score >= $1 ORDER BY risk_score DESC',
+      "SELECT * FROM dusting_victims WHERE risk_score >= $1 ORDER BY risk_score DESC",
       [minRiskScore]
     );
   }
@@ -270,88 +274,130 @@ export class DatabaseUtils {
 
   async getOverviewStatistics(): Promise<any> {
     // Query for total transactions count
-    const totalTransactionsQuery = "SELECT COUNT(*) as total FROM dust_transactions";
-    const totalTransactionsResult = await this.pool.executeQuery(totalTransactionsQuery);
-    const totalTransactions = parseInt(totalTransactionsResult.rows[0].total || '0');
+    const totalTransactionsQuery =
+      "SELECT COUNT(*) as total FROM dust_transactions";
+    const totalTransactionsResult = await this.pool.executeQuery(
+      totalTransactionsQuery
+    );
+    const totalTransactions = parseInt(
+      totalTransactionsResult.rows[0].total || "0"
+    );
 
     // Query for successful transactions count
-    const successfulTransactionsQuery = "SELECT COUNT(*) as successful FROM dust_transactions WHERE success = true";
-    const successfulTransactionsResult = await this.pool.executeQuery(successfulTransactionsQuery);
-    const successfulTransactions = parseInt(successfulTransactionsResult.rows[0].successful || '0');
+    const successfulTransactionsQuery =
+      "SELECT COUNT(*) as successful FROM dust_transactions WHERE success = true";
+    const successfulTransactionsResult = await this.pool.executeQuery(
+      successfulTransactionsQuery
+    );
+    const successfulTransactions = parseInt(
+      successfulTransactionsResult.rows[0].successful || "0"
+    );
 
     // Calculate failed transactions
     const failedTransactions = totalTransactions - successfulTransactions;
 
     // Query for dusted transactions count
-    const dustedTransactionsQuery = "SELECT COUNT(*) as dusted FROM dust_transactions WHERE is_potential_dust = true";
-    const dustedTransactionsResult = await this.pool.executeQuery(dustedTransactionsQuery);
-    const dustedTransactions = parseInt(dustedTransactionsResult.rows[0].dusted || '0');
+    const dustedTransactionsQuery =
+      "SELECT COUNT(*) as dusted FROM dust_transactions WHERE is_potential_dust = true";
+    const dustedTransactionsResult = await this.pool.executeQuery(
+      dustedTransactionsQuery
+    );
+    const dustedTransactions = parseInt(
+      dustedTransactionsResult.rows[0].dusted || "0"
+    );
 
     // Query for poisoned transactions count
-    const poisonedTransactionsQuery = "SELECT COUNT(*) as poisoned FROM dust_transactions WHERE is_potential_poisoning = true";
-    const poisonedTransactionsResult = await this.pool.executeQuery(poisonedTransactionsQuery);
-    const poisonedTransactions = parseInt(poisonedTransactionsResult.rows[0].poisoned || '0');
+    const poisonedTransactionsQuery =
+      "SELECT COUNT(*) as poisoned FROM dust_transactions WHERE is_potential_poisoning = true";
+    const poisonedTransactionsResult = await this.pool.executeQuery(
+      poisonedTransactionsQuery
+    );
+    const poisonedTransactions = parseInt(
+      poisonedTransactionsResult.rows[0].poisoned || "0"
+    );
 
     // Query for total volume in SOL
-    const volumeQuery = "SELECT SUM(amount) as total_volume FROM dust_transactions WHERE token_type = 'SOL' AND success = true";
+    const volumeQuery =
+      "SELECT SUM(amount) as total_volume FROM dust_transactions WHERE token_type = 'SOL' AND success = true";
     const volumeResult = await this.pool.executeQuery(volumeQuery);
-    const volume = parseFloat(volumeResult.rows[0].total_volume || '0');
+    const volume = parseFloat(volumeResult.rows[0].total_volume || "0");
 
     // Query for average transaction amount
-    const avgAmountQuery = "SELECT AVG(amount) as avg_amount FROM dust_transactions WHERE token_type = 'SOL' AND success = true";
+    const avgAmountQuery =
+      "SELECT AVG(amount) as avg_amount FROM dust_transactions WHERE token_type = 'SOL' AND success = true";
     const avgAmountResult = await this.pool.executeQuery(avgAmountQuery);
-    const avgTransactionAmount = parseFloat(avgAmountResult.rows[0].avg_amount || '0');
+    const avgTransactionAmount = parseFloat(
+      avgAmountResult.rows[0].avg_amount || "0"
+    );
 
     // Query for average fee
-    const avgFeeQuery = "SELECT AVG(fee::numeric) as avg_fee FROM dust_transactions WHERE success = true";
+    const avgFeeQuery =
+      "SELECT AVG(fee::numeric) as avg_fee FROM dust_transactions WHERE success = true";
     const avgFeeResult = await this.pool.executeQuery(avgFeeQuery);
-    const avgTransactionFee = parseFloat(avgFeeResult.rows[0].avg_fee || '0');
+    const avgTransactionFee = parseFloat(avgFeeResult.rows[0].avg_fee || "0");
 
     // Query for token type distribution
-    const tokenDistributionQuery = "SELECT token_type, COUNT(*) as count FROM dust_transactions GROUP BY token_type ORDER BY count DESC";
-    const tokenDistributionResult = await this.pool.executeQuery(tokenDistributionQuery);
+    const tokenDistributionQuery =
+      "SELECT token_type, COUNT(*) as count FROM dust_transactions GROUP BY token_type ORDER BY count DESC";
+    const tokenDistributionResult = await this.pool.executeQuery(
+      tokenDistributionQuery
+    );
     const tokenDistribution = tokenDistributionResult.rows;
 
     // Query for unique senders and recipients
-    const uniqueAddressesQuery = "SELECT COUNT(DISTINCT sender) as unique_senders, COUNT(DISTINCT recipient) as unique_recipients FROM dust_transactions";
-    const uniqueAddressesResult = await this.pool.executeQuery(uniqueAddressesQuery);
-    const uniqueSenders = parseInt(uniqueAddressesResult.rows[0].unique_senders || '0');
-    const uniqueRecipients = parseInt(uniqueAddressesResult.rows[0].unique_recipients || '0');
+    const uniqueAddressesQuery =
+      "SELECT COUNT(DISTINCT sender) as unique_senders, COUNT(DISTINCT recipient) as unique_recipients FROM dust_transactions";
+    const uniqueAddressesResult = await this.pool.executeQuery(
+      uniqueAddressesQuery
+    );
+    const uniqueSenders = parseInt(
+      uniqueAddressesResult.rows[0].unique_senders || "0"
+    );
+    const uniqueRecipients = parseInt(
+      uniqueAddressesResult.rows[0].unique_recipients || "0"
+    );
 
     // Query for top dusting senders (potential attackers)
-    const topDustingSourcesQuery = "SELECT sender as address, COUNT(*) as small_transfers_count, COUNT(DISTINCT recipient) as unique_victims_count, AVG(amount) as avg_amount, MAX(timestamp) as last_activity FROM dust_transactions WHERE is_potential_dust = true AND sender IS NOT NULL GROUP BY sender ORDER BY small_transfers_count DESC LIMIT 10";
-    const topDustingSourcesResult = await this.pool.executeQuery(topDustingSourcesQuery);
+    const topDustingSourcesQuery =
+      "SELECT sender as address, COUNT(*) as small_transfers_count, COUNT(DISTINCT recipient) as unique_victims_count, AVG(amount) as avg_amount, MAX(timestamp) as last_activity FROM dust_transactions WHERE is_potential_dust = true AND sender IS NOT NULL GROUP BY sender ORDER BY small_transfers_count DESC LIMIT 10";
+    const topDustingSourcesResult = await this.pool.executeQuery(
+      topDustingSourcesQuery
+    );
     const attackerPatterns = topDustingSourcesResult.rows.map((row: any) => ({
       address: row.address,
       small_transfers_count: parseInt(row.small_transfers_count),
       unique_victims_count: parseInt(row.unique_victims_count),
-      avg_amount: parseFloat(row.avg_amount || '0'),
+      avg_amount: parseFloat(row.avg_amount || "0"),
       last_updated: row.last_activity,
       // Adding placeholder values for compatibility
       risk_score: 0.7,
       regularity_score: 0.5,
       centrality_score: 0.5,
-      uses_scripts: false
+      uses_scripts: false,
     }));
 
     // Query for top dusted recipients (potential victims)
-    const topDustedRecipientsQuery = "SELECT recipient as address, COUNT(*) as dust_transactions_count, COUNT(DISTINCT sender) as unique_attackers_count, SUM(amount) as total_received, MAX(timestamp) as last_activity FROM dust_transactions WHERE is_potential_dust = true AND recipient IS NOT NULL GROUP BY recipient ORDER BY dust_transactions_count DESC LIMIT 10";
-    const topDustedRecipientsResult = await this.pool.executeQuery(topDustedRecipientsQuery);
+    const topDustedRecipientsQuery =
+      "SELECT recipient as address, COUNT(*) as dust_transactions_count, COUNT(DISTINCT sender) as unique_attackers_count, SUM(amount) as total_received, MAX(timestamp) as last_activity FROM dust_transactions WHERE is_potential_dust = true AND recipient IS NOT NULL GROUP BY recipient ORDER BY dust_transactions_count DESC LIMIT 10";
+    const topDustedRecipientsResult = await this.pool.executeQuery(
+      topDustedRecipientsQuery
+    );
     const victimExposure = topDustedRecipientsResult.rows.map((row: any) => ({
       address: row.address,
       dust_transactions_count: parseInt(row.dust_transactions_count),
       unique_attackers_count: parseInt(row.unique_attackers_count),
-      total_received: parseFloat(row.total_received || '0'),
+      total_received: parseFloat(row.total_received || "0"),
       last_updated: row.last_activity,
       // Adding placeholder values for compatibility
       risk_score: 0.5,
       risk_exposure: 0.6,
       wallet_activity: "medium",
-      asset_value: "unknown"
+      asset_value: "unknown",
     }));
 
     // Query for daily transaction summary
-    const dailySummaryQuery = "SELECT DATE(timestamp) as day, COUNT(*) as total_transactions, COUNT(CASE WHEN is_potential_dust = true THEN 1 END) as total_dust_transactions, COUNT(DISTINCT sender) as unique_senders, COUNT(DISTINCT recipient) as unique_recipients, AVG(amount) as avg_amount FROM dust_transactions GROUP BY DATE(timestamp) ORDER BY day DESC LIMIT 30";
+    const dailySummaryQuery =
+      "SELECT DATE(timestamp) as day, COUNT(*) as total_transactions, COUNT(CASE WHEN is_potential_dust = true THEN 1 END) as total_dust_transactions, COUNT(DISTINCT sender) as unique_senders, COUNT(DISTINCT recipient) as unique_recipients, AVG(amount) as avg_amount FROM dust_transactions GROUP BY DATE(timestamp) ORDER BY day DESC LIMIT 30";
     const dailySummaryResult = await this.pool.executeQuery(dailySummaryQuery);
     const dailySummary = dailySummaryResult.rows.map((row: any) => ({
       day: row.day,
@@ -359,12 +405,15 @@ export class DatabaseUtils {
       total_dust_transactions: parseInt(row.total_dust_transactions),
       unique_attackers: parseInt(row.unique_senders),
       unique_victims: parseInt(row.unique_recipients),
-      avg_dust_amount: parseFloat(row.avg_amount || '0')
+      avg_dust_amount: parseFloat(row.avg_amount || "0"),
     }));
 
     // Query for recent transactions (limit to 10)
-    const recentTransactionsQuery = "SELECT * FROM dust_transactions ORDER BY timestamp DESC LIMIT 10";
-    const recentTransactionsResult = await this.pool.executeQuery(recentTransactionsQuery);
+    const recentTransactionsQuery =
+      "SELECT * FROM dust_transactions ORDER BY timestamp DESC LIMIT 10";
+    const recentTransactionsResult = await this.pool.executeQuery(
+      recentTransactionsQuery
+    );
     const recentTransactions = recentTransactionsResult.rows.map((tx: any) => ({
       id: tx.id,
       signature: tx.signature,
@@ -380,13 +429,18 @@ export class DatabaseUtils {
       is_potential_dust: tx.is_potential_dust,
       is_potential_poisoning: tx.is_potential_poisoning,
       risk_score: String(tx.risk_score || 0.5),
-      created_at: tx.created_at || tx.timestamp
+      created_at: tx.created_at || tx.timestamp,
     }));
 
     // Query for dusting sources count (addresses that are potential dusting sources)
-    const dustingSourcesQuery = "SELECT COUNT(DISTINCT sender) as sources FROM dust_transactions WHERE is_potential_dust = true";
-    const dustingSourcesResult = await this.pool.executeQuery(dustingSourcesQuery);
-    const dustingSources = parseInt(dustingSourcesResult.rows[0].sources || '0');
+    const dustingSourcesQuery =
+      "SELECT COUNT(DISTINCT sender) as sources FROM dust_transactions WHERE is_potential_dust = true";
+    const dustingSourcesResult = await this.pool.executeQuery(
+      dustingSourcesQuery
+    );
+    const dustingSources = parseInt(
+      dustingSourcesResult.rows[0].sources || "0"
+    );
 
     return {
       totalTransactions,
@@ -404,7 +458,7 @@ export class DatabaseUtils {
       attackerPatterns,
       victimExposure,
       dailySummary,
-      recentTransactions
+      recentTransactions,
     };
   }
 }
