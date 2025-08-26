@@ -5,12 +5,22 @@ import {
   DailySummary,
 } from "@/app/types/dashboard";
 import { DashboardData } from "@/app/types/transactions";
+import { auth } from "@/lib/auth";
+
+const apiKey = process.env.API_KEY;
+const apiBaseURL = process.env.API_BASE_URL;
 
 export async function GET() {
   try {
-    const response = await fetch(`${process.env.API_BASE_URL}/overview`, {
+    const session = await auth();
+
+    if (!session || !session.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const response = await fetch(`${apiBaseURL}/overview`, {
       headers: {
-        "x-access-token": process.env.API_KEY as string,
+        "x-access-token": apiKey as string,
       },
     });
 

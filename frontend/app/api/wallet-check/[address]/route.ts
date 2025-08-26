@@ -1,9 +1,20 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ address: string }> }
-) {
+const apiKey = process.env.API_KEY;
+const apiBaseURL = process.env.API_BASE_URL;
+
+export async function GET({
+  params,
+}: {
+  params: Promise<{ address: string }>;
+}) {
+  const session = await auth();
+
+  if (!session || !session.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const { address } = await params;
 
@@ -14,14 +25,11 @@ export async function GET(
       );
     }
 
-    const response = await fetch(
-      `${process.env.API_BASE_URL}/check-wallet/${address}`,
-      {
-        headers: {
-          "x-access-token": process.env.API_KEY as string,
-        },
-      }
-    );
+    const response = await fetch(`${apiBaseURL}/check-wallet/${address}`, {
+      headers: {
+        "x-access-token": apiKey as string,
+      },
+    });
 
     if (!response.ok) {
       return NextResponse.json(

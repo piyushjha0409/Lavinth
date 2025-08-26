@@ -1,7 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+
+const apiKey = process.env.API_KEY;
+const apiBaseURL = process.env.API_BASE_URL;
 
 export async function GET(request: NextRequest) {
   try {
+    const session = await auth();
+
+    if (!session || !session.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const filterType = searchParams.get("type") || "all";
     const limit = searchParams.get("limit") || "10";
@@ -11,51 +21,51 @@ export async function GET(request: NextRequest) {
     let responses: Response[] = [];
 
     if (filterType === "dust") {
-      endpoint = `${process.env.API_BASE_URL}/dust-transactions/potential-dust?limit=${limit}&offset=${offset}`;
+      endpoint = `${apiBaseURL}/dust-transactions/potential-dust?limit=${limit}&offset=${offset}`;
       const response = await fetch(endpoint, {
         headers: {
-          "x-access-token": process.env.API_KEY as string,
+          "x-access-token": apiKey as string,
         },
       });
       responses = [response];
     } else if (filterType === "poisoning") {
-      endpoint = `${process.env.API_BASE_URL}/dust-transactions/potential-poisoning?limit=${limit}&offset=${offset}`;
+      endpoint = `${apiBaseURL}/dust-transactions/potential-poisoning?limit=${limit}&offset=${offset}`;
       const response = await fetch(endpoint, {
         headers: {
-          "x-access-token": process.env.API_KEY as string,
+          "x-access-token": apiKey as string,
         },
       });
       responses = [response];
     } else if (filterType === "attackers") {
-      endpoint = `${process.env.API_BASE_URL}/dusting-attackers?limit=${limit}&offset=${offset}`;
+      endpoint = `${apiBaseURL}/dusting-attackers?limit=${limit}&offset=${offset}`;
       const response = await fetch(endpoint, {
         headers: {
-          "x-access-token": process.env.API_KEY as string,
+          "x-access-token": apiKey as string,
         },
       });
       responses = [response];
     } else if (filterType === "victims") {
-      endpoint = `${process.env.API_BASE_URL}/dusting-victims?limit=${limit}&offset=${offset}`;
+      endpoint = `${apiBaseURL}/dusting-victims?limit=${limit}&offset=${offset}`;
       const response = await fetch(endpoint, {
         headers: {
-          "x-access-token": process.env.API_KEY as string,
+          "x-access-token": apiKey as string,
         },
       });
       responses = [response];
     } else {
       // For 'all', fetch both dust and poisoning transactions
-      const dustEndpoint = `${process.env.API_BASE_URL}/dust-transactions/potential-dust?limit=${limit}&offset=${offset}`;
-      const poisoningEndpoint = `${process.env.API_BASE_URL}/dust-transactions/potential-poisoning?limit=${limit}&offset=${offset}`;
+      const dustEndpoint = `${apiBaseURL}/dust-transactions/potential-dust?limit=${limit}&offset=${offset}`;
+      const poisoningEndpoint = `${apiBaseURL}/dust-transactions/potential-poisoning?limit=${limit}&offset=${offset}`;
 
       const [dustResponse, poisoningResponse] = await Promise.all([
         fetch(dustEndpoint, {
           headers: {
-            "x-access-token": process.env.API_KEY as string,
+            "x-access-token": apiKey as string,
           },
         }),
         fetch(poisoningEndpoint, {
           headers: {
-            "x-access-token": process.env.API_KEY as string,
+            "x-access-token": apiKey as string,
           },
         }),
       ]);
