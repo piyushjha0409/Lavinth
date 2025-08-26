@@ -21,25 +21,16 @@ app.use(
 );
 app.use(express.json());
 
-/**
- * Get all dust transactions with optional filtering
- * Query parameters:
- * - limit: number of records to return (default: 10)
- * - offset: pagination offset (default: 0)
- * - sender: filter by sender address
- * - recipient: filter by recipient address
- * - minRiskScore: minimum risk score (0-1)
- * - isPotentialDust: filter by potential dust status (true/false)
- * - isPotentialPoisoning: filter by potential poisoning status (true/false)
- * - startDate: filter by transactions after this date (ISO format)
- * - endDate: filter by transactions before this date (ISO format)
- * - sortBy: field to sort by (default: timestamp)
- * - sortOrder: asc or desc (default: desc)
- */
 app.get(
   "/api/dust-transactions",
   validateToken,
   async (req: Request, res: Response) => {
+    const requestId = `dust-tx-${Date.now()}-${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
+    console.log(`[${requestId}] Starting dust transactions request`);
+    console.log(`[${requestId}] Query parameters:`, req.query);
+
     try {
       const {
         limit = 10,
@@ -54,6 +45,20 @@ app.get(
         sortBy = "timestamp",
         sortOrder = "desc",
       } = req.query;
+
+      console.log(`[${requestId}] Parsed parameters:`, {
+        limit,
+        offset,
+        sender,
+        recipient,
+        minRiskScore,
+        isPotentialDust,
+        isPotentialPoisoning,
+        startDate,
+        endDate,
+        sortBy,
+        sortOrder,
+      });
 
       // Build the main query with filters
       let queryBase = "SELECT * FROM dust_transactions WHERE 1=1";
@@ -158,7 +163,8 @@ app.get(
         data: result.rows,
       });
     } catch (error) {
-      console.error("Error fetching dust transactions:", error);
+      console.error(`[${requestId}] Error fetching dust transactions:`, error);
+      console.error(`[${requestId}] Error stack:`, (error as Error).stack);
       res.status(500).json({
         status: "error",
         message: "Failed to fetch dust transactions",
@@ -168,18 +174,16 @@ app.get(
   }
 );
 
-/**
- * Get all potential dust transactions
- * Query parameters:
- * - limit: number of records to return (default: 10)
- * - offset: pagination offset (default: 0)
- * - sortBy: field to sort by (default: timestamp)
- * - sortOrder: asc or desc (default: desc)
- */
 app.get(
   "/api/dust-transactions/potential-dust",
   validateToken,
   async (req: Request, res: Response) => {
+    const requestId = `pot-dust-${Date.now()}-${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
+    console.log(`[${requestId}] Starting potential dust transactions request`);
+    console.log(`[${requestId}] Query parameters:`, req.query);
+
     try {
       const {
         limit = 10,
@@ -187,6 +191,13 @@ app.get(
         sortBy = "timestamp",
         sortOrder = "desc",
       } = req.query;
+
+      console.log(`[${requestId}] Parsed parameters:`, {
+        limit,
+        offset,
+        sortBy,
+        sortOrder,
+      });
 
       // Build the query for potential dust transactions
       let queryBase =
@@ -239,7 +250,11 @@ app.get(
         data: result.rows,
       });
     } catch (error) {
-      console.error("Error fetching potential dust transactions:", error);
+      console.error(
+        `[${requestId}] Error fetching potential dust transactions:`,
+        error
+      );
+      console.error(`[${requestId}] Error stack:`, (error as Error).stack);
       res.status(500).json({
         status: "error",
         message: "Failed to fetch potential dust transactions",
@@ -249,18 +264,18 @@ app.get(
   }
 );
 
-/**
- * Get all potential poisoning transactions
- * Query parameters:
- * - limit: number of records to return (default: 10)
- * - offset: pagination offset (default: 0)
- * - sortBy: field to sort by (default: timestamp)
- * - sortOrder: asc or desc (default: desc)
- */
 app.get(
   "/api/dust-transactions/potential-poisoning",
   validateToken,
   async (req: Request, res: Response) => {
+    const requestId = `pot-poison-${Date.now()}-${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
+    console.log(
+      `[${requestId}] Starting potential poisoning transactions request`
+    );
+    console.log(`[${requestId}] Query parameters:`, req.query);
+
     try {
       const {
         limit = 10,
@@ -268,6 +283,13 @@ app.get(
         sortBy = "timestamp",
         sortOrder = "desc",
       } = req.query;
+
+      console.log(`[${requestId}] Parsed parameters:`, {
+        limit,
+        offset,
+        sortBy,
+        sortOrder,
+      });
 
       // Build the query for potential poisoning transactions
       let queryBase =
@@ -320,7 +342,11 @@ app.get(
         data: result.rows,
       });
     } catch (error) {
-      console.error("Error fetching potential poisoning transactions:", error);
+      console.error(
+        `[${requestId}] Error fetching potential poisoning transactions:`,
+        error
+      );
+      console.error(`[${requestId}] Error stack:`, (error as Error).stack);
       res.status(500).json({
         status: "error",
         message: "Failed to fetch potential poisoning transactions",
@@ -330,30 +356,27 @@ app.get(
   }
 );
 
-/**
- * Get overview statistics for dashboard
- * Returns:
- * 1. Total transactions count
- * 2. Successful transactions count
- * 3. Failed transactions count
- * 4. Dusted transactions count
- * 5. Poisoned transactions count
- * 6. Volume (in SOL)
- * 7. Suspicious wallet count
- * 8. Dusting sources count
- */
 app.get("/api/overview", validateToken, async (req: Request, res: Response) => {
+  const requestId = `overview-${Date.now()}-${Math.random()
+    .toString(36)
+    .substr(2, 9)}`;
+  console.log(`[${requestId}] Starting overview statistics request`);
+
   try {
     // Use the new getOverviewStatistics method to fetch all statistics at once
+    console.log(`[${requestId}] Fetching overview statistics...`);
     const statistics = await db.getOverviewStatistics();
+    console.log(`[${requestId}] Overview statistics retrieved:`, statistics);
 
     // Return all statistics
+    console.log(`[${requestId}] Sending successful response`);
     res.status(200).json({
       status: "success",
       data: statistics,
     });
   } catch (error) {
-    console.error("Error fetching overview statistics:", error);
+    console.error(`[${requestId}] Error fetching overview statistics:`, error);
+    console.error(`[${requestId}] Error stack:`, (error as Error).stack);
     res.status(500).json({
       status: "error",
       message: "Failed to fetch overview statistics",
@@ -362,24 +385,22 @@ app.get("/api/overview", validateToken, async (req: Request, res: Response) => {
   }
 });
 
-/**
- * Check if a wallet address is flagged as a dusting candidate or attacker
- * Returns:
- * - status: success or error
- * - isDusted: boolean indicating if the address is flagged as a dusting candidate or attacker
- * - riskScore: risk score of the address
- * - attackerDetails: detailed information if found in dusting_attackers table
- * - message: description of the result
- */
 app.get(
   "/api/check-wallet/:address",
   validateApiKey,
   async (req: Request, res: Response): Promise<any> => {
+    const requestId = `wallet-check-${Date.now()}-${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
+    console.log(`[${requestId}] Starting wallet check request`);
+
     try {
       const { address } = req.params;
+      console.log(`[${requestId}] Checking wallet address:`, address);
 
       // Validate the address format (basic validation for Solana address)
       if (!address) {
+        console.log(`[${requestId}] Invalid address format - empty address`);
         return res.status(400).json({
           status: "error",
           message: "Invalid wallet address format",
@@ -392,15 +413,27 @@ app.get(
       const attackerQuery =
         "SELECT * FROM dusting_attackers WHERE address = $1";
 
+      console.log(
+        `[${requestId}] Executing parallel queries for candidates and attackers...`
+      );
       const [candidateResult, attackerResult] = await Promise.all([
         db.pool.executeQuery(candidateQuery, [address]),
         db.pool.executeQuery(attackerQuery, [address]),
       ]);
 
+      console.log(
+        `[${requestId}] Candidate query result: ${candidateResult.rowCount} rows`
+      );
+      console.log(
+        `[${requestId}] Attacker query result: ${attackerResult.rowCount} rows`
+      );
+
       // Check if address exists in dusting_attackers (more detailed information)
       if (attackerResult.rowCount && attackerResult.rowCount > 0) {
+        console.log(`[${requestId}] Found in dusting_attackers table`);
         const attacker = attackerResult.rows[0];
         const riskScore = parseFloat(attacker.risk_score);
+        console.log(`[${requestId}] Attacker risk score:`, riskScore);
 
         return res.status(200).json({
           status: "success",
@@ -422,7 +455,9 @@ app.get(
 
       // Check if address exists in dusting_candidates (basic information)
       if (candidateResult.rowCount && candidateResult.rowCount > 0) {
+        console.log(`[${requestId}] Found in dusting_candidates table`);
         const riskScore = parseFloat(candidateResult.rows[0].risk_score);
+        console.log(`[${requestId}] Candidate risk score:`, riskScore);
 
         return res.status(200).json({
           status: "success",
@@ -434,6 +469,9 @@ app.get(
         });
       } else {
         // Address does not exist in the dusting_candidates table
+        console.log(
+          `[${requestId}] Address not found in any dusting tables - clean wallet`
+        );
         return res.status(200).json({
           status: "success",
           isDusted: false,
@@ -443,7 +481,8 @@ app.get(
         });
       }
     } catch (error) {
-      console.error("Error checking wallet address:", error);
+      console.error(`[${requestId}] Error checking wallet address:`, error);
+      console.error(`[${requestId}] Error stack:`, (error as Error).stack);
       res.status(500).json({
         status: "error",
         message: "Failed to check wallet address",
@@ -453,19 +492,16 @@ app.get(
   }
 );
 
-/**
- * Get dusting attackers with pagination and filtering
- * Query parameters:
- * - limit: number of records to return (default: 10)
- * - offset: pagination offset (default: 0)
- * - minRiskScore: minimum risk score (0-1)
- * - sortBy: field to sort by (default: risk_score)
- * - sortOrder: asc or desc (default: desc)
- */
 app.get(
   "/api/dusting-attackers",
   validateToken,
   async (req: Request, res: Response) => {
+    const requestId = `dust-attackers-${Date.now()}-${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
+    console.log(`[${requestId}] Starting dusting attackers request`);
+    console.log(`[${requestId}] Query parameters:`, req.query);
+
     try {
       const {
         limit = 10,
@@ -474,6 +510,14 @@ app.get(
         sortBy = "risk_score",
         sortOrder = "desc",
       } = req.query;
+
+      console.log(`[${requestId}] Parsed parameters:`, {
+        limit,
+        offset,
+        minRiskScore,
+        sortBy,
+        sortOrder,
+      });
 
       // Build the main query with filters
       let queryBase = "SELECT * FROM dusting_attackers WHERE 1=1";
@@ -536,7 +580,8 @@ app.get(
         data: result.rows,
       });
     } catch (error) {
-      console.error("Error fetching dusting attackers:", error);
+      console.error(`[${requestId}] Error fetching dusting attackers:`, error);
+      console.error(`[${requestId}] Error stack:`, (error as Error).stack);
       res.status(500).json({
         status: "error",
         message: "Failed to fetch dusting attackers",
@@ -546,19 +591,16 @@ app.get(
   }
 );
 
-/**
- * Get dusting victims with pagination and filtering
- * Query parameters:
- * - limit: number of records to return (default: 10)
- * - offset: pagination offset (default: 0)
- * - minRiskScore: minimum risk score (0-1)
- * - sortBy: field to sort by (default: risk_score)
- * - sortOrder: asc or desc (default: desc)
- */
 app.get(
   "/api/dusting-victims",
   validateToken,
   async (req: Request, res: Response) => {
+    const requestId = `dust-victims-${Date.now()}-${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
+    console.log(`[${requestId}] Starting dusting victims request`);
+    console.log(`[${requestId}] Query parameters:`, req.query);
+
     try {
       const {
         limit = 10,
@@ -567,6 +609,14 @@ app.get(
         sortBy = "risk_score",
         sortOrder = "desc",
       } = req.query;
+
+      console.log(`[${requestId}] Parsed parameters:`, {
+        limit,
+        offset,
+        minRiskScore,
+        sortBy,
+        sortOrder,
+      });
 
       // Build the main query with filters
       let queryBase = "SELECT * FROM dusting_victims WHERE 1=1";
@@ -604,16 +654,31 @@ app.get(
       const paginationParams = [limitValue, offsetValue];
       const queryParams = [...params, ...paginationParams];
 
+      console.log(`[${requestId}] Final query:`, queryBase);
+      console.log(`[${requestId}] Query parameters:`, queryParams);
+
       // Execute the main query
+      console.log(`[${requestId}] Executing main query...`);
       const result = await db.pool.executeQuery(queryBase, queryParams);
+      console.log(`[${requestId}] Main query result: ${result.rowCount} rows`);
 
       // Execute count query to get total records (for pagination metadata)
+      console.log(`[${requestId}] Executing count query...`);
       const countResult = await db.pool.executeQuery(countQueryBase, params);
       const totalCount = parseInt(countResult.rows[0].total);
       const totalPages = Math.ceil(totalCount / limitValue);
       const currentPage = Math.floor(offsetValue / limitValue) + 1;
 
+      console.log(`[${requestId}] Pagination metadata:`, {
+        totalCount,
+        totalPages,
+        currentPage,
+        limitValue,
+        offsetValue,
+      });
+
       // Return the results with pagination metadata
+      console.log(`[${requestId}] Sending successful response`);
       res.status(200).json({
         status: "success",
         count: result.rowCount,
@@ -629,7 +694,8 @@ app.get(
         data: result.rows,
       });
     } catch (error) {
-      console.error("Error fetching dusting victims:", error);
+      console.error(`[${requestId}] Error fetching dusting victims:`, error);
+      console.error(`[${requestId}] Error stack:`, (error as Error).stack);
       res.status(500).json({
         status: "error",
         message: "Failed to fetch dusting victims",
@@ -646,11 +712,23 @@ app.get(
   "/api/dusting-attackers/:address",
   validateToken,
   async (req: Request, res: Response): Promise<any> => {
+    const requestId = `attacker-detail-${Date.now()}-${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
+    console.log(`[${requestId}] Starting dusting attacker detail request`);
+
     try {
       const { address } = req.params;
+      console.log(
+        `[${requestId}] Fetching details for attacker address:`,
+        address
+      );
 
       // Validate the address format (basic validation for Solana address)
       if (!address || address.length !== 44) {
+        console.log(
+          `[${requestId}] Invalid address format - length: ${address?.length}`
+        );
         return res.status(400).json({
           status: "error",
           message: "Invalid wallet address format",
@@ -658,21 +736,31 @@ app.get(
       }
 
       const query = "SELECT * FROM dusting_attackers WHERE address = $1";
+      console.log(`[${requestId}] Executing query:`, query);
       const result = await db.pool.executeQuery(query, [address]);
+      console.log(`[${requestId}] Query result: ${result.rowCount} rows`);
 
       if (result.rowCount === 0) {
+        console.log(`[${requestId}] Dusting attacker not found`);
         return res.status(404).json({
           status: "error",
           message: "Dusting attacker not found",
         });
       }
 
+      console.log(
+        `[${requestId}] Sending successful response with attacker details`
+      );
       res.status(200).json({
         status: "success",
         data: result.rows[0],
       });
     } catch (error) {
-      console.error("Error fetching dusting attacker details:", error);
+      console.error(
+        `[${requestId}] Error fetching dusting attacker details:`,
+        error
+      );
+      console.error(`[${requestId}] Error stack:`, (error as Error).stack);
       res.status(500).json({
         status: "error",
         message: "Failed to fetch dusting attacker details",
@@ -689,11 +777,23 @@ app.get(
   "/api/dusting-victims/:address",
   validateToken,
   async (req: Request, res: Response): Promise<any> => {
+    const requestId = `victim-detail-${Date.now()}-${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
+    console.log(`[${requestId}] Starting dusting victim detail request`);
+
     try {
       const { address } = req.params;
+      console.log(
+        `[${requestId}] Fetching details for victim address:`,
+        address
+      );
 
       // Validate the address format (basic validation for Solana address)
       if (!address || address.length !== 44) {
+        console.log(
+          `[${requestId}] Invalid address format - length: ${address?.length}`
+        );
         return res.status(400).json({
           status: "error",
           message: "Invalid wallet address format",
@@ -701,21 +801,31 @@ app.get(
       }
 
       const query = "SELECT * FROM dusting_victims WHERE address = $1";
+      console.log(`[${requestId}] Executing query:`, query);
       const result = await db.pool.executeQuery(query, [address]);
+      console.log(`[${requestId}] Query result: ${result.rowCount} rows`);
 
       if (result.rowCount === 0) {
+        console.log(`[${requestId}] Dusting victim not found`);
         return res.status(404).json({
           status: "error",
           message: "Dusting victim not found",
         });
       }
 
+      console.log(
+        `[${requestId}] Sending successful response with victim details`
+      );
       res.status(200).json({
         status: "success",
         data: result.rows[0],
       });
     } catch (error) {
-      console.error("Error fetching dusting victim details:", error);
+      console.error(
+        `[${requestId}] Error fetching dusting victim details:`,
+        error
+      );
+      console.error(`[${requestId}] Error stack:`, (error as Error).stack);
       res.status(500).json({
         status: "error",
         message: "Failed to fetch dusting victim details",
@@ -727,7 +837,9 @@ app.get(
 
 // Start the server
 app.listen(PORT, () => {
-  console.log(`Solana Dust Detector API running on port ${PORT}`);
+  console.log(`🚀 Solana Dust Detector API running on port ${PORT}`);
+  console.log(`📊 Debug logging enabled for all endpoints`);
+  console.log(`🔍 Request IDs will be generated for tracking`);
 });
 
 // Export the Express app
