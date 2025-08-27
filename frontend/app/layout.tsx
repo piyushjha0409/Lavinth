@@ -15,6 +15,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <meta
+          name="solads-site-verification"
+          content="solads_verify_1756328321020_361278ce66e77c69da78b0eedc79b352"
+        />
+      </head>
       <body>
         <AuthProvider>{children}</AuthProvider>
       </body>
