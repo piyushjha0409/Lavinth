@@ -43,8 +43,6 @@ import { useToast } from "@/components/ui/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import RedocDocumentation from "@/components/ui/redoc-documentation";
 
 type ApiKey = {
@@ -135,6 +133,7 @@ export default function ApiKeysTab() {
   // Revoke an API key
   const handleRevokeApiKey = async (keyId: string) => {
     try {
+      console.log("Revoke API key:", keyId);
       setIsLoading(true);
       const response = await fetch(`/api/api-keys/${keyId}`, {
         method: "DELETE",

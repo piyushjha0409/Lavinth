@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { ApiKeyService } from "@/lib/services/apiKeyService";
 
-export async function GET({ params }: { params: Promise<{ id: string }> }) {
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const session = await auth();
 
   if (!session || !session.user) {
@@ -29,7 +32,15 @@ export async function GET({ params }: { params: Promise<{ id: string }> }) {
   }
 }
 
-export async function DELETE({ params }: { params: Promise<{ id: string }> }) {
+/**
+ * To test this delete functionality 
+ * @param param0 
+ * @returns 
+ */
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const session = await auth();
 
   if (!session || !session.user) {

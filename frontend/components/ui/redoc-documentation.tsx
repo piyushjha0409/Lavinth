@@ -29,7 +29,9 @@ export default function RedocDocumentation({
 }: RedocDocumentationProps) {
   const [error, setError] = useState<string | null>(null);
 
-  // Light theme options that match shadcn/ui design
+/**
+ * TODO: to change the theme colors of redoc
+ */
   const defaultOptions = {
     theme: {
       colors: {
