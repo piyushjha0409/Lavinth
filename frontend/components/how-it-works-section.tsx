@@ -1,8 +1,8 @@
 "use client"
 
-import { useRef } from "react"
+import { useRef, useState } from "react"
 import { motion, useInView } from "framer-motion"
-import { Database, Shield, AlertTriangle, CheckCircle, Server } from "lucide-react"
+import { Database, Shield, AlertTriangle, CheckCircle, Server, Copy } from "lucide-react"
 
 const steps = [
   {
@@ -36,6 +36,49 @@ const steps = [
 export default function HowItWorksSection() {
   const ref = useRef(null)
   const isInView = useInView(ref, { once: true, amount: 0.2 })
+  const [copied, setCopied] = useState(false)
+
+  const codeSnippet = `// Check if a wallet address is poisoned
+const response = await fetch(
+  'https://api.lavinth.com/v1/wallet-check',
+  {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer lav_live_your_api_key'
+    },
+    body: JSON.stringify({
+      wallet_address: '0x1234567890abcdef1234567890abcdef12345678'
+    })
+  }
+);
+const data = await response.json();
+console.log(data);
+
+// Output:
+{
+  wallet_address: '0x1234567890abcdef1234567890abcdef12345678',
+  risk_score: 85,
+  risk_level: 'high',
+  findings: [
+    {
+      type: 'dust_attack',
+      severity: 'high',
+      description: 'Wallet has received dust from known attacker addresses'
+    }
+  ],
+  last_updated: '2025-07-22T03:35:00+05:30'
+}`
+
+  const handleCopyCode = async () => {
+    try {
+      await navigator.clipboard.writeText(codeSnippet)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      console.error('Failed to copy code:', err)
+    }
+  }
 
   return (
     <section id="how-it-works" className="py-20 relative overflow-hidden">
@@ -97,57 +140,80 @@ export default function HowItWorksSection() {
         {/* Terminal-like code example */}
         <div className="mt-20 max-w-3xl mx-auto">
           <div className="bg-black/80 border border-blue-500/30 rounded-lg overflow-hidden">
-            <div className="bg-gray-900 px-4 py-2 flex items-center gap-2 border-b border-blue-500/30">
-              <div className="w-3 h-3 rounded-full bg-red-500" />
-              <div className="w-3 h-3 rounded-full bg-yellow-500" />
-              <div className="w-3 h-3 rounded-full bg-green-500" />
-              <span className="text-gray-400 text-sm ml-2">Lavinth API Example</span>
+            <div className="bg-gray-900 px-4 py-2 flex items-center justify-between border-b border-blue-500/30">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-red-500" />
+                <div className="w-3 h-3 rounded-full bg-yellow-500" />
+                <div className="w-3 h-3 rounded-full bg-green-500" />
+                <span className="text-gray-400 text-sm ml-2">Lavinth API Example</span>
+              </div>
+              <button
+                onClick={handleCopyCode}
+                className="flex items-center gap-1 px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
+                title="Copy code"
+              >
+                <Copy className="h-3 w-3" />
+                {copied ? 'Copied!' : 'Copy'}
+              </button>
             </div>
             <div className="p-4 font-mono text-sm">
               <div className="text-blue-400">// Check if a wallet address is poisoned</div>
               <div className="text-gray-300 mt-2">const response = await fetch(</div>
-              <div className="text-green-400 ml-4">'https://api.lavinth.com/api/check-wallet',</div>
+              <div className="text-green-400 ml-4">'https://api.lavinth.com/v1/wallet-check',</div>
               <div className="text-gray-300 ml-4">{"{"}</div>
               <div className="text-gray-300 ml-8">method: 'POST',</div>
               <div className="text-gray-300 ml-8">
-                headers: {"{"} 'Content-Type': 'application/json' {"}"},
+                headers: {"{"}
               </div>
+              <div className="text-gray-300 ml-12">
+                'Content-Type': 'application/json',
+              </div>
+              <div className="text-gray-300 ml-12">
+                'Authorization': <span className="text-yellow-400">'Bearer lav_live_your_api_key'</span>
+              </div>
+              <div className="text-gray-300 ml-8">{"}"},</div>
               <div className="text-gray-300 ml-8">body: JSON.stringify({"{"}</div>
               <div className="text-gray-300 ml-12">
-                address: <span className="text-yellow-400">'8xrt67qLVBw4MFN6a9WnQgcj2fZvCQXMQMg9YQ9Yif3J'</span>
+                wallet_address: <span className="text-yellow-400">'0x1234567890abcdef1234567890abcdef12345678'</span>
               </div>
               <div className="text-gray-300 ml-8">{"}"})</div>
-              <div className="text-gray-300 ml-4">{"}"});</div>
+              <div className="text-gray-300 ml-4">{"}"}); </div>
               <div className="text-gray-300 mt-2">const data = await response.json();</div>
               <div className="text-gray-300 mt-2">console.log(data);</div>
-                <div className="text-gray-400 mt-4">// Output:</div>
+                <div className="text-gray-400 mt-4">//Output:</div>
                 <div className="text-gray-300 mt-1">{"{"}</div>
                 <div className="text-gray-300 ml-4">
-                status: <span className="text-green-400">'success'</span>,
+                wallet_address: <span className="text-yellow-400">'0x1234567890abcdef1234567890abcdef12345678'</span>,
                 </div>
                 <div className="text-gray-300 ml-4">
-                isDusted: <span className="text-red-400">true</span>,
+                risk_score: <span className="text-yellow-400">85</span>,
                 </div>
                 <div className="text-gray-300 ml-4">
-                riskScore: <span className="text-yellow-400">0.39</span>,
+                risk_level: <span className="text-red-400">'high'</span>,
                 </div>
                 <div className="text-gray-300 ml-4">
-                attackerDetails: <span className="text-gray-300">{"{"}</span>
+                findings: <span className="text-gray-300">[</span>
                 </div>
                 <div className="text-gray-300 ml-8">
-                smallTransfersCount: <span className="text-yellow-400">3</span>,
+                <span className="text-gray-300">{"{"}</span>
+                </div>
+                <div className="text-gray-300 ml-12">
+                type: <span className="text-yellow-400">'address_poisoning'</span>,
+                </div>
+                <div className="text-gray-300 ml-12">
+                severity: <span className="text-red-400">'high'</span>,
+                </div>
+                <div className="text-gray-300 ml-12">
+                description: <span className="text-yellow-400">'Wallet has received dust from known attacker addresses'</span>
                 </div>
                 <div className="text-gray-300 ml-8">
-                uniqueVictimsCount: <span className="text-yellow-400">3</span>,
-                </div>
-                <div className="text-gray-300 ml-8">
-                lastUpdated: <span className="text-yellow-400">'2025-05-16T14:32:08.327Z'</span>,
+                <span className="text-gray-300">{"}"}</span>
                 </div>
                 <div className="text-gray-300 ml-4">
-                <span className="text-gray-300">{"}"}</span>,
+                <span className="text-gray-300">],</span>
                 </div>
                 <div className="text-gray-300 ml-4">
-                message: <span className="text-yellow-400">'This wallet address is flagged as a confirmed dusting attacker with a risk score of 0.3900.'</span>
+                last_updated: <span className="text-yellow-400">'2025-07-22T03:35:00+05:30'</span>
                 </div>
                 <div className="text-gray-300">{"}"}</div>
             </div>

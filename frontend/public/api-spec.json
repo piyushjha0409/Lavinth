@@ -1,0 +1,347 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Lavinth Wallet Check API",
+    "description": "Lavinth's Wallet Check API allows you to scan wallet addresses for security risks and potential threats. The API provides comprehensive security analysis including risk scoring, threat detection, and detailed findings for cryptocurrency wallet addresses.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Lavinth Support",
+      "url": "https://lavinth.com/support",
+      "email": "support@lavinth.com"
+    },
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.lavinth.com/v1",
+      "description": "Production server"
+    },
+    {
+      "url": "https://staging-api.lavinth.com/v1",
+      "description": "Staging server"
+    }
+  ],
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "paths": {
+    "/wallet-check": {
+      "post": {
+        "summary": "Check wallet address for security risks",
+        "description": "Analyzes a cryptocurrency wallet address for security risks, potential threats, and provides a comprehensive risk assessment with detailed findings.",
+        "operationId": "checkWallet",
+        "tags": ["Wallet Security"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WalletCheckRequest"
+              },
+              "examples": {
+                "ethereum_wallet": {
+                  "summary": "Ethereum wallet address",
+                  "value": {
+                    "wallet_address": "0x1234567890abcdef1234567890abcdef12345678"
+                  }
+                },
+                "bitcoin_wallet": {
+                  "summary": "Bitcoin wallet address",
+                  "value": {
+                    "wallet_address": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful wallet analysis",
+            "headers": {
+              "X-RateLimit-Limit": {
+                "description": "Total requests allowed in the period",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Remaining": {
+                "description": "Requests remaining in the period",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "description": "Time when the rate limit resets (Unix timestamp)",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WalletCheckResponse"
+                },
+                "examples": {
+                  "high_risk_wallet": {
+                    "summary": "High risk wallet with dust attack",
+                    "value": {
+                      "wallet_address": "0x1234567890abcdef1234567890abcdef12345678",
+                      "risk_score": 85,
+                      "risk_level": "high",
+                      "findings": [
+                        {
+                          "type": "dust_attack",
+                          "severity": "high",
+                          "description": "Wallet has received dust from known attacker addresses",
+                          "details": {
+                            "attacker_addresses": ["0xabcd...1234"],
+                            "dust_amount": "0.000001 ETH",
+                            "timestamp": "2025-07-20T10:30:00Z"
+                          }
+                        }
+                      ],
+                      "last_updated": "2025-07-22T03:35:00+05:30"
+                    }
+                  },
+                  "low_risk_wallet": {
+                    "summary": "Low risk clean wallet",
+                    "value": {
+                      "wallet_address": "0xabcdef1234567890abcdef1234567890abcdef12",
+                      "risk_score": 15,
+                      "risk_level": "low",
+                      "findings": [],
+                      "last_updated": "2025-07-22T03:35:00+05:30"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - Invalid wallet address or request format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "invalid_wallet": {
+                    "summary": "Invalid wallet address format",
+                    "value": {
+                      "error": {
+                        "code": "invalid_wallet_address",
+                        "message": "The wallet address provided is not valid",
+                        "status": 400
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "missing_auth": {
+                    "summary": "Missing authorization header",
+                    "value": {
+                      "error": {
+                        "code": "unauthorized",
+                        "message": "Authentication failed or user doesn't have permissions",
+                        "status": 401
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found - Endpoint not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests - Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "rate_limit": {
+                    "summary": "Rate limit exceeded",
+                    "value": {
+                      "error": {
+                        "code": "rate_limit_exceeded",
+                        "message": "You've hit the rate limit for your API key",
+                        "status": 429
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Enter your API key with the 'lav_live_' or 'lav_test_' prefix"
+      }
+    },
+    "schemas": {
+      "WalletCheckRequest": {
+        "type": "object",
+        "required": ["wallet_address"],
+        "properties": {
+          "wallet_address": {
+            "type": "string",
+            "description": "The cryptocurrency wallet address to check for security risks",
+            "example": "0x1234567890abcdef1234567890abcdef12345678",
+            "pattern": "^(0x[a-fA-F0-9]{40}|[13][a-km-zA-HJ-NP-Z1-9]{25,34}|bc1[a-z0-9]{39,59})$"
+          }
+        }
+      },
+      "WalletCheckResponse": {
+        "type": "object",
+        "required": ["wallet_address", "risk_score", "risk_level", "findings", "last_updated"],
+        "properties": {
+          "wallet_address": {
+            "type": "string",
+            "description": "The wallet address that was analyzed",
+            "example": "0x1234567890abcdef1234567890abcdef12345678"
+          },
+          "risk_score": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Risk score from 0-100, where higher values indicate greater risk",
+            "example": 85
+          },
+          "risk_level": {
+            "type": "string",
+            "enum": ["low", "medium", "high"],
+            "description": "Categorized risk level based on the risk score",
+            "example": "high"
+          },
+          "findings": {
+            "type": "array",
+            "description": "List of security findings and threats detected",
+            "items": {
+              "$ref": "#/components/schemas/SecurityFinding"
+            }
+          },
+          "last_updated": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp of when the data was last updated",
+            "example": "2025-07-22T03:35:00+05:30"
+          }
+        }
+      },
+      "SecurityFinding": {
+        "type": "object",
+        "required": ["type", "severity", "description"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Type of security finding",
+            "enum": [
+              "dust_attack",
+              "phishing_connection",
+              "mixer_usage",
+              "blacklisted_address",
+              "suspicious_transaction",
+              "high_risk_exchange",
+              "sanctioned_entity"
+            ],
+            "example": "dust_attack"
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["low", "medium", "high", "critical"],
+            "description": "Severity level of the finding",
+            "example": "high"
+          },
+          "description": {
+            "type": "string",
+            "description": "Human-readable description of the security finding",
+            "example": "Wallet has received dust from known attacker addresses"
+          },
+          "details": {
+            "type": "object",
+            "description": "Additional details specific to the finding type",
+            "additionalProperties": true
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": ["code", "message", "status"],
+            "properties": {
+              "code": {
+                "type": "string",
+                "description": "Error code identifier",
+                "example": "invalid_wallet_address"
+              },
+              "message": {
+                "type": "string",
+                "description": "Human-readable error message",
+                "example": "The wallet address provided is not valid"
+              },
+              "status": {
+                "type": "integer",
+                "description": "HTTP status code",
+                "example": 400
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Wallet Security",
+      "description": "Operations for analyzing wallet security and risk assessment"
+    }
+  ]
+}
