@@ -18,6 +18,8 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
+  Area,
+  AreaChart,
   CartesianGrid,
   Legend,
   Line,
@@ -220,7 +222,7 @@ export default function TransactionsTab({ dashboardData }: { dashboardData: Dash
           </h4>
           <div className="h-64 rounded-md">
             <ResponsiveContainer width="100%" height="100%">
-              <RechartsLineChart
+              <AreaChart
                 data={
                   dashboardData?.dailySummary
                     ?.map((day) => {
@@ -241,6 +243,39 @@ export default function TransactionsTab({ dashboardData }: { dashboardData: Dash
                 }
                 margin={{ top: 10, right: 30, left: 20, bottom: 10 }}
               >
+                <defs>
+                  {/* Line gradients */}
+                  <linearGradient id="successLineGradient" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stopColor="#10b981" stopOpacity={1} />
+                    <stop offset="50%" stopColor="#34d399" stopOpacity={1} />
+                    <stop offset="100%" stopColor="#6ee7b7" stopOpacity={1} />
+                  </linearGradient>
+                  <linearGradient id="failureLineGradient" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stopColor="#ef4444" stopOpacity={1} />
+                    <stop offset="50%" stopColor="#f87171" stopOpacity={1} />
+                    <stop offset="100%" stopColor="#fca5a5" stopOpacity={1} />
+                  </linearGradient>
+                  
+                  {/* Area fill gradients */}
+                  <linearGradient id="successAreaGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#10b981" stopOpacity={0.4} />
+                    <stop offset="50%" stopColor="#34d399" stopOpacity={0.2} />
+                    <stop offset="100%" stopColor="#6ee7b7" stopOpacity={0.05} />
+                  </linearGradient>
+                  <linearGradient id="failureAreaGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#ef4444" stopOpacity={0.4} />
+                    <stop offset="50%" stopColor="#f87171" stopOpacity={0.2} />
+                    <stop offset="100%" stopColor="#fca5a5" stopOpacity={0.05} />
+                  </linearGradient>
+                  
+                  <filter id="glow">
+                    <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                    <feMerge> 
+                      <feMergeNode in="coloredBlur"/>
+                      <feMergeNode in="SourceGraphic"/>
+                    </feMerge>
+                  </filter>
+                </defs>
                 <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
                 <XAxis dataKey="day" tick={{ fill: "#94a3b8" }} />
                 <YAxis tick={{ fill: "#94a3b8" }} />
@@ -254,25 +289,53 @@ export default function TransactionsTab({ dashboardData }: { dashboardData: Dash
                   labelStyle={{ color: "#e2e8f0" }}
                 />
                 <Legend />
-                <Line
+                <Area
                   type="monotone"
                   dataKey="success"
                   name="Successful Transactions"
-                  stroke="#10b981"
-                  strokeWidth={2}
-                  dot={{ r: 4, strokeWidth: 2, fill: "#10b981" }}
-                  activeDot={{ r: 6 }}
+                  stroke="url(#successLineGradient)"
+                  fill="url(#successAreaGradient)"
+                  strokeWidth={3}
+                  dot={{ 
+                    r: 5, 
+                    strokeWidth: 2, 
+                    fill: "#10b981",
+                    stroke: "#34d399",
+                    filter: "url(#glow)"
+                  }}
+                  activeDot={{ 
+                    r: 7, 
+                    fill: "#10b981",
+                    stroke: "#34d399",
+                    strokeWidth: 3,
+                    filter: "url(#glow)"
+                  }}
+                  filter="url(#glow)"
                 />
-                <Line
+                <Area
                   type="monotone"
                   dataKey="failure"
                   name="Failed Transactions"
-                  stroke="#ef4444"
-                  strokeWidth={2}
-                  dot={{ r: 4, strokeWidth: 2, fill: "#ef4444" }}
-                  activeDot={{ r: 6 }}
+                  stroke="url(#failureLineGradient)"
+                  fill="url(#failureAreaGradient)"
+                  strokeWidth={3}
+                  dot={{ 
+                    r: 5, 
+                    strokeWidth: 2, 
+                    fill: "#ef4444",
+                    stroke: "#f87171",
+                    filter: "url(#glow)"
+                  }}
+                  activeDot={{ 
+                    r: 7, 
+                    fill: "#ef4444",
+                    stroke: "#f87171",
+                    strokeWidth: 3,
+                    filter: "url(#glow)"
+                  }}
+                  filter="url(#glow)"
                 />
-              </RechartsLineChart>
+              </AreaChart>
             </ResponsiveContainer>
           </div>
         </CardContent>
