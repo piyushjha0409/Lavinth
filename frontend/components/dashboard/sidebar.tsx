@@ -26,6 +26,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense } from "react";
 import Image from "next/image";
 import logo from "@/public/lavinth-logo.png";
+import dynamic from "next/dynamic";
 
 const navigation = [
   {
@@ -195,28 +196,30 @@ function SidebarContent({ className }: SidebarProps) {
   );
 }
 
-export function Sidebar({ className }: SidebarProps) {
-  return (
-    <Suspense fallback={
-      <div className={cn("flex h-full w-full flex-col bg-muted/40", className)}>
-        <div className="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
-          <div className="h-8 w-32 bg-muted rounded animate-pulse" />
-        </div>
-        <div className="flex-1">
-          <div className="grid items-start px-2 text-sm font-medium lg:px-4">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-3 rounded-lg px-3 py-4">
-                <div className="h-4 w-4 bg-muted rounded animate-pulse" />
-                <div className="h-4 w-20 bg-muted rounded animate-pulse" />
-              </div>
-            ))}
-          </div>
+// Create a dynamic import for SidebarContent to prevent hydration issues
+const DynamicSidebarContent = dynamic(() => Promise.resolve(SidebarContent), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-full w-full flex-col bg-muted/40">
+      <div className="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
+        <div className="h-8 w-32 bg-muted rounded animate-pulse" />
+      </div>
+      <div className="flex-1">
+        <div className="grid items-start px-2 text-sm font-medium lg:px-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-3 rounded-lg px-3 py-4">
+              <div className="h-4 w-4 bg-muted rounded animate-pulse" />
+              <div className="h-4 w-20 bg-muted rounded animate-pulse" />
+            </div>
+          ))}
         </div>
       </div>
-    }>
-      <SidebarContent className={className} />
-    </Suspense>
-  );
+    </div>
+  ),
+});
+
+export function Sidebar({ className }: SidebarProps) {
+  return <DynamicSidebarContent className={className} />;
 }
 
 export function MobileSidebar() {
@@ -231,7 +234,7 @@ export function MobileSidebar() {
         </Button>
       </SheetTrigger>
       <SheetContent side="left" className="flex flex-col h-full">
-        <Sidebar />
+        <DynamicSidebarContent />
       </SheetContent>
     </Sheet>
   );
