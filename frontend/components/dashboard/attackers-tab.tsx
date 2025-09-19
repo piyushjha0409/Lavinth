@@ -8,13 +8,17 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsRight,
+  Users, 
+  TrendingUp, 
+  ShieldCheck
 } from "lucide-react";
-import router from "next/router";
-import { StatsCard } from "./overview-tab";
-import { Card, CardContent } from "../ui/card";
+import { StatsCard } from "../dashboard/stats-card";
+import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
 import { Progress } from "../ui/progress";
 import { useEffect, useState } from "react";
+import { TopAttackersChart, RiskScoreDistributionChart } from "./attackers-charts";
+import { MotionWrapper } from "../analytics/motion-wrapper";
 
 interface DustingAttacker {
   id: number;
@@ -153,113 +157,81 @@ export default function AttackersTab() {
       ) : (
         <>
           {/* Attackers Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <StatsCard
-              title="Total Attackers"
-              value={attackersTotalItems}
-              icon={<WalletIcon className="h-8 w-8 text-red-500" />}
-              trend="neutral"
-            />
-            <StatsCard
-              title="Avg Transfers Count"
-              value={
-                dustingAttackers.reduce(
-                  (sum, a) => sum + a.small_transfers_count,
-                  0
-                ) / (dustingAttackers.length || 1)
-              }
-              valueFormatter={(val) => val.toFixed(1)}
-              icon={<Activity className="h-8 w-8 text-orange-500" />}
-              trend="neutral"
-            />
-            <StatsCard
-              title="Avg Risk Score"
-              value={
-                dustingAttackers.reduce(
-                  (sum, a) => sum + Number(a.risk_score),
-                  0
-                ) / (dustingAttackers.length || 1)
-              }
-              valueFormatter={(val) => (val * 100).toFixed(1) + "%"}
-              icon={<AlertTriangle className="h-8 w-8 text-yellow-500" />}
-              trend="neutral"
-            />
+          <MotionWrapper>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <StatsCard
+                title="Total Attackers"
+                value={attackersTotalItems}
+                icon={<Users className="h-8 w-8 text-red-500" />}
+                trend="neutral"
+              />
+              <StatsCard
+                title="Avg Transfers Count"
+                value={dustingAttackers.reduce((sum, a) => sum + a.small_transfers_count, 0) / (dustingAttackers.length || 1)}
+                valueFormatter={(val: number) => val.toFixed(1)}
+                icon={<TrendingUp className="h-8 w-8 text-orange-500" />}
+                trend="neutral"
+              />
+              <StatsCard
+                title="Avg Risk Score"
+                value={dustingAttackers.reduce((sum, a) => sum + Number(a.risk_score), 0) / (dustingAttackers.length || 1)}
+                valueFormatter={(val: number) => (val * 100).toFixed(1) + "%"}
+                icon={<ShieldCheck className="h-8 w-8 text-yellow-500" />}
+                trend="neutral"
+              />
+            </div>
+          </MotionWrapper>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+              <TopAttackersChart data={dustingAttackers} />
+              <RiskScoreDistributionChart data={dustingAttackers} />
           </div>
 
-          {/* Attackers Table */}
           <Card>
+            <CardHeader>
+              <CardTitle>All Attackers</CardTitle>
+            </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-gray-700">
-                      <th className="px-4 py-3 text-left font-medium text-cyan-300">
-                        Address
-                      </th>
-                      <th className="px-4 py-3 text-center font-medium text-cyan-300">
-                        Risk Score
-                      </th>
-                      <th className="px-4 py-3 text-center font-medium text-cyan-300">
-                        Transfers
-                      </th>
-                      <th className="px-4 py-3 text-center font-medium text-cyan-300">
-                        Victims
-                      </th>
-                      <th className="px-4 py-3 text-center font-medium text-cyan-300">
-                        Last Updated
-                      </th>
-                      <th className="px-4 py-3 text-center font-medium text-cyan-300">
-                        Actions
-                      </th>
+                    <tr className="border-b border-slate-800">
+                      <th className="px-4 py-3 text-left font-medium text-slate-400">Address</th>
+                      <th className="px-4 py-3 text-center font-medium text-slate-400">Risk Score</th>
+                      <th className="px-4 py-3 text-center font-medium text-slate-400">Transfers</th>
+                      <th className="px-4 py-3 text-center font-medium text-slate-400">Victims</th>
+                      <th className="px-4 py-3 text-center font-medium text-slate-400">Last Updated</th>
+                      <th className="px-4 py-3 text-center font-medium text-slate-400">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {dustingAttackers.map((attacker) => (
-                      <tr
-                        key={attacker.id}
-                        className="border-b border-gray-800 hover:bg-gray-900/50"
-                      >
+                      <tr key={attacker.id} className="border-b border-slate-800 hover:bg-slate-900/50 transition-colors">
                         <td className="px-4 py-3">
-                          <div className="font-medium">
+                          <div className="font-mono text-xs text-cyan-400 hover:text-cyan-300 transition-colors">
                             {formatAddress(attacker.address)}
                           </div>
                         </td>
                         <td className="px-4 py-3 text-center">
                           <div
-                            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
-                            style={{
-                              backgroundColor: `rgba(${Math.round(
-                                255 * attacker.risk_score
-                              )}, ${Math.round(
-                                255 * (1 - attacker.risk_score)
-                              )}, 0, 0.2)`,
-                              color: `rgb(${Math.round(
-                                255 * attacker.risk_score
-                              )}, ${Math.round(
-                                255 * (1 - attacker.risk_score)
-                              )}, 0)`,
+                            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-opacity-20"
+                            style={{ 
+                              color: `hsl(${ (1 - attacker.risk_score) * 120 }, 100%, 50%)`,
+                              backgroundColor: `hsla(${ (1 - attacker.risk_score) * 120 }, 100%, 50%, 0.1)`
                             }}
                           >
                             {(attacker.risk_score * 100).toFixed(1)}%
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-center">
-                          {attacker.small_transfers_count}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          {attacker.unique_victims_count}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          {new Date(attacker.last_updated).toLocaleDateString()}
-                        </td>
+                        <td className="px-4 py-3 text-center font-medium">{attacker.small_transfers_count}</td>
+                        <td className="px-4 py-3 text-center font-medium">{attacker.unique_victims_count}</td>
+                        <td className="px-4 py-3 text-center text-slate-400">{new Date(attacker.last_updated).toLocaleDateString()}</td>
                         <td className="px-4 py-3 text-center">
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() =>
-                              window.location.href = `/wallet-check?address=${attacker.address}`
-                            }
-                            className="h-8 w-8 p-0"
+                            onClick={() => window.location.href = `/wallet-check?address=${attacker.address}`}
+                            className="h-8 w-8 p-0 text-slate-400 hover:text-white transition-colors"
                           >
                             <Eye className="h-4 w-4" />
                             <span className="sr-only">View Details</span>
