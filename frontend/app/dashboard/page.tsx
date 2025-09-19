@@ -9,6 +9,7 @@ import PoisoningDetectionTab from "@/components/dashboard/poisoning-detection-ta
 import TransactionsTab from "@/components/dashboard/transactions-tab";
 import VictimsTab from "@/components/dashboard/victims-tab";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
+import { AnalyticsOverview } from "@/components/analytics";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { AlertTriangle } from "lucide-react";
@@ -126,8 +127,12 @@ function DashboardContent() {
         return <VictimsTab />;
       case "alerts":
         return <AlertsTab />;
-      default:
+      case "analytics":
+        return <AnalyticsOverview dashboardData={dashboardData} />;
+      case "legacy-overview":
         return <OverviewTab dashboardData={dashboardData} />;
+      default:
+        return <AnalyticsOverview dashboardData={dashboardData} />;
     }
   };
 
