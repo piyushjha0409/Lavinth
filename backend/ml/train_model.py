@@ -43,7 +43,7 @@ class TrainingOrchestrator:
         self.config = self._load_config(config_path)
         self.data_loader = DataLoader()
         self.feature_engineer = FeatureEngineer(FeatureConfig())
-        self.model = EnsembleModel(self.config.get('model_config'))
+        self.model = ExtendedEnsembleModel(self.config.get('model_config'))
         self.evaluator = ModelEvaluator()
         
         # Create output directories
@@ -448,9 +448,6 @@ def main():
     orchestrator.config['data_config']['days_back'] = args.days_back
     orchestrator.config['data_config']['min_samples'] = args.min_samples
     
-    # Replace model with extended version
-    orchestrator.model = ExtendedEnsembleModel(orchestrator.config.get('model_config'))
-    
     if args.dry_run:
         logger.info("Running in dry-run mode (validation only)")
         # Run only data loading and validation
@@ -464,11 +461,11 @@ def main():
         results = asyncio.run(orchestrator.run_training_pipeline())
         
         if results['success']:
-            print("✅ Training completed successfully!")
-            print(f"📊 Results saved to: {orchestrator.reports_dir}")
-            print(f"🤖 Model saved to: {orchestrator.models_dir}")
+            print("Training completed successfully!")
+            print(f"Results saved to: {orchestrator.reports_dir}")
+            print(f"Model saved to: {orchestrator.models_dir}")
         else:
-            print("❌ Training failed!")
+            print("Training failed!")
             print(f"Error: {results.get('error', 'Unknown error')}")
             sys.exit(1)
 

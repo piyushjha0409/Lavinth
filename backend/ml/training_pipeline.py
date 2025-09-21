@@ -202,6 +202,22 @@ class EnsembleModel:
         logger.info(f"Prepared {X.shape[0]} samples with {X.shape[1]} features")
         return X, y
     
+    def prepare_data_from_features(self, X: pd.DataFrame, y: pd.Series) -> Tuple[pd.DataFrame, pd.Series]:
+        """Prepare already extracted features for training"""
+        logger.info("Preparing extracted features for training...")
+        
+        # Store feature columns for later use
+        self.feature_columns = list(X.columns)
+        
+        # Handle missing values
+        X_clean = X.fillna(0)
+        
+        # Ensure labels are properly formatted
+        y_clean = y.copy()
+        
+        logger.info(f"Prepared {X_clean.shape[0]} samples with {X_clean.shape[1]} features")
+        return X_clean, y_clean
+    
     def _create_labels(self, df: pd.DataFrame) -> pd.Series:
         """Create training labels from existing detection results"""
         # Combine existing detection flags with confidence weighting
