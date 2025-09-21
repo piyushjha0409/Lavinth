@@ -117,10 +117,9 @@ class DataLoader:
             token_address,
             is_potential_dust,
             is_potential_poisoning,
-            risk_score,
-            memo_content
+            risk_score
         FROM dust_transactions 
-        WHERE timestamp > NOW() - INTERVAL '%s days'
+        WHERE timestamp > NOW() - make_interval(days => $1)
         ORDER BY timestamp DESC
         """
         
@@ -136,8 +135,10 @@ class DataLoader:
                 df['risk_score'] = df['risk_score'].fillna(0.0)
                 df['is_potential_dust'] = df['is_potential_dust'].fillna(False)
                 df['is_potential_poisoning'] = df['is_potential_poisoning'].fillna(False)
-                df['memo_content'] = df['memo_content'].fillna('')
                 df['token_type'] = df['token_type'].fillna('SOL')
+                
+                # Add memo_content as empty string since it doesn't exist in DB
+                df['memo_content'] = ''
                 
             logger.info(f"Loaded {len(df)} transactions from database")
             return df
@@ -163,7 +164,7 @@ class DataLoader:
             ml_prediction,
             last_updated
         FROM dusting_attackers
-        WHERE last_updated > NOW() - INTERVAL '30 days'
+        WHERE last_updated > NOW() - make_interval(days => 30)
         """
         
         try:
@@ -200,7 +201,7 @@ class DataLoader:
             ml_prediction,
             last_updated
         FROM dusting_victims
-        WHERE last_updated > NOW() - INTERVAL '30 days'
+        WHERE last_updated > NOW() - make_interval(days => 30)
         """
         
         try:
@@ -320,8 +321,7 @@ class DataLoader:
             amount,
             fee,
             token_type,
-            token_address,
-            memo_content
+            token_address
         FROM dust_transactions 
         WHERE signature IN ({placeholders})
         ORDER BY timestamp DESC
@@ -333,7 +333,7 @@ class DataLoader:
             
             if not df.empty:
                 df['timestamp'] = pd.to_datetime(df['timestamp'])
-                df['memo_content'] = df['memo_content'].fillna('')
+                df['memo_content'] = ''  # Add as empty string since it doesn't exist in DB
                 df['token_type'] = df['token_type'].fillna('SOL')
             
             return df
@@ -383,7 +383,7 @@ class DataLoader:
                 COUNT(DISTINCT sender) as unique_senders,
                 COUNT(DISTINCT recipient) as unique_recipients
             FROM dust_transactions
-            WHERE timestamp > NOW() - INTERVAL '30 days'
+            WHERE timestamp > NOW() - make_interval(days => 30)
             """
             
             tx_result = await self.db.execute_query(tx_query)
