@@ -227,23 +227,66 @@ class TrainingOrchestrator:
             # Create labels
             labels = self._create_training_labels(data)
             
-            # Remove non-feature columns
+            # Remove non-feature columns and avoid duplicates
+            exclude_columns = ['signature', 'timestamp', 'sender', 'recipient']
             feature_columns = [col for col in features_df.columns 
-                             if col not in ['signature', 'timestamp', 'sender', 'recipient']]
+                             if col not in exclude_columns]
             
-            X = features_df[feature_columns].fillna(0)
+            # Remove duplicates while preserving order
+            seen = set()
+            feature_columns = [col for col in feature_columns if not (col in seen or seen.add(col))]
+            
+            # Select features and handle different data types properly
+            X = features_df[feature_columns].copy()
+            
+            # Convert string columns to categorical codes or drop them
+            for col in X.columns:
+                if X[col].dtype == 'object':
+                    try:
+                        # Try to convert to numeric first
+                        X[col] = pd.to_numeric(X[col], errors='coerce')
+                    except (ValueError, TypeError):
+                        # If that fails, convert to categorical codes
+                        X[col] = pd.Categorical(X[col]).codes
+            
+            # Fill missing values after conversion
+            X = X.fillna(0)
             y = labels
             
             # Feature statistics
-            feature_stats = {
-                'total_features': len(feature_columns),
-                'feature_groups': self.feature_engineer.get_feature_importance_groups(),
-                'missing_values': X.isnull().sum().to_dict(),
-                'feature_ranges': {
-                    col: {'min': float(X[col].min()), 'max': float(X[col].max())}
-                    for col in X.select_dtypes(include=[np.number]).columns
+            try:
+                feature_stats = {
+                    'total_features': len(feature_columns),
+                    'feature_groups': self.feature_engineer.get_feature_importance_groups(),
+                    'missing_values': X.isnull().sum().to_dict(),
+                    'feature_ranges': {}
                 }
-            }
+                
+                # Calculate feature ranges safely
+                numeric_cols = X.select_dtypes(include=[np.number]).columns
+                for col in numeric_cols:
+                    try:
+                        # Convert boolean columns to int first
+                        if X[col].dtype == 'bool':
+                            col_values = X[col].astype(int)
+                        else:
+                            col_values = X[col]
+                            
+                        col_min = float(col_values.min())
+                        col_max = float(col_values.max())
+                        feature_stats['feature_ranges'][col] = {'min': col_min, 'max': col_max}
+                    except (ValueError, TypeError) as e:
+                        logger.warning(f"Could not calculate range for column {col}: {e}")
+                        feature_stats['feature_ranges'][col] = {'min': 0, 'max': 0}
+                        
+            except Exception as e:
+                logger.warning(f"Error calculating feature statistics: {e}")
+                feature_stats = {
+                    'total_features': len(feature_columns),
+                    'feature_groups': {},
+                    'missing_values': {},
+                    'feature_ranges': {}
+                }
             
             # Save features if configured
             if self.config.get('save_intermediate', False):
@@ -285,7 +328,9 @@ class TrainingOrchestrator:
         
         # Use risk scores if available
         if 'risk_score' in data.columns:
-            high_risk_mask = data['risk_score'] > 0.7
+            # Ensure risk_score is numeric and handle any conversion issues
+            risk_scores = pd.to_numeric(data['risk_score'], errors='coerce').fillna(0)
+            high_risk_mask = risk_scores > 0.7
             labels[high_risk_mask] = 1
         
         logger.info(f"Created labels: {labels.sum()} positive, {(labels == 0).sum()} negative")
@@ -395,20 +440,13 @@ def main():
     
     args = parser.parse_args()
     
-    # Override config with command line arguments
-    config_overrides = {
-        'output_dir': args.output_dir,
-        'data_config': {
-            'days_back': args.days_back,
-            'min_samples': args.min_samples
-        }
-    }
-    
     # Create orchestrator
     orchestrator = TrainingOrchestrator(args.config)
     
-    # Apply command line overrides
-    orchestrator.config.update(config_overrides)
+    # Override config with command line arguments (merge instead of replace)
+    orchestrator.config['output_dir'] = args.output_dir
+    orchestrator.config['data_config']['days_back'] = args.days_back
+    orchestrator.config['data_config']['min_samples'] = args.min_samples
     
     # Replace model with extended version
     orchestrator.model = ExtendedEnsembleModel(orchestrator.config.get('model_config'))

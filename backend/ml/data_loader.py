@@ -131,8 +131,12 @@ class DataLoader:
             if not df.empty:
                 df['timestamp'] = pd.to_datetime(df['timestamp'])
                 
+                # Convert decimal columns to float for ML processing
+                df['amount'] = pd.to_numeric(df['amount'], errors='coerce').fillna(0.0)
+                df['fee'] = pd.to_numeric(df['fee'], errors='coerce').fillna(0.0)
+                df['risk_score'] = pd.to_numeric(df['risk_score'], errors='coerce').fillna(0.0)
+                
                 # Fill missing values
-                df['risk_score'] = df['risk_score'].fillna(0.0)
                 df['is_potential_dust'] = df['is_potential_dust'].fillna(False)
                 df['is_potential_poisoning'] = df['is_potential_poisoning'].fillna(False)
                 df['token_type'] = df['token_type'].fillna('SOL')
@@ -245,8 +249,9 @@ class DataLoader:
                     ).fillna(0)
             
             # Add attacker risk score
-            enriched_df['sender_attacker_risk'] = enriched_df['sender'].map(
-                attacker_features['risk_score']
+            enriched_df['sender_attacker_risk'] = pd.to_numeric(
+                enriched_df['sender'].map(attacker_features['risk_score']), 
+                errors='coerce'
             ).fillna(0)
         
         # Merge victim data
@@ -261,8 +266,9 @@ class DataLoader:
                     ).fillna(0)
             
             # Add victim risk score
-            enriched_df['recipient_victim_risk'] = enriched_df['recipient'].map(
-                victim_features['risk_score']
+            enriched_df['recipient_victim_risk'] = pd.to_numeric(
+                enriched_df['recipient'].map(victim_features['risk_score']), 
+                errors='coerce'
             ).fillna(0)
         
         logger.info("Transaction data enriched with attacker and victim profiles")
@@ -473,7 +479,12 @@ class DataValidator:
         # Check data freshness
         if 'timestamp' in df.columns:
             latest_timestamp = df['timestamp'].max()
-            days_old = (datetime.now() - latest_timestamp).days
+            # Handle timezone-aware timestamps
+            if latest_timestamp.tz is not None:
+                current_time = datetime.now(latest_timestamp.tz)
+            else:
+                current_time = datetime.now()
+            days_old = (current_time - latest_timestamp).days
             validation_results['statistics']['days_old'] = days_old
             
             if days_old > 7:

@@ -202,23 +202,39 @@ class FeatureEngineer:
         """Calculate features for a specific time window"""
         features = pd.DataFrame(index=df.index)
         
-        # Convert window string to timedelta
-        window_td = pd.Timedelta(window)
-        
+        # Simplified approach: calculate basic statistics per address
         for address_col in ['sender', 'recipient']:
             if address_col not in df.columns:
                 continue
                 
             prefix = f"{address_col}_{window}"
             
-            # Calculate rolling statistics
-            df_sorted = df.sort_values('timestamp')
+            # Calculate basic address statistics
+            address_stats = df.groupby(address_col).agg({
+                'amount': ['count', 'mean', 'std', 'min', 'max'],
+                'success': 'mean',
+                'fee': 'mean'
+            }).fillna(0)
             
-            # Transaction frequency
-            tx_counts = df_sorted.groupby(address_col).rolling(
-                window_td, on='timestamp'
-            ).size().reset_index(level=0, drop=True)
-            features[f'{prefix}_tx_count'] = tx_counts
+            # Flatten column names
+            address_stats.columns = ['_'.join(col).strip() for col in address_stats.columns]
+            
+            # Map back to original dataframe
+            features[f'{prefix}_tx_count'] = df[address_col].map(
+                address_stats['amount_count']
+            ).fillna(0)
+            
+            features[f'{prefix}_amount_mean'] = df[address_col].map(
+                address_stats['amount_mean']
+            ).fillna(0)
+            
+            features[f'{prefix}_amount_std'] = df[address_col].map(
+                address_stats['amount_std']
+            ).fillna(0)
+            
+            features[f'{prefix}_success_rate'] = df[address_col].map(
+                address_stats['success_mean']
+            ).fillna(0)
             
             # Unique counterparts
             if address_col == 'sender':
@@ -227,24 +243,10 @@ class FeatureEngineer:
                 counterpart_col = 'sender'
                 
             if counterpart_col in df.columns:
-                unique_counterparts = df_sorted.groupby(address_col)[counterpart_col].rolling(
-                    window_td, on='timestamp'
-                ).nunique().reset_index(level=0, drop=True)
-                features[f'{prefix}_unique_counterparts'] = unique_counterparts
-            
-            # Amount statistics
-            amount_stats = df_sorted.groupby(address_col)['amount'].rolling(
-                window_td, on='timestamp'
-            ).agg(['mean', 'std', 'min', 'max']).reset_index(level=0, drop=True)
-            
-            for stat in ['mean', 'std', 'min', 'max']:
-                features[f'{prefix}_amount_{stat}'] = amount_stats[stat]
-            
-            # Success rate
-            success_rate = df_sorted.groupby(address_col)['success'].rolling(
-                window_td, on='timestamp'
-            ).mean().reset_index(level=0, drop=True)
-            features[f'{prefix}_success_rate'] = success_rate
+                unique_counterparts = df.groupby(address_col)[counterpart_col].nunique()
+                features[f'{prefix}_unique_counterparts'] = df[address_col].map(
+                    unique_counterparts
+                ).fillna(0)
         
         return features.fillna(0)
     
@@ -471,12 +473,12 @@ class FeatureEngineer:
         if 'risk_score' in df.columns:
             features['existing_risk_score'] = df['risk_score'].fillna(0)
         
-        # Dust/poisoning flags (if available)
-        if 'is_potential_dust' in df.columns:
-            features['is_potential_dust'] = df['is_potential_dust'].astype(int)
+        # Dust/poisoning flags (if available) - only add if not already in features
+        if 'is_potential_dust' in df.columns and 'is_potential_dust' not in features.columns:
+            features['is_potential_dust_flag'] = df['is_potential_dust'].astype(int)
         
-        if 'is_potential_poisoning' in df.columns:
-            features['is_potential_poisoning'] = df['is_potential_poisoning'].astype(int)
+        if 'is_potential_poisoning' in df.columns and 'is_potential_poisoning' not in features.columns:
+            features['is_potential_poisoning_flag'] = df['is_potential_poisoning'].astype(int)
         
         # Anomaly scores based on amount distribution
         features['amount_anomaly_score'] = self._calculate_anomaly_scores(df['amount'])
@@ -491,12 +493,23 @@ class FeatureEngineer:
         if len(values) < 10:
             return pd.Series(0, index=values.index)
         
+        # Remove NaN values and zeros for better anomaly detection
+        clean_values = values.dropna()
+        clean_values = clean_values[clean_values > 0]
+        
+        if len(clean_values) < 10:
+            return pd.Series(0, index=values.index)
+        
         # Reshape for sklearn
-        X = values.values.reshape(-1, 1)
+        X = clean_values.values.reshape(-1, 1)
         
         # Fit isolation forest
         iso_forest = IsolationForest(contamination=0.1, random_state=42)
-        anomaly_scores = iso_forest.decision_function(X)
+        iso_forest.fit(X)
+        
+        # Get anomaly scores for all values
+        X_all = values.fillna(0).values.reshape(-1, 1)
+        anomaly_scores = iso_forest.decision_function(X_all)
         
         # Normalize to 0-1 range
         anomaly_scores = (anomaly_scores - anomaly_scores.min()) / (
