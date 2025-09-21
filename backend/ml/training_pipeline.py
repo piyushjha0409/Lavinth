@@ -538,31 +538,68 @@ class EnsembleModel:
         
         # LSTM predictions
         if self.lstm_model:
-            X_val_seq = self._prepare_sequences(X_val, self.config['lstm_params']['sequence_length'])
-            X_val_tensor = torch.FloatTensor(X_val_seq)
-            
-            self.lstm_model.eval()
-            with torch.no_grad():
-                lstm_pred = self.lstm_model(X_val_tensor).cpu().numpy().flatten()
-            ensemble_features.append(lstm_pred)
+            try:
+                sequence_length = self.config.get('lstm_params', {}).get('sequence_length', 10)
+                X_val_seq = self._prepare_sequences(X_val, sequence_length)
+                
+                if len(X_val_seq) > 0:
+                    X_val_tensor = torch.FloatTensor(X_val_seq)
+                    
+                    self.lstm_model.eval()
+                    with torch.no_grad():
+                        lstm_pred = self.lstm_model(X_val_tensor).squeeze().numpy()
+                    
+                    # Pad predictions to match original length
+                    padded_pred = np.zeros(len(X_val))
+                    padded_pred[:len(lstm_pred)] = lstm_pred
+                    ensemble_features.append(padded_pred)
+                else:
+                    # Not enough data for sequences, use zeros
+                    ensemble_features.append(np.zeros(len(X_val)))
+            except Exception as e:
+                logger.warning(f"LSTM prediction failed: {e}")
+                ensemble_features.append(np.zeros(len(X_val)))
         
         # Isolation Forest predictions
         if self.isolation_forest:
-            iso_scores = self.isolation_forest.decision_function(X_val)
-            # Normalize to 0-1 range
-            iso_scores = (iso_scores - iso_scores.min()) / (iso_scores.max() - iso_scores.min())
-            ensemble_features.append(iso_scores)
+            try:
+                iso_scores = self.isolation_forest.decision_function(X_val)
+                # Normalize to 0-1 range
+                iso_min, iso_max = iso_scores.min(), iso_scores.max()
+                if iso_max > iso_min:
+                    iso_scores = (iso_scores - iso_min) / (iso_max - iso_min)
+                else:
+                    iso_scores = np.zeros_like(iso_scores)
+                ensemble_features.append(iso_scores)
+            except Exception as e:
+                logger.warning(f"Isolation Forest prediction failed: {e}")
+                ensemble_features.append(np.zeros(len(X_val)))
         
-        # Simple weighted average for now (can be replaced with more sophisticated meta-model)
+        # Combine predictions using weighted average
         if ensemble_features:
-            ensemble_pred = np.average(ensemble_features, axis=0, weights=list(self.model_weights.values())[:len(ensemble_features)])
-            ensemble_auc = roc_auc_score(y_val, ensemble_pred)
+            try:
+                # Ensure all predictions have the same length
+                min_length = min(len(pred) for pred in ensemble_features)
+                ensemble_features = [pred[:min_length] for pred in ensemble_features]
+                y_val_trimmed = y_val.iloc[:min_length]
+                
+                # Stack predictions and compute weighted average
+                predictions_array = np.column_stack(ensemble_features)
+                active_models = ['xgb', 'lstm', 'isolation'][:len(ensemble_features)]
+                weights = [self.model_weights.get(model, 1.0) for model in active_models]
+                
+                ensemble_pred = np.average(predictions_array, axis=1, weights=weights)
+                ensemble_auc = roc_auc_score(y_val_trimmed, ensemble_pred)
+            except Exception as e:
+                logger.error(f"Ensemble combination failed: {e}")
+                ensemble_auc = 0.0
         else:
             ensemble_auc = 0.0
         
         return {
             'validation_auc': ensemble_auc,
-            'model_weights': self.model_weights
+            'model_weights': self.model_weights,
+            'num_models': len(ensemble_features)
         }
     
     def _evaluate_ensemble(self, X_test: np.ndarray, y_test: pd.Series) -> Dict[str, Any]:
@@ -596,27 +633,59 @@ class EnsembleModel:
         
         # LSTM predictions
         if self.lstm_model:
-            X_seq = self._prepare_sequences(X, self.config['lstm_params']['sequence_length'])
-            X_tensor = torch.FloatTensor(X_seq)
-            
-            self.lstm_model.eval()
-            with torch.no_grad():
-                lstm_pred = self.lstm_model(X_tensor).cpu().numpy().flatten()
-            predictions.append(lstm_pred)
-            weights.append(self.model_weights['lstm'])
+            try:
+                sequence_length = self.config.get('lstm_params', {}).get('sequence_length', 10)
+                X_seq = self._prepare_sequences(X, sequence_length)
+                
+                if len(X_seq) > 0:
+                    X_tensor = torch.FloatTensor(X_seq)
+                    
+                    self.lstm_model.eval()
+                    with torch.no_grad():
+                        lstm_pred = self.lstm_model(X_tensor).squeeze().numpy()
+                    
+                    # Pad predictions to match original length
+                    padded_pred = np.zeros(len(X))
+                    padded_pred[:len(lstm_pred)] = lstm_pred
+                    predictions.append(padded_pred)
+                else:
+                    # Not enough data for sequences, use zeros
+                    predictions.append(np.zeros(len(X)))
+            except Exception as e:
+                logger.warning(f"LSTM prediction failed: {e}")
+                predictions.append(np.zeros(len(X)))
         
         # Isolation Forest predictions
         if self.isolation_forest:
-            iso_scores = self.isolation_forest.decision_function(X)
-            # Normalize to 0-1 range
-            iso_scores = (iso_scores - iso_scores.min()) / (iso_scores.max() - iso_scores.min())
-            predictions.append(iso_scores)
-            weights.append(self.model_weights['isolation'])
+            try:
+                iso_scores = self.isolation_forest.decision_function(X)
+                # Normalize to 0-1 range
+                iso_min, iso_max = iso_scores.min(), iso_scores.max()
+                if iso_max > iso_min:
+                    iso_scores = (iso_scores - iso_min) / (iso_max - iso_min)
+                else:
+                    iso_scores = np.zeros_like(iso_scores)
+                predictions.append(iso_scores)
+            except Exception as e:
+                logger.warning(f"Isolation Forest prediction failed: {e}")
+                predictions.append(np.zeros(len(X)))
         
         if predictions:
-            # Weighted average
-            ensemble_pred = np.average(predictions, axis=0, weights=weights)
-            return ensemble_pred
+            try:
+                # Ensure all predictions have the same length
+                min_length = min(len(pred) for pred in predictions)
+                predictions = [pred[:min_length] for pred in predictions]
+                
+                # Stack predictions and compute weighted average
+                predictions_array = np.column_stack(predictions)
+                active_models = ['xgb', 'lstm', 'isolation'][:len(predictions)]
+                weights = [self.model_weights.get(model, 1.0) for model in active_models]
+                
+                ensemble_pred = np.average(predictions_array, axis=1, weights=weights)
+                return ensemble_pred
+            except Exception as e:
+                logger.error(f"Ensemble prediction failed: {e}")
+                return np.zeros(len(X))
         else:
             return np.zeros(len(X))
     
