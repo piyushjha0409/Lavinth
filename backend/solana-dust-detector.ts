@@ -10,7 +10,6 @@ import {
 import * as fs from "fs";
 // Remove the direct import of p-limit
 // import pLimit from 'p-limit';
-import axios from "axios";
 import * as dotenv from "dotenv";
 import db from "./db/db-utils";
 
@@ -36,39 +35,12 @@ db.initializeDatabase()
     console.log("Continuing execution despite schema initialization error...");
   });
 
-// Third-party API configurations
-const CHAINALYSIS_API_KEY = process.env.CHAINALYSIS_API_KEY || "";
-const TRM_LABS_API_KEY = process.env.TRM_LABS_API_KEY || "";
-
-// Parse Helius API keys from environment variable
-import { getCombinedScamUrlList } from "./scam-url-service";
-
 const HELIUS_API_KEYS = (process.env.HELIUS_API_KEYS || "")
   .split(",")
   .map((key) => key.trim())
   .filter((key) => key.length > 0);
 
 console.log("Parsed HELIUS_API_KEYS array:", HELIUS_API_KEYS);
-
-// Helper to extract URLs from a string (e.g., memo or metadata)
-function extractUrls(text: string): string[] {
-  if (!text) return [];
-  const urlRegex = /https?:\/\/[^\s]+|[a-zA-Z0-9\-_.]+\.[a-zA-Z]{2,}/g;
-  return text.match(urlRegex) || [];
-}
-
-// Check if any extracted URLs match the scam blocklist
-async function isScamUrlPresent(
-  text: string,
-  apiKey: string
-): Promise<boolean> {
-  const urls = extractUrls(text);
-  if (urls.length === 0) return false;
-  const scamList = await getCombinedScamUrlList(apiKey);
-  return urls.some((url) => scamList.some((scam) => url.includes(scam)));
-}
-
-console.log(`Found ${HELIUS_API_KEYS.length} Helius API keys`);
 
 if (HELIUS_API_KEYS.length === 0) {
   throw new Error(
@@ -473,54 +445,6 @@ async function findActiveAddresses(): Promise<Set<string>> {
 }
 
 /**
- * Find reported dusting/scam addresses from external sources
- */
-async function findReportedAddresses(): Promise<Set<string>> {
-  try {
-    // In a real implementation, you might:
-    // 1. Query a public API for reported scam addresses
-    // 2. Load from a local database of known dusting sources
-    // 3. Parse community reports from social media
-
-    console.log("Looking for known reported addresses...");
-
-    // For this example, we'll assume no external data source
-    // but you could implement API calls here
-
-    // Example implementation placeholder:
-    // const response = await fetch('https://api.scamdetector.io/solana/reported-addresses');
-    // const data = await response.json();
-    // return new Set(data.addresses);
-
-    return new Set<string>();
-  } catch (error) {
-    console.error(`Error fetching reported addresses:`, error);
-    return new Set<string>();
-  }
-}
-
-/**
- * Find potential victims of dusting attacks from social media reports
- */
-async function findPotentialVictims(): Promise<Set<string>> {
-  try {
-    // In a real implementation, you might:
-    // 1. Query Twitter API for mentions of "Solana dust" or "address poisoning"
-    // 2. Extract reported wallet addresses from posts
-
-    console.log("Looking for potential victims from reports...");
-
-    // For this example, we'll assume no external data source
-    // but you could implement social media API calls here
-
-    return new Set<string>();
-  } catch (error) {
-    console.error(`Error finding potential victims:`, error);
-    return new Set<string>();
-  }
-}
-
-/**
  * Fetch transactions for a given address
  */
 async function fetchAddressTransactions(
@@ -674,35 +598,28 @@ async function processTransaction(
       }
     }
 
-    // Check for scam URLs in memoContent
-    let isScamUrl = false;
-    if (memoContent && HELIUS_API_KEYS.length > 0) {
-      // Use the first API key for scam URL lookup
-      try {
-        isScamUrl = await isScamUrlPresent(memoContent, HELIUS_API_KEYS[0]);
-        if (isScamUrl) {
-          console.warn(
-            `Scam URL detected in transaction ${signature}:`,
-            memoContent
-          );
-        }
-      } catch (err) {
-        console.error("Error checking scam URL in memoContent:", err);
-      }
-    }
-
-    // Check if this might be a dust transaction
-    const isPotentialDust =
-      tokenType === "SOL" && amount > 0 && amount < CONFIG.thresholds.dust.sol;
+    // Enhanced dust detection with multiple criteria
+    const isPotentialDust = await enhancedDustDetection(
+      amount, 
+      tokenType, 
+      sender, 
+      recipient, 
+      timestamp,
+      hasMemo
+    );
 
     // Update dusting candidates tracking
     if (isPotentialDust && sender) {
       await updateDustingCandidates(sender, recipient || "", timestamp);
     }
 
-    // Basic check for potential address poisoning (this would need to be enhanced)
-    const isPotentialPoisoning =
-      recipient && checkForAddressPoisoning(recipient);
+    // Enhanced address poisoning detection
+    const isPotentialPoisoning = await enhancedPoisoningDetection(
+      sender,
+      recipient,
+      amount,
+      timestamp
+    );
 
     // After processing transaction data, store it in the database
     if (sender && recipient) {
@@ -721,7 +638,6 @@ async function processTransaction(
           isPotentialDust,
           isPotentialPoisoning,
           riskScore: 0, // Initial risk score, will be updated after analysis
-          isScamUrl,
           memoContent,
         });
       } catch (dbError) {
@@ -1047,15 +963,294 @@ async function updateDustingCandidates(
 }
 
 /**
- * Simple implementation to check for address poisoning
- * This would need to be expanded with more sophisticated similarity checks
+ * Enhanced dust detection with multiple criteria
+ */
+async function enhancedDustDetection(
+  amount: number,
+  tokenType: string,
+  sender: string | null,
+  recipient: string | null,
+  timestamp: number,
+  hasMemo: boolean
+): Promise<boolean> {
+  // Base dust check (preserve original logic)
+  if (tokenType !== "SOL" || amount <= 0) return false;
+  
+  const baseDustThreshold = currentDustThreshold || CONFIG.thresholds.dust.sol;
+  const isBaseDust = amount < baseDustThreshold;
+  
+  // If not even base dust, return false
+  if (!isBaseDust) return false;
+  
+  // Enhanced criteria for dust detection
+  let dustScore = 0;
+  
+  // 1. Amount-based scoring (40% weight)
+  if (amount < baseDustThreshold * 0.1) dustScore += 0.4; // Very small amounts
+  else if (amount < baseDustThreshold * 0.5) dustScore += 0.3;
+  else dustScore += 0.2;
+  
+  // 2. Memo presence (20% weight) - dusting attacks often include memos
+  if (hasMemo) dustScore += 0.2;
+  
+  // 3. Sender pattern analysis (25% weight)
+  if (sender) {
+    const senderPattern = await analyzeSenderPattern(sender, timestamp);
+    dustScore += senderPattern * 0.25;
+  }
+  
+  // 4. Timing pattern analysis (15% weight)
+  const timingPattern = analyzeTimingPattern(timestamp);
+  dustScore += timingPattern * 0.15;
+  
+  // Return true if dust score exceeds threshold
+  return dustScore >= 0.6; // 60% confidence threshold
+}
+
+/**
+ * Analyze sender's transaction patterns for dust attack indicators
+ */
+async function analyzeSenderPattern(sender: string, currentTimestamp: number): Promise<number> {
+  try {
+    // Look at recent transactions from this sender
+    const recentTxs = await db.pool.query(`
+      SELECT COUNT(*) as tx_count, 
+             COUNT(DISTINCT recipient) as unique_recipients,
+             AVG(amount) as avg_amount
+      FROM dust_transactions 
+      WHERE sender = $1 
+        AND timestamp > $2 
+        AND timestamp <= $3
+    `, [
+      sender,
+      new Date(currentTimestamp - 3600000), // Last hour
+      new Date(currentTimestamp)
+    ]);
+    
+    const { tx_count, unique_recipients, avg_amount } = recentTxs.rows[0];
+    
+    let suspicionScore = 0;
+    
+    // High frequency of transactions
+    if (tx_count > 10) suspicionScore += 0.4;
+    else if (tx_count > 5) suspicionScore += 0.2;
+    
+    // Many unique recipients (spray pattern)
+    if (unique_recipients > 8) suspicionScore += 0.4;
+    else if (unique_recipients > 4) suspicionScore += 0.2;
+    
+    // Consistently small amounts
+    if (avg_amount && avg_amount < CONFIG.thresholds.dust.sol * 0.5) {
+      suspicionScore += 0.2;
+    }
+    
+    return Math.min(1, suspicionScore);
+  } catch (error) {
+    console.error('Error analyzing sender pattern:', error);
+    return 0;
+  }
+}
+
+/**
+ * Analyze timing patterns for burst activity
+ */
+function analyzeTimingPattern(timestamp: number): number {
+  // Simple burst detection - check if this is part of rapid-fire transactions
+  const currentHour = new Date(timestamp).getHours();
+  
+  // Dusting attacks often happen during low-activity hours
+  if (currentHour >= 2 && currentHour <= 6) return 0.3; // 3AM-6AM UTC
+  if (currentHour >= 22 || currentHour <= 2) return 0.2; // 10PM-2AM UTC
+  
+  return 0.1; // Normal hours
+}
+
+/**
+ * Enhanced address poisoning detection with multiple criteria
+ */
+async function enhancedPoisoningDetection(
+  sender: string | null,
+  recipient: string | null,
+  amount: number,
+  timestamp: number
+): Promise<boolean> {
+  if (!sender || !recipient) return false;
+  
+  let poisoningScore = 0;
+  
+  // 1. Address similarity analysis (40% weight)
+  const similarityScore = await analyzeAddressSimilarity(sender, recipient);
+  poisoningScore += similarityScore * 0.4;
+  
+  // 2. Transaction pattern analysis (30% weight)
+  const patternScore = await analyzeTransactionPattern(sender, recipient, amount, timestamp);
+  poisoningScore += patternScore * 0.3;
+  
+  // 3. Historical poisoning indicators (20% weight)
+  const historicalScore = await checkHistoricalPoisoning(sender, recipient);
+  poisoningScore += historicalScore * 0.2;
+  
+  // 4. Network behavior analysis (10% weight)
+  const networkScore = analyzeNetworkBehavior(sender, recipient);
+  poisoningScore += networkScore * 0.1;
+  
+  // Add to candidates for future analysis
+  addressPoisoningCandidates.add(recipient);
+  
+  return poisoningScore >= 0.7; // 70% confidence threshold
+}
+
+/**
+ * Analyze address similarity with enhanced algorithms
+ */
+async function analyzeAddressSimilarity(sender: string, recipient: string): Promise<number> {
+  // Calculate multiple similarity metrics
+  const levenshteinDist = levenshteinDistance(sender, recipient);
+  const visualSimilarity = calculateVisualSimilarity(sender, recipient);
+  
+  let similarityScore = 0;
+  
+  // Levenshtein distance analysis
+  if (levenshteinDist <= 2 && levenshteinDist > 0) similarityScore += 0.6;
+  else if (levenshteinDist <= 4) similarityScore += 0.4;
+  else if (levenshteinDist <= 6) similarityScore += 0.2;
+  
+  // Visual similarity (homoglyphs, similar characters)
+  if (visualSimilarity > 0.9) similarityScore += 0.4;
+  else if (visualSimilarity > 0.8) similarityScore += 0.2;
+  
+  // Check prefix/suffix similarity (common in poisoning)
+  const prefixSimilarity = calculatePrefixSuffixSimilarity(sender, recipient);
+  if (prefixSimilarity > 0.8) similarityScore += 0.3;
+  
+  return Math.min(1, similarityScore);
+}
+
+/**
+ * Analyze transaction patterns for poisoning indicators
+ */
+async function analyzeTransactionPattern(
+  sender: string, 
+  recipient: string, 
+  amount: number, 
+  timestamp: number
+): Promise<number> {
+  try {
+    // Check if sender has been sending to many similar addresses
+    const similarTargets = await db.pool.query(`
+      SELECT COUNT(DISTINCT recipient) as similar_count
+      FROM dust_transactions 
+      WHERE sender = $1 
+        AND timestamp > $2
+        AND recipient != $3
+    `, [
+      sender,
+      new Date(timestamp - 86400000), // Last 24 hours
+      recipient
+    ]);
+    
+    const { similar_count } = similarTargets.rows[0];
+    
+    let patternScore = 0;
+    
+    // High number of different recipients suggests spray pattern
+    if (similar_count > 20) patternScore += 0.5;
+    else if (similar_count > 10) patternScore += 0.3;
+    else if (similar_count > 5) patternScore += 0.1;
+    
+    // Very small amounts are suspicious for poisoning
+    if (amount < 0.0001) patternScore += 0.3;
+    else if (amount < 0.001) patternScore += 0.2;
+    
+    return Math.min(1, patternScore);
+  } catch (error) {
+    console.error('Error analyzing transaction pattern:', error);
+    return 0;
+  }
+}
+
+/**
+ * Check historical poisoning patterns
+ */
+async function checkHistoricalPoisoning(sender: string, recipient: string): Promise<number> {
+  try {
+    // Check if sender has been flagged before
+    const senderHistory = await db.pool.query(`
+      SELECT COUNT(*) as poisoning_count
+      FROM dust_transactions 
+      WHERE sender = $1 
+        AND is_potential_poisoning = true
+        AND timestamp > $2
+    `, [
+      sender,
+      new Date(Date.now() - 7 * 86400000) // Last 7 days
+    ]);
+    
+    const { poisoning_count } = senderHistory.rows[0];
+    
+    if (poisoning_count > 5) return 0.8;
+    if (poisoning_count > 2) return 0.5;
+    if (poisoning_count > 0) return 0.3;
+    
+    return 0;
+  } catch (error) {
+    console.error('Error checking historical poisoning:', error);
+    return 0;
+  }
+}
+
+/**
+ * Analyze network behavior patterns
+ */
+function analyzeNetworkBehavior(sender: string, recipient: string): number {
+  // Simple network analysis - can be enhanced
+  let networkScore = 0;
+  
+  // Check if addresses follow suspicious patterns
+  if (sender.length === recipient.length) networkScore += 0.2;
+  
+  // Check for sequential or pattern-based addresses
+  const senderNum = extractNumericParts(sender);
+  const recipientNum = extractNumericParts(recipient);
+  
+  if (senderNum.length > 0 && recipientNum.length > 0) {
+    const numDiff = Math.abs(parseInt(senderNum) - parseInt(recipientNum));
+    if (numDiff <= 10) networkScore += 0.3;
+  }
+  
+  return Math.min(1, networkScore);
+}
+
+/**
+ * Calculate prefix/suffix similarity
+ */
+function calculatePrefixSuffixSimilarity(addr1: string, addr2: string): number {
+  const prefixLength = Math.min(8, addr1.length, addr2.length);
+  const suffixLength = Math.min(8, addr1.length, addr2.length);
+  
+  const prefixMatch = addr1.substring(0, prefixLength) === addr2.substring(0, prefixLength);
+  const suffixMatch = addr1.substring(addr1.length - suffixLength) === addr2.substring(addr2.length - suffixLength);
+  
+  if (prefixMatch && suffixMatch) return 0.9;
+  if (prefixMatch || suffixMatch) return 0.6;
+  
+  return 0;
+}
+
+/**
+ * Extract numeric parts from address
+ */
+function extractNumericParts(address: string): string {
+  return address.replace(/[^0-9]/g, '');
+}
+
+/**
+ * Simple implementation to check for address poisoning (legacy function)
+ * Kept for backward compatibility
  */
 function checkForAddressPoisoning(address: string): boolean {
   // Add the address to our candidates for analysis
   addressPoisoningCandidates.add(address);
-
-  // Log the current set of addresses for debugging purposes
-  console.log("addresses poisoning", addressPoisoningCandidates);
 
   // We'll use the addressPoisoningCandidates set to check for similar addresses
   for (const existingAddress of addressPoisoningCandidates) {
@@ -1435,54 +1630,6 @@ async function updateDustThreshold() {
 
 // Update dust threshold periodically
 setInterval(updateDustThreshold, CONFIG.thresholds.dust.updateInterval);
-
-// Threat Intelligence Integration
-async function checkThreatIntelligence(address: string): Promise<{
-  chainalysisRisk?: number;
-  trmLabsRisk?: number;
-  combinedRisk: number;
-}> {
-  const results: {
-    combinedRisk: number;
-    chainalysisRisk?: number;
-    trmLabsRisk?: number;
-  } = { combinedRisk: 0 };
-
-  try {
-    if (CHAINALYSIS_API_KEY) {
-      const chainalysisResponse = await axios.get(
-        `https://api.chainalysis.com/api/risk/v1/addresses/${address}`,
-        { headers: { "X-API-Key": CHAINALYSIS_API_KEY } }
-      );
-      results.chainalysisRisk = chainalysisResponse.data.risk;
-    }
-  } catch (error) {
-    console.error("Chainalysis API error:", error);
-  }
-
-  try {
-    if (TRM_LABS_API_KEY) {
-      const trmResponse = await axios.post(
-        "https://api.trmlabs.com/public/v1/screening",
-        { address },
-        { headers: { "X-API-Key": TRM_LABS_API_KEY } }
-      );
-      results.trmLabsRisk = trmResponse.data.riskScore;
-    }
-  } catch (error) {
-    console.error("TRM Labs API error:", error);
-  }
-
-  // Combine risk scores
-  const scores = [results.chainalysisRisk, results.trmLabsRisk].filter(
-    (score) => score !== undefined
-  ) as number[];
-
-  results.combinedRisk =
-    scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
-
-  return results;
-}
 
 // Network Analysis
 class NetworkAnalyzer {
@@ -2135,20 +2282,8 @@ async function main() {
   const activeAddresses = await findActiveAddresses();
   console.log(`Found ${activeAddresses.size} active addresses`);
 
-  // 2. Find reported addresses from external sources
-  const reportedAddresses = await findReportedAddresses();
-  console.log(`Found ${reportedAddresses.size} reported addresses`);
-
-  // 3. Find potential victims from social media
-  const potentialVictims = await findPotentialVictims();
-  console.log(`Found ${potentialVictims.size} potential victims`);
-
   // Combine all address sources
-  const addressesToAnalyze = new Set<string>([
-    ...activeAddresses,
-    ...reportedAddresses,
-    ...potentialVictims,
-  ]);
+  const addressesToAnalyze = new Set<string>([...activeAddresses]);
 
   console.log(`Total unique addresses to analyze: ${addressesToAnalyze.size}`);
 
@@ -2173,9 +2308,6 @@ async function main() {
       limitInstance(async () => {
         const transactions = await fetchAddressTransactions(address, 200);
 
-        // Check threat intelligence
-        const threatIntel = await checkThreatIntelligence(address);
-
         // Add transactions to network analyzer
         transactions.forEach((tx) => {
           if (tx.sender && tx.recipient) {
@@ -2183,7 +2315,7 @@ async function main() {
           }
         });
 
-        return { address, transactions, threatIntel };
+        return { address, transactions };
       })
     );
 
