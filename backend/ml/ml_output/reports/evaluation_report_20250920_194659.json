@@ -1,0 +1,336 @@
+{
+  "timestamp": "2025-09-20T19:46:39.447295",
+  "data_info": {
+    "n_samples": 412579,
+    "n_features": 125,
+    "positive_ratio": 0.6626173411637529,
+    "class_distribution": {
+      "1": 273382,
+      "0": 139197
+    }
+  },
+  "basic_metrics": {
+    "accuracy": 1.0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1_score": 1.0,
+    "roc_auc": 1.0,
+    "average_precision": 1.0,
+    "true_positives": 273382,
+    "true_negatives": 139197,
+    "false_positives": 0,
+    "false_negatives": 0,
+    "specificity": 1.0,
+    "false_positive_rate": 0.0,
+    "false_negative_rate": 0.0
+  },
+  "threshold_analysis": {
+    "threshold_analysis": [
+      {
+        "threshold": 0.1,
+        "precision": 0.9999817109079803,
+        "recall": 1.0,
+        "f1_score": 0.9999908553703667,
+        "predictions_positive": 273387
+      },
+      {
+        "threshold": 0.2,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1_score": 1.0,
+        "predictions_positive": 273382
+      },
+      {
+        "threshold": 0.30000000000000004,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1_score": 1.0,
+        "predictions_positive": 273382
+      },
+      {
+        "threshold": 0.4,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1_score": 1.0,
+        "predictions_positive": 273382
+      },
+      {
+        "threshold": 0.5,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1_score": 1.0,
+        "predictions_positive": 273382
+      },
+      {
+        "threshold": 0.6,
+        "precision": 1.0,
+        "recall": 0.0006145247309625359,
+        "f1_score": 0.0012282946444891244,
+        "predictions_positive": 168
+      },
+      {
+        "threshold": 0.7000000000000001,
+        "precision": 0,
+        "recall": 0,
+        "f1_score": 0,
+        "predictions_positive": 0
+      },
+      {
+        "threshold": 0.8,
+        "precision": 0,
+        "recall": 0,
+        "f1_score": 0,
+        "predictions_positive": 0
+      },
+      {
+        "threshold": 0.9,
+        "precision": 0,
+        "recall": 0,
+        "f1_score": 0,
+        "predictions_positive": 0
+      }
+    ],
+    "optimal_threshold": {
+      "threshold": 0.2,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0,
+      "predictions_positive": 273382
+    },
+    "recommended_threshold": 0.2
+  },
+  "cross_validation": {
+    "error": "The 'estimator' parameter of cross_val_score must be an object implementing 'fit'. Got <__main__.ExtendedEnsembleModel object at 0x7615c9844560> instead."
+  },
+  "feature_importance": {
+    "xgboost": {
+      "top_10": {
+        "is_potential_dust": "0.94295555",
+        "is_potential_dust_flag": "0.057044458",
+        "slot": "0.0",
+        "success": "0.0",
+        "amount": "0.0",
+        "fee": "0.0",
+        "token_type": "0.0",
+        "token_address": "0.0",
+        "is_potential_poisoning": "0.0",
+        "risk_score": "0.0"
+      },
+      "all_features": {
+        "is_potential_dust": "0.94295555",
+        "is_potential_dust_flag": "0.057044458",
+        "slot": "0.0",
+        "success": "0.0",
+        "amount": "0.0",
+        "fee": "0.0",
+        "token_type": "0.0",
+        "token_address": "0.0",
+        "is_potential_poisoning": "0.0",
+        "risk_score": "0.0",
+        "memo_content": "0.0",
+        "sender_small_transfers_count": "0.0",
+        "sender_unique_victims_count": "0.0",
+        "sender_wallet_age_days": "0.0",
+        "sender_attacker_risk": "0.0",
+        "recipient_dust_transactions_count": "0.0",
+        "recipient_unique_attackers_count": "0.0",
+        "recipient_wallet_value_estimate": "0.0",
+        "recipient_victim_risk": "0.0",
+        "amount_log": "0.0",
+        "amount_normalized": "0.0",
+        "is_dust_amount": "0.0",
+        "is_micro_amount": "0.0",
+        "fee_log": "0.0",
+        "fee_ratio": "0.0",
+        "fee_normalized": "0.0",
+        "is_successful": "0.0",
+        "has_memo": "0.0",
+        "memo_length": "0.0",
+        "is_sol_transfer": "0.0",
+        "is_token_transfer": "0.0",
+        "hour": "0.0",
+        "day_of_week": "0.0",
+        "is_weekend": "0.0",
+        "is_night": "0.0",
+        "hour_sin": "0.0",
+        "hour_cos": "0.0",
+        "day_sin": "0.0",
+        "day_cos": "0.0",
+        "timestamp_unix": "0.0",
+        "sender_time_gap": "0.0",
+        "sender_time_gap_log": "0.0",
+        "recipient_time_gap": "0.0",
+        "recipient_time_gap_log": "0.0",
+        "sender_1h_tx_count": "0.0",
+        "sender_1h_amount_mean": "0.0",
+        "sender_1h_amount_std": "0.0",
+        "sender_1h_success_rate": "0.0",
+        "sender_1h_unique_counterparts": "0.0",
+        "recipient_1h_tx_count": "0.0",
+        "recipient_1h_amount_mean": "0.0",
+        "recipient_1h_amount_std": "0.0",
+        "recipient_1h_success_rate": "0.0",
+        "recipient_1h_unique_counterparts": "0.0",
+        "sender_6h_tx_count": "0.0",
+        "sender_6h_amount_mean": "0.0",
+        "sender_6h_amount_std": "0.0",
+        "sender_6h_success_rate": "0.0",
+        "sender_6h_unique_counterparts": "0.0",
+        "recipient_6h_tx_count": "0.0",
+        "recipient_6h_amount_mean": "0.0",
+        "recipient_6h_amount_std": "0.0",
+        "recipient_6h_success_rate": "0.0",
+        "recipient_6h_unique_counterparts": "0.0",
+        "sender_24h_tx_count": "0.0",
+        "sender_24h_amount_mean": "0.0",
+        "sender_24h_amount_std": "0.0",
+        "sender_24h_success_rate": "0.0",
+        "sender_24h_unique_counterparts": "0.0",
+        "recipient_24h_tx_count": "0.0",
+        "recipient_24h_amount_mean": "0.0",
+        "recipient_24h_amount_std": "0.0",
+        "recipient_24h_success_rate": "0.0",
+        "recipient_24h_unique_counterparts": "0.0",
+        "sender_7d_tx_count": "0.0",
+        "sender_7d_amount_mean": "0.0",
+        "sender_7d_amount_std": "0.0",
+        "sender_7d_success_rate": "0.0",
+        "sender_7d_unique_counterparts": "0.0",
+        "recipient_7d_tx_count": "0.0",
+        "recipient_7d_amount_mean": "0.0",
+        "recipient_7d_amount_std": "0.0",
+        "recipient_7d_success_rate": "0.0",
+        "recipient_7d_unique_counterparts": "0.0",
+        "sender_30d_tx_count": "0.0",
+        "sender_30d_amount_mean": "0.0",
+        "sender_30d_amount_std": "0.0",
+        "sender_30d_success_rate": "0.0",
+        "sender_30d_unique_counterparts": "0.0",
+        "recipient_30d_tx_count": "0.0",
+        "recipient_30d_amount_mean": "0.0",
+        "recipient_30d_amount_std": "0.0",
+        "recipient_30d_success_rate": "0.0",
+        "recipient_30d_unique_counterparts": "0.0",
+        "sender_degree_centrality": "0.0",
+        "sender_betweenness_centrality": "0.0",
+        "sender_pagerank": "0.0",
+        "recipient_degree_centrality": "0.0",
+        "recipient_betweenness_centrality": "0.0",
+        "recipient_pagerank": "0.0",
+        "sender_community_id": "0.0",
+        "recipient_community_id": "0.0",
+        "sender_seq_regularity": "0.0",
+        "sender_seq_burst_score": "0.0",
+        "sender_seq_amount_consistency": "0.0",
+        "recipient_seq_regularity": "0.0",
+        "recipient_seq_burst_score": "0.0",
+        "recipient_seq_amount_consistency": "0.0",
+        "amount_percentile": "0.0",
+        "fee_percentile": "0.0",
+        "amount_zscore": "0.0",
+        "fee_zscore": "0.0",
+        "amount_rolling_mean_10": "0.0",
+        "amount_rolling_std_10": "0.0",
+        "amount_rolling_zscore_10": "0.0",
+        "amount_rolling_mean_50": "0.0",
+        "amount_rolling_std_50": "0.0",
+        "amount_rolling_zscore_50": "0.0",
+        "amount_rolling_mean_100": "0.0",
+        "amount_rolling_std_100": "0.0",
+        "amount_rolling_zscore_100": "0.0",
+        "existing_risk_score": "0.0",
+        "is_potential_poisoning_flag": "0.0",
+        "amount_anomaly_score": "0.0",
+        "fee_anomaly_score": "0.0"
+      }
+    },
+    "feature_groups": {
+      "basic_transaction": "0.0",
+      "temporal": "0.0",
+      "address_behavior": "0.0",
+      "network": "0.0",
+      "sequential": "0.0",
+      "risk_anomaly": "0.94295555"
+    }
+  },
+  "segment_analysis": {
+    "low_amount": {
+      "n_samples": 107276,
+      "positive_ratio": 0.9948171072746933,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0
+    },
+    "medium_amount": {
+      "n_samples": 202159,
+      "positive_ratio": 0.824410488773688,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0
+    },
+    "high_amount": {
+      "n_samples": 103144,
+      "positive_ratio": 0.0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1_score": 0.0
+    },
+    "time_night": {
+      "n_samples": 102004,
+      "positive_ratio": 0.6647778518489471,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0
+    },
+    "time_morning": {
+      "n_samples": 113206,
+      "positive_ratio": 0.6827553309895236,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0
+    },
+    "time_afternoon": {
+      "n_samples": 98910,
+      "positive_ratio": 0.6462339500556061,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0
+    },
+    "time_evening": {
+      "n_samples": 98459,
+      "positive_ratio": 0.6536832590215217,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0
+    }
+  },
+  "visualizations": {
+    "confusion_matrix": "evaluation_output/plots/confusion_matrix.png",
+    "roc_curve": "evaluation_output/plots/roc_curve.png",
+    "precision_recall_curve": "evaluation_output/plots/precision_recall_curve.png",
+    "prediction_distribution": "evaluation_output/plots/prediction_distribution.png"
+  },
+  "model_comparison": {
+    "xgboost": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0,
+      "roc_auc": 1.0
+    },
+    "lstm": {
+      "note": "LSTM evaluation requires sequence preparation"
+    },
+    "isolation_forest": {
+      "precision": 0.5034674550502901,
+      "recall": 0.41984841723302924,
+      "f1_score": 0.45787150524873393,
+      "roc_auc": 0.17802831569830582
+    },
+    "ensemble": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0,
+      "roc_auc": 1.0
+    }
+  }
+}
