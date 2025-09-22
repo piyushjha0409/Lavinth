@@ -4,7 +4,6 @@
  */
 
 import { DustingAttacker, DustingVictim, DustTransaction } from './db/db-utils';
-import { mlIntegration, MLPrediction as EnhancedMLPrediction } from './ml/ml_integration';
 
 export interface MLFeatures {
   transactionFrequency: number;
