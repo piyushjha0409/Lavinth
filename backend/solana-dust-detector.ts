@@ -76,7 +76,7 @@ const CONFIG = {
       ), // Dust threshold = current network fee * multiplier
     },
     detection: {
-      minTransfers: parseInt(process.env.MIN_TRANSFERS || "3"),
+      minTransfers: parseInt(process.env.MIN_TRANSFERS || "2"),
       blocksToAnalyze: parseInt(process.env.BLOCKS_TO_ANALYZE || "500"),
       maxAddresses: parseInt(process.env.MAX_ADDRESSES || "200"),
       highActivity: parseInt(process.env.HIGH_ACTIVITY || "5"),
@@ -278,6 +278,74 @@ const dustingVictims: Map<string, DustingVictim> = new Map();
 const addressPoisoningCandidates: Set<string> = new Set();
 // Cache for address transaction counts
 const addressActivityCache: Map<string, number> = new Map();
+
+/**
+ * Calculate wallet age in days based on first transaction
+ */
+async function calculateWalletAge(address: string): Promise<number | null> {
+  try {
+    const connection = getNextConnection();
+    const publicKey = new PublicKey(address);
+    
+    // Get signatures with a reasonable limit to find oldest transaction
+    const signatures = await connection.getSignaturesForAddress(publicKey, { 
+      limit: 1000 
+    });
+    
+    if (signatures.length === 0) return null;
+    
+    // Get the oldest transaction (last in the array)
+    const oldestSignature = signatures[signatures.length - 1];
+    if (!oldestSignature.blockTime) return null;
+    
+    const ageInDays = Math.floor(
+      (Date.now() - (oldestSignature.blockTime * 1000)) / (1000 * 60 * 60 * 24)
+    );
+    
+    return ageInDays;
+  } catch (error) {
+    console.error(`Error calculating wallet age for ${address}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Calculate transaction volume for an address over the last 30 days
+ */
+async function calculateTransactionVolume(address: string): Promise<number | null> {
+  try {
+    const result = await db.pool.executeQuery(`
+      SELECT SUM(amount) as total_volume 
+      FROM dust_transactions 
+      WHERE (sender = $1 OR recipient = $1) 
+        AND success = true 
+        AND timestamp > NOW() - INTERVAL '30 days'
+        AND token_type = 'SOL'
+    `, [address]);
+    
+    return parseFloat(result.rows[0]?.total_volume || '0');
+  } catch (error) {
+    console.error(`Error calculating volume for ${address}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Update dusting candidates table with lightweight risk scoring
+ */
+async function updateDustingCandidatesTable(address: string, riskScore: number): Promise<void> {
+  try {
+    await db.pool.executeQuery(`
+      INSERT INTO dusting_candidates (address, risk_score, first_detected_at, last_updated)
+      VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ON CONFLICT (address) DO UPDATE SET
+        risk_score = GREATEST(dusting_candidates.risk_score, EXCLUDED.risk_score),
+        last_updated = CURRENT_TIMESTAMP
+    `, [address, riskScore]);
+  } catch (error) {
+    console.error('Error updating dusting candidates:', error);
+  }
+}
 
 /**
  * Fetch recent blocks to identify active addresses
@@ -640,6 +708,21 @@ async function processTransaction(
           riskScore: 0, // Initial risk score, will be updated after analysis
           memoContent,
         });
+        
+        // Update dusting candidates table for lightweight risk tracking
+        if (isPotentialDust && sender) {
+          await updateDustingCandidatesTable(sender, 0.5); // Sender gets moderate risk score
+        }
+        if (isPotentialDust && recipient) {
+          await updateDustingCandidatesTable(recipient, 0.3); // Recipient gets lower risk score
+        }
+        if (isPotentialPoisoning && sender) {
+          await updateDustingCandidatesTable(sender, 0.7); // Poisoning attempts get higher risk
+        }
+        if (isPotentialPoisoning && recipient) {
+          await updateDustingCandidatesTable(recipient, 0.4); // Poisoning targets get moderate risk
+        }
+        
       } catch (dbError) {
         console.error("Error storing transaction in database:", dbError);
       }
@@ -740,7 +823,7 @@ async function updateDustingCandidates(
 
   // Calculate risk score for victim based on number of dust transactions received
   let victimRiskScore = 0;
-  if (victim.dustTransactionsCount >= 2) {
+  if (victim.dustTransactionsCount >= 1) {
     // Even a few dust transactions can be concerning
     victimRiskScore = Math.min(
       0.2 +
@@ -754,7 +837,7 @@ async function updateDustingCandidates(
   // If this sender has sent many small transfers to different recipients, it's a strong dusting attacker indicator
   if (
     attacker.smallTransfersCount >= CONFIG.thresholds.detection.minTransfers &&
-    attacker.uniqueVictims.size >= CONFIG.thresholds.detection.minTransfers
+    attacker.uniqueVictims.size >= 2
   ) {
     console.log(
       `Potential dusting attacker detected: ${sender} (${attacker.smallTransfersCount} transfers to ${attacker.uniqueVictims.size} victims)`
@@ -762,13 +845,18 @@ async function updateDustingCandidates(
 
     // Store the attacker in the database
     try {
+      // Calculate wallet intelligence data
+      console.log(`Calculating wallet intelligence for attacker: ${sender}`);
+      const walletAge = await calculateWalletAge(attacker.address);
+      const transactionVolume = await calculateTransactionVolume(attacker.address);
+      
       // Create a database-compatible attacker object with default values for required fields
       const dbAttacker = {
         address: attacker.address,
         smallTransfersCount: attacker.smallTransfersCount,
         uniqueVictimsCount: attacker.uniqueVictims.size,
-        uniqueVictims: Array.from(attacker.uniqueVictims),
-        timestamps: attacker.timestamps,
+        uniqueVictims: JSON.stringify(Array.from(attacker.uniqueVictims)),
+        timestamps: JSON.stringify(attacker.timestamps),
         riskScore: attacker.riskScore,
         temporalPattern: JSON.stringify({
           burstCount: attacker.patterns.temporal.burstCount,
@@ -781,9 +869,9 @@ async function updateDustingCandidates(
           centralityScore: attacker.patterns.network.centralityScore,
           recipientOverlap: attacker.patterns.network.recipientOverlap,
         }),
-        // Add optional fields with default values to match the database schema
-        walletAgeDays: null,
-        totalTransactionVolume: null,
+        // Add optional fields with calculated wallet intelligence data
+        walletAgeDays: walletAge,
+        totalTransactionVolume: transactionVolume,
         knownLabels: null,
         relatedAddresses: null,
         previousAttackPatterns: null,
@@ -870,24 +958,29 @@ async function updateDustingCandidates(
   }
 
   // If this recipient has received multiple dust transactions, track as a potential victim
-  if (victim.dustTransactionsCount >= 2) {
+  if (victim.dustTransactionsCount >= 1) {
     console.log(
       `Potential dusting victim detected: ${recipient} (${victim.dustTransactionsCount} dust transactions from ${victim.uniqueAttackers.size} attackers)`
     );
 
     // Store the victim in the database
     try {
+      // Calculate wallet intelligence data
+      console.log(`Calculating wallet intelligence for victim: ${recipient}`);
+      const walletAge = await calculateWalletAge(victim.address);
+      const walletValue = await calculateTransactionVolume(victim.address);
+      
       // Create a database-compatible victim object with default values for required fields
       const dbVictim = {
         address: victim.address,
         dustTransactionsCount: victim.dustTransactionsCount,
         uniqueAttackersCount: victim.uniqueAttackers.size,
-        uniqueAttackers: Array.from(victim.uniqueAttackers),
-        timestamps: victim.timestamps,
+        uniqueAttackers: JSON.stringify(Array.from(victim.uniqueAttackers)),
+        timestamps: JSON.stringify(victim.timestamps),
         riskScore: victim.riskScore,
-        // Add optional fields with default values to match the database schema
-        walletAgeDays: null,
-        walletValueEstimate: null,
+        // Add optional fields with calculated wallet intelligence data
+        walletAgeDays: walletAge,
+        walletValueEstimate: walletValue,
         // Use default JSON structures for required fields that don't accept NULL
         timePatterns: JSON.stringify({
           hourlyDistribution: [
@@ -1097,7 +1190,7 @@ async function enhancedPoisoningDetection(
   // Add to candidates for future analysis
   addressPoisoningCandidates.add(recipient);
   
-  return poisoningScore >= 0.7; // 70% confidence threshold
+  return poisoningScore >= 0.5; // 50% confidence threshold
 }
 
 /**
@@ -1403,7 +1496,7 @@ function analyzeTransactions(transactions: TransactionData[]): {
 
   // Extract potential victims (addresses receiving dust transactions)
   const potentialVictims = Array.from(dustingVictims.values()).filter(
-    (victim) => victim.dustTransactionsCount >= 2
+    (victim) => victim.dustTransactionsCount >= 1
   );
 
   // Find potentially similar addresses for poisoning detection
@@ -2315,7 +2408,16 @@ async function main() {
           }
         });
 
-        return { address, transactions };
+        return { 
+          address, 
+          transactions,
+          // TODO: Integrate with external threat intelligence APIs (Chainalysis, TRM Labs)
+          threatIntel: {
+            combinedRisk: 0, // Default risk score until external APIs are integrated
+            chainalysisRisk: null,
+            trmLabsRisk: null
+          }
+        };
       })
     );
 

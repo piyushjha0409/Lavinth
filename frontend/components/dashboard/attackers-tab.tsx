@@ -8,12 +8,21 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsRight,
+  RefreshCw,
+  Clock,
+  TrendingUp,
+  Users,
+  Filter
 } from "lucide-react";
 import router from "next/router";
 import { StatsCard } from "./overview-tab";
-import { Card, CardContent } from "../ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
 import { Progress } from "../ui/progress";
+import { Badge } from "../ui/badge";
+import { Input } from "../ui/input";
+import { Label } from "../ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { useEffect, useState } from "react";
 
 interface DustingAttacker {
@@ -102,16 +111,20 @@ export default function AttackersTab() {
 
   return (
     <>
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold text-cyan-200">
-          Dusting Attackers
-        </h2>
-        <div className="flex items-center space-x-2">
-          <span className="text-sm text-muted-foreground">
-            {attackersTotalItems > 0 &&
-              `Showing ${attackersPage} of ${attackersTotalPages} pages (${attackersTotalItems} total)`}
-          </span>
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Threat Actors</h2>
+          <p className="text-muted-foreground">
+            {attackersTotalItems > 0 
+              ? `${attackersTotalItems} confirmed attackers identified`
+              : "Loading attacker profiles..."
+            }
+          </p>
         </div>
+        <Button variant="outline" onClick={fetchDustingAttackers} disabled={isAttackersLoading}>
+          <RefreshCw className={`h-4 w-4 mr-2 ${isAttackersLoading ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
       </div>
 
       {isAttackersLoading ? (

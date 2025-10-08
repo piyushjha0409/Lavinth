@@ -36,18 +36,12 @@ import {
   Copy,
   AlertCircle,
   ExternalLink,
-  ChevronRight,
 } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/components/ui/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import ReactMarkdown from "react-markdown";
-import rehypeHighlight from "rehype-highlight";
-import rehypeRaw from "rehype-raw";
-import remarkGfm from "remark-gfm";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 
 type ApiKey = {
@@ -98,8 +92,10 @@ export default function ApiKeysTab() {
     fetchApiKeys();
   }, []);
 
-  // Create a new API key
+  // Create new API key
   const handleCreateApiKey = async () => {
+    if (!newKeyName.trim()) return;
+
     try {
       setIsLoading(true);
       const response = await fetch("/api/api-keys", {
@@ -107,15 +103,13 @@ export default function ApiKeysTab() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          name: newKeyName,
-        }),
+        body: JSON.stringify({ name: newKeyName }),
       });
 
       if (response.ok) {
         const data = await response.json();
-        setNewApiKey(data.apiKey);
-        fetchApiKeys();
+        setNewApiKey(data.key);
+        await fetchApiKeys();
         toast({
           title: "Success",
           description: "API key created successfully",
@@ -135,7 +129,7 @@ export default function ApiKeysTab() {
     }
   };
 
-  // Revoke an API key
+  // Revoke API key
   const handleRevokeApiKey = async (keyId: string) => {
     try {
       setIsLoading(true);
@@ -144,7 +138,7 @@ export default function ApiKeysTab() {
       });
 
       if (response.ok) {
-        fetchApiKeys();
+        await fetchApiKeys();
         toast({
           title: "Success",
           description: "API key revoked successfully",
@@ -175,11 +169,17 @@ export default function ApiKeysTab() {
 
   return (
     <div className="space-y-6">
-      <Tabs defaultValue="keys" className="space-y-4">
+      <Tabs defaultValue="keys" className="space-y-6">
         <div className="flex justify-between items-center">
-          <TabsList>
-            <TabsTrigger value="keys">API Keys</TabsTrigger>
-            <TabsTrigger value="docs">Documentation</TabsTrigger>
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="keys" className="flex items-center space-x-2">
+              <Key className="h-4 w-4" />
+              <span>API Keys</span>
+            </TabsTrigger>
+            <TabsTrigger value="docs" className="flex items-center space-x-2">
+              <ExternalLink className="h-4 w-4" />
+              <span>Documentation</span>
+            </TabsTrigger>
           </TabsList>
           <Dialog
             open={isCreateDialogOpen}
@@ -247,7 +247,7 @@ export default function ApiKeysTab() {
                       <Label htmlFor="name">API Key Name</Label>
                       <Input
                         id="name"
-                        placeholder="e.g., Production API Key"
+                        placeholder="My API Key"
                         value={newKeyName}
                         onChange={(e) => setNewKeyName(e.target.value)}
                       />
@@ -272,40 +272,47 @@ export default function ApiKeysTab() {
             </DialogContent>
           </Dialog>
         </div>
-        <TabsContent value="keys">
+        
+        <TabsContent value="keys" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Your API Keys</CardTitle>
+              <CardTitle className="flex items-center">
+                <Key className="h-5 w-5 mr-2" />
+                API Key Management
+              </CardTitle>
               <CardDescription>
-                Manage your API keys for accessing the Wallet Check API.
+                Create, manage, and monitor your API keys for secure access to the Lavinth Wallet Check API
               </CardDescription>
             </CardHeader>
             <CardContent>
               {isLoading && apiKeys.length === 0 ? (
-                <div className="flex justify-center py-8">
+                <div className="flex justify-center py-12">
                   <div className="text-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                    <p className="mt-2 text-sm text-muted-foreground">
+                    <p className="mt-4 text-sm text-muted-foreground">
                       Loading API keys...
                     </p>
                   </div>
                 </div>
               ) : apiKeys.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 space-y-4">
-                  <div className="rounded-full bg-muted p-3">
-                    <Key className="h-8 w-8 text-muted-foreground" />
+                <div className="flex flex-col items-center justify-center py-12 space-y-6">
+                  <div className="rounded-full bg-blue-50 p-4">
+                    <Key className="h-10 w-10 text-blue-600" />
                   </div>
-                  <h3 className="text-lg font-medium">No API Keys</h3>
-                  <p className="text-sm text-muted-foreground text-center max-w-sm">
-                    You haven't created any API keys yet. Create your first API
-                    key to start using the Wallet Check API.
-                  </p>
+                  <div className="text-center space-y-2">
+                    <h3 className="text-xl font-semibold">No API Keys Yet</h3>
+                    <p className="text-sm text-muted-foreground max-w-md">
+                      Get started by creating your first API key to access the Lavinth Wallet Check API. 
+                      Your keys will appear here for easy management.
+                    </p>
+                  </div>
                   <Button
                     onClick={() => setIsCreateDialogOpen(true)}
                     className="flex items-center gap-2"
+                    size="lg"
                   >
                     <Plus className="h-4 w-4" />
-                    Create your first API key
+                    Create Your First API Key
                   </Button>
                 </div>
               ) : (
@@ -314,25 +321,27 @@ export default function ApiKeysTab() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Name</TableHead>
-                        <TableHead>Created</TableHead>
-                        <TableHead>Last Used</TableHead>
                         <TableHead>Status</TableHead>
+                        <TableHead>Last Used</TableHead>
+                        <TableHead>API Key</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {apiKeys.map((key) => (
-                        <TableRow key={key.id}>
-                          <TableCell className="font-medium">
-                            {key.name}
-                          </TableCell>
+                        <TableRow key={key.id} className="hover:bg-muted/50">
                           <TableCell>
-                            {format(new Date(key.createdAt), "MMM d, yyyy")}
-                          </TableCell>
-                          <TableCell>
-                            {key.lastUsed
-                              ? format(new Date(key.lastUsed), "MMM d, yyyy")
-                              : "Never"}
+                            <div className="flex items-center space-x-3">
+                              <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                                <Key className="h-4 w-4 text-blue-600" />
+                              </div>
+                              <div>
+                                <p className="font-medium">{key.name}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  Created {format(new Date(key.createdAt), "MMM d, yyyy")}
+                                </p>
+                              </div>
+                            </div>
                           </TableCell>
                           <TableCell>
                             <Badge
@@ -346,6 +355,26 @@ export default function ApiKeysTab() {
                               {key.isActive ? "Active" : "Revoked"}
                             </Badge>
                           </TableCell>
+                          <TableCell className="text-sm">
+                            {key.lastUsed
+                              ? format(new Date(key.lastUsed), "MMM d, yyyy")
+                              : "Never"}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center space-x-2">
+                              <code className="text-xs bg-muted px-2 py-1 rounded font-mono">
+                                {key.key.substring(0, 8)}...{key.key.slice(-4)}
+                              </code>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleCopyApiKey(key.key)}
+                                className="h-6 w-6 p-0 hover:bg-blue-50"
+                              >
+                                <Copy className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </TableCell>
                           <TableCell className="text-right">
                             <Button
                               variant="ghost"
@@ -355,7 +384,6 @@ export default function ApiKeysTab() {
                               className="text-red-500 hover:text-red-700 hover:bg-red-50"
                             >
                               <Trash2 className="h-4 w-4" />
-                              <span className="sr-only">Revoke</span>
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -367,543 +395,195 @@ export default function ApiKeysTab() {
             </CardContent>
             <CardFooter className="border-t px-6 py-4">
               <p className="text-sm text-muted-foreground">
-                API keys are used to authenticate requests to the Wallet Check
-                API.
+                API keys are used to authenticate requests to the Wallet Check API.
               </p>
             </CardFooter>
           </Card>
         </TabsContent>
 
-        <TabsContent value="docs" className="relative">
-          <div className="w-full">
-            {/* Main Content */}
-            <div className="w-full">
-              <Card className="border-none shadow-none overflow-hidden">
-                <CardHeader className="pb-4 bg-gradient-to-r from-primary/10 to-transparent">
-                  <CardTitle className="text-2xl font-bold">
-                    API Documentation
-                  </CardTitle>
-                  <CardDescription className="text-base mt-1">
-                    Learn how to use the Wallet Check API with your API keys
-                  </CardDescription>
-                </CardHeader>
-
-                <CardContent className="pt-4">
-                  <ScrollArea className="pr-2 sm:pr-4">
-                    <div className="space-y-8 pb-4">
-                      {/* Getting Started Section */}
-                      <section
-                        id="getting-started"
-                        className="space-y-4 rounded-lg p-4 sm:p-6 border border-primary/10 bg-gradient-to-b from-primary/5 to-transparent"
-                      >
-                        <h2 className="text-2xl font-semibold tracking-tight text-primary">
-                          Getting Started
-                        </h2>
-                        <p className="text-muted-foreground leading-7">
-                          Lavinth's Wallet Check API allows you to scan wallet
-                          addresses for security risks and potential threats.
-                          Follow this documentation to integrate our API into
-                          your application.
-                        </p>
-
-                        <Alert className="border-primary/20 bg-primary/5">
-                          <AlertCircle className="h-4 w-4" />
-                          <AlertTitle>Important</AlertTitle>
-                          <AlertDescription>
-                            All API requests must be made over HTTPS. Calls made
-                            over plain HTTP will fail.
-                          </AlertDescription>
-                        </Alert>
-                      </section>
-
-                      <Separator />
-
-                      {/* Authentication Section */}
-                      <section
-                        id="authentication"
-                        className="space-y-4 rounded-lg p-4 sm:p-6 border border-primary/10 bg-gradient-to-b from-primary/5 to-transparent"
-                      >
-                        <h2 className="text-2xl font-semibold tracking-tight text-primary">
-                          Authentication
-                        </h2>
-                        <p className="text-muted-foreground leading-7">
-                          The Wallet Check API uses API keys to authenticate
-                          requests. You can view and manage your API keys in the
-                          API Keys tab.
-                        </p>
-
-                        <div className="not-prose relative bg-muted rounded-lg overflow-hidden">
-                          <div className="flex items-center px-4 py-2 text-xs font-sans justify-between rounded-t-md bg-muted border-b">
-                            <span>Authorization Header</span>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() =>
-                                handleCopyApiKey(
-                                  "Authorization: Bearer lav_live_your_api_key"
-                                )
-                              }
-                            >
-                              <Copy className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                          <pre className="p-4 text-sm overflow-x-auto">
-                            <code className="text-primary-foreground">
-                              Authorization: Bearer lav_live_your_api_key
-                            </code>
-                          </pre>
-                        </div>
-
-                        <div className="prose prose-slate dark:prose-invert max-w-none">
-                          <ReactMarkdown
-                            rehypePlugins={[rehypeHighlight, rehypeRaw]}
-                            remarkPlugins={[remarkGfm]}
-                          >
-                            {`
-> **Warning**: Keep your API keys secure! Do not share them in publicly accessible areas such as GitHub, client-side code, etc.
-                          `}
-                          </ReactMarkdown>
-                        </div>
-                      </section>
-
-                      <Separator />
-
-                      {/* Wallet Check API Section */}
-                      <section
-                        id="wallet-check"
-                        className="space-y-4 rounded-lg p-4 sm:p-6 border border-primary/10 bg-gradient-to-b from-primary/5 to-transparent"
-                      >
-                        <h2 className="text-2xl font-semibold tracking-tight text-primary">
-                          Wallet Check API
-                        </h2>
-                        <p className="text-muted-foreground leading-7">
-                          The Wallet Check endpoint allows you to check a wallet
-                          address for security risks and potential threats.
-                        </p>
-
-                        <div className="space-y-6">
-                          {/* Endpoint */}
-                          <div className="space-y-2">
-                            <h3 className="text-lg font-medium text-primary/90">
-                              Endpoint
-                            </h3>
-                            <div className="not-prose relative bg-muted rounded-lg overflow-hidden">
-                              <div className="flex items-center px-4 py-2 text-xs font-sans justify-between rounded-t-md bg-muted border-b">
-                                <span>POST Request</span>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-6 w-6"
-                                  onClick={() =>
-                                    handleCopyApiKey(
-                                      "POST https://api.lavinth.com/v1/wallet-check"
-                                    )
-                                  }
-                                >
-                                  <Copy className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-                              <pre className="p-4 text-sm overflow-x-auto">
-                                <code className="text-primary-foreground">
-                                  POST https://api.lavinth.com/v1/wallet-check
-                                </code>
-                              </pre>
-                            </div>
-                          </div>
-
-                          {/* Request Body */}
-                          <div className="space-y-2">
-                            <h3 className="text-lg font-medium text-primary/90">
-                              Request Body
-                            </h3>
-                            <div className="not-prose relative bg-muted rounded-lg overflow-hidden">
-                              <div className="flex items-center px-4 py-2 text-xs font-sans justify-between rounded-t-md bg-muted border-b">
-                                <span>JSON</span>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-6 w-6"
-                                  onClick={() =>
-                                    handleCopyApiKey(
-                                      '{\n  "wallet_address": "0x1234567890abcdef1234567890abcdef12345678"\n}'
-                                    )
-                                  }
-                                >
-                                  <Copy className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-                              <pre className="p-4 text-sm overflow-x-auto">
-                                <code className="text-primary-foreground">{`{
-  "wallet_address": "0x1234567890abcdef1234567890abcdef12345678"
-}`}</code>
-                              </pre>
-                            </div>
-
-                            <table className="w-full border-collapse text-sm mt-4">
-                              <thead>
-                                <tr>
-                                  <th className="border-b py-2 px-3 text-left font-medium text-primary/80">
-                                    Parameter
-                                  </th>
-                                  <th className="border-b py-2 px-3 text-left font-medium text-primary/80">
-                                    Type
-                                  </th>
-                                  <th className="border-b py-2 px-3 text-left font-medium text-primary/80">
-                                    Description
-                                  </th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                <tr>
-                                  <td className="border-b py-2 px-3">
-                                    wallet_address
-                                  </td>
-                                  <td className="border-b py-2 px-3 text-muted-foreground">
-                                    string
-                                  </td>
-                                  <td className="border-b py-2 px-3 text-muted-foreground">
-                                    The cryptocurrency wallet address to check
-                                  </td>
-                                </tr>
-                              </tbody>
-                            </table>
-                          </div>
-
-                          {/* Response */}
-                          <div className="space-y-2">
-                            <h3 className="text-lg font-medium text-primary/90">
-                              Response
-                            </h3>
-                            <div className="not-prose relative bg-muted rounded-lg overflow-hidden">
-                              <div className="flex items-center px-4 py-2 text-xs font-sans justify-between rounded-t-md bg-muted border-b">
-                                <span>200: OK</span>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-6 w-6"
-                                  onClick={() =>
-                                    handleCopyApiKey(
-                                      '{\n  "wallet_address": "0x1234567890abcdef1234567890abcdef12345678",\n  "risk_score": 85,\n  "risk_level": "high",\n  "findings": [\n    {\n      "type": "dust_attack",\n      "severity": "high",\n      "description": "Wallet has received dust from known attacker addresses"\n    }\n  ],\n  "last_updated": "2025-07-22T03:35:00+05:30"\n}'
-                                    )
-                                  }
-                                >
-                                  <Copy className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-                              <pre className="p-4 text-sm overflow-x-auto">
-                                <code className="text-primary-foreground">{`{
-  "wallet_address": "0x1234567890abcdef1234567890abcdef12345678",
-  "risk_score": 85,
-  "risk_level": "high",
-  "findings": [
-    {
-      "type": "dust_attack",
-      "severity": "high",
-      "description": "Wallet has received dust from known attacker addresses"
-    }
-  ],
-  "last_updated": "2025-07-22T03:35:00+05:30"
-}`}</code>
-                              </pre>
-                            </div>
-
-                            <table className="w-full border-collapse text-sm mt-4">
-                              <thead>
-                                <tr>
-                                  <th className="border-b py-2 px-3 text-left font-medium text-primary/80">
-                                    Property
-                                  </th>
-                                  <th className="border-b py-2 px-3 text-left font-medium text-primary/80">
-                                    Type
-                                  </th>
-                                  <th className="border-b py-2 px-3 text-left font-medium text-primary/80">
-                                    Description
-                                  </th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                <tr>
-                                  <td className="border-b py-2 px-3">
-                                    wallet_address
-                                  </td>
-                                  <td className="border-b py-2 px-3 text-muted-foreground">
-                                    string
-                                  </td>
-                                  <td className="border-b py-2 px-3 text-muted-foreground">
-                                    The wallet address that was checked
-                                  </td>
-                                </tr>
-                                <tr>
-                                  <td className="border-b py-2 px-3 font-medium">
-                                    risk_score
-                                  </td>
-                                  <td className="border-b py-2 px-3 text-muted-foreground">
-                                    integer
-                                  </td>
-                                  <td className="border-b py-2 px-3 text-muted-foreground">
-                                    Risk score from 0-100 (higher is riskier)
-                                  </td>
-                                </tr>
-                                <tr>
-                                  <td className="border-b py-2 px-3 font-medium">
-                                    risk_level
-                                  </td>
-                                  <td className="border-b py-2 px-3 text-muted-foreground">
-                                    string
-                                  </td>
-                                  <td className="border-b py-2 px-3 text-muted-foreground">
-                                    Risk level: low, medium, high
-                                  </td>
-                                </tr>
-                                <tr>
-                                  <td className="border-b py-2 px-3 font-medium">
-                                    findings
-                                  </td>
-                                  <td className="border-b py-2 px-3 text-muted-foreground">
-                                    array
-                                  </td>
-                                  <td className="border-b py-2 px-3 text-muted-foreground">
-                                    List of security findings
-                                  </td>
-                                </tr>
-                                <tr>
-                                  <td className="border-b py-2 px-3 font-medium">
-                                    last_updated
-                                  </td>
-                                  <td className="border-b py-2 px-3 text-muted-foreground">
-                                    string
-                                  </td>
-                                  <td className="border-b py-2 px-3 text-muted-foreground">
-                                    ISO 8601 timestamp of last data update
-                                  </td>
-                                </tr>
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      </section>
-
-                      <Separator />
-
-                      <section
-                        id="rate-limits"
-                        className="space-y-4 rounded-lg p-4 sm:p-6 border border-primary/10 bg-gradient-to-b from-primary/5 to-transparent"
-                      >
-                        <h2 className="text-2xl font-semibold tracking-tight text-primary">
-                          Rate Limits
-                        </h2>
-                        <p className="text-muted-foreground leading-7">
-                          API requests are subject to rate limiting based on
-                          your subscription tier. Rate limits are applied per
-                          API key.
-                        </p>
-
-                        <table className="w-full border-collapse text-sm">
-                          <thead>
-                            <tr>
-                              <th className="border-b py-2 px-3 text-left font-medium text-primary/80">
-                                Plan
-                              </th>
-                              <th className="border-b py-2 px-3 text-left font-medium text-primary/80">
-                                Rate Limit
-                              </th>
-                              <th className="border-b py-2 px-3 text-left font-medium text-primary/80">
-                                Burst Limit
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            <tr>
-                              <td className="border-b py-2 px-3">
-                                <div className="font-medium text-primary/90">
-                                  Free
-                                </div>
-                                <div className="text-xs text-muted-foreground">
-                                  For testing and development
-                                </div>
-                              </td>
-                              <td className="border-b py-2 px-3">
-                                100 requests/day
-                              </td>
-                              <td className="border-b py-2 px-3">
-                                10 requests/minute
-                              </td>
-                            </tr>
-                            <tr>
-                              <td className="border-b py-2 px-3">
-                                <div className="font-medium text-primary/90">
-                                  Pro
-                                </div>
-                                <div className="text-xs text-muted-foreground">
-                                  For small to medium applications
-                                </div>
-                              </td>
-                              <td className="border-b py-2 px-3">
-                                1,000 requests/day
-                              </td>
-                              <td className="border-b py-2 px-3">
-                                60 requests/minute
-                              </td>
-                            </tr>
-                            <tr>
-                              <td className="border-b py-2 px-3">
-                                <div className="font-medium text-primary/90">
-                                  Enterprise
-                                </div>
-                                <div className="text-xs text-muted-foreground">
-                                  For large-scale applications
-                                </div>
-                              </td>
-                              <td className="border-b py-2 px-3">
-                                Custom limits
-                              </td>
-                              <td className="border-b py-2 px-3">
-                                Custom limits
-                              </td>
-                            </tr>
-                          </tbody>
-                        </table>
-
-                        <Alert
-                          variant="default"
-                          className="border-primary/20 bg-primary/5"
-                        >
-                          <AlertCircle className="h-4 w-4" />
-                          <AlertTitle>Rate Limit Headers</AlertTitle>
-                          <AlertDescription>
-                            Each response includes headers that indicate your
-                            rate limit status:
-                            <ul className="list-disc list-inside mt-2 space-y-1">
-                              <li>
-                                <code>X-RateLimit-Limit</code>: Total requests
-                                allowed in the period
-                              </li>
-                              <li>
-                                <code>X-RateLimit-Remaining</code>: Requests
-                                remaining in the period
-                              </li>
-                              <li>
-                                <code>X-RateLimit-Reset</code>: Time when the
-                                rate limit resets (Unix timestamp)
-                              </li>
-                            </ul>
-                          </AlertDescription>
-                        </Alert>
-                      </section>
-
-                      <Separator />
-
-                      <section
-                        id="error-handling"
-                        className="space-y-4 rounded-lg p-4 sm:p-6 border border-primary/10 bg-gradient-to-b from-primary/5 to-transparent"
-                      >
-                        <h2 className="text-2xl font-semibold tracking-tight text-primary">
-                          Error Handling
-                        </h2>
-                        <p className="text-muted-foreground leading-7">
-                          The API uses conventional HTTP response codes to
-                          indicate the success or failure of an API request.
-                        </p>
-
-                        <table className="w-full border-collapse text-sm">
-                          <thead>
-                            <tr>
-                              <th className="border-b py-2 px-3 text-left font-medium text-primary/80">
-                                Code
-                              </th>
-                              <th className="border-b py-2 px-3 text-left font-medium text-primary/80">
-                                Description
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            <tr>
-                              <td className="border-b py-2 px-3">
-                                <code className="text-green-600 bg-green-100 dark:text-green-400 dark:bg-green-900/30 px-1 py-0.5 rounded">
-                                  200 - OK
-                                </code>
-                              </td>
-                              <td className="border-b py-2 px-3 text-muted-foreground">
-                                The request was successful.
-                              </td>
-                            </tr>
-                            <tr>
-                              <td className="border-b py-2 px-3">
-                                <code className="text-primary-foreground bg-primary/20 px-1 py-0.5 rounded">
-                                  400 - Bad Request
-                                </code>
-                              </td>
-                              <td className="border-b py-2 px-3 text-muted-foreground">
-                                The request was invalid or cannot be otherwise
-                                served.
-                              </td>
-                            </tr>
-                            <tr>
-                              <td className="border-b py-2 px-3">
-                                <code className="text-primary-foreground bg-primary/20 px-1 py-0.5 rounded">
-                                  401 - Unauthorized
-                                </code>
-                              </td>
-                              <td className="border-b py-2 px-3 text-muted-foreground">
-                                Authentication failed or user doesn't have
-                                permissions.
-                              </td>
-                            </tr>
-                            <tr>
-                              <td className="border-b py-2 px-3">
-                                <code className="text-primary-foreground bg-primary/20 px-1 py-0.5 rounded">
-                                  404 - Not Found
-                                </code>
-                              </td>
-                              <td className="border-b py-2 px-3 text-muted-foreground">
-                                The requested resource could not be found.
-                              </td>
-                            </tr>
-                            <tr>
-                              <td className="border-b py-2 px-3">
-                                <code className="text-primary-foreground bg-primary/20 px-1 py-0.5 rounded">
-                                  429 - Too Many Requests
-                                </code>
-                              </td>
-                              <td className="border-b py-2 px-3 text-muted-foreground">
-                                You've hit the rate limit for your API key.
-                              </td>
-                            </tr>
-                            <tr>
-                              <td className="border-b py-2 px-3">
-                                <code className="text-primary-foreground bg-primary/20 px-1 py-0.5 rounded">
-                                  500 - Server Error
-                                </code>
-                              </td>
-                              <td className="border-b py-2 px-3 text-muted-foreground">
-                                Something went wrong on our end.
-                              </td>
-                            </tr>
-                          </tbody>
-                        </table>
-
-                        <div className="not-prose relative bg-muted rounded-lg overflow-hidden mt-4">
-                          <div className="flex items-center px-4 py-2 text-xs font-sans rounded-t-md bg-muted border-b">
-                            <span>Error Response Example</span>
-                          </div>
-                          <pre className="p-4 text-sm overflow-x-auto">
-                            <code>{`{
-  "error": {
-    "code": "invalid_wallet_address",
-    "message": "The wallet address provided is not valid",
-    "status": 400
-  }
-}`}</code>
-                          </pre>
-                        </div>
-                      </section>
+        <TabsContent value="docs" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <ExternalLink className="h-5 w-5 mr-2" />
+                API Documentation
+              </CardTitle>
+              <CardDescription>
+                Complete guide to integrating the Lavinth Wallet Check API
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Quick Start */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">Quick Start</h3>
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="p-4 border rounded-lg">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-xs font-bold text-blue-600">1</div>
+                      <h4 className="font-medium">Get API Key</h4>
                     </div>
-                  </ScrollArea>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
+                    <p className="text-sm text-muted-foreground">Create an API key from the API Keys tab</p>
+                  </div>
+                  <div className="p-4 border rounded-lg">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-xs font-bold text-blue-600">2</div>
+                      <h4 className="font-medium">Make Request</h4>
+                    </div>
+                    <p className="text-sm text-muted-foreground">Send POST request to wallet-check endpoint</p>
+                  </div>
+                  <div className="p-4 border rounded-lg">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-xs font-bold text-blue-600">3</div>
+                      <h4 className="font-medium">Get Results</h4>
+                    </div>
+                    <p className="text-sm text-muted-foreground">Receive risk score and security findings</p>
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Base URL */}
+              <div className="space-y-3">
+                <h3 className="text-lg font-semibold">Base URL</h3>
+                <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                  <code className="text-sm font-mono">https://api.lavinth.com</code>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleCopyApiKey("https://api.lavinth.com")}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Authentication */}
+              <div className="space-y-3">
+                <h3 className="text-lg font-semibold">Authentication</h3>
+                <p className="text-sm text-muted-foreground">
+                  Include your API key in the Authorization header of every request:
+                </p>
+                <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                  <code className="text-sm font-mono">Authorization: Bearer lav_live_your_api_key</code>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleCopyApiKey("Authorization: Bearer lav_live_your_api_key")}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Wallet Check Endpoint */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">Wallet Check Endpoint</h3>
+                <div className="space-y-4">
+                  <div className="p-4 border rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center space-x-2">
+                        <Badge variant="default" className="font-mono text-xs">POST</Badge>
+                        <code className="text-sm font-mono">/v1/wallet-check</code>
+                      </div>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => handleCopyApiKey("POST https://api.lavinth.com/v1/wallet-check")}
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-3">
+                      Check a wallet address for security risks and potential threats
+                    </p>
+                    
+                    <div className="space-y-3">
+                      <div>
+                        <h4 className="text-sm font-medium mb-2">Request Body:</h4>
+                        <div className="bg-muted rounded p-3">
+                          <code className="text-xs">
+                            {JSON.stringify({ wallet_address: "0x1234567890abcdef1234567890abcdef12345678" }, null, 2)}
+                          </code>
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <h4 className="text-sm font-medium mb-2">Response:</h4>
+                        <div className="bg-muted rounded p-3">
+                          <code className="text-xs">
+                            {JSON.stringify({
+                              wallet_address: "0x1234567890abcdef1234567890abcdef12345678",
+                              risk_score: 85,
+                              risk_level: "high",
+                              findings: [{
+                                type: "dust_attack",
+                                severity: "high",
+                                description: "Wallet has received dust from known attacker addresses"
+                              }],
+                              last_updated: "2025-07-22T03:35:00+05:30"
+                            }, null, 2)}
+                          </code>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Rate Limits */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">Rate Limits</h3>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="p-4 border rounded-lg">
+                    <h4 className="font-medium mb-2">Current Limits</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1">
+                      <li>• 1000 requests per hour</li>
+                      <li>• 10 requests per second</li>
+                      <li>• Rate limit headers included</li>
+                    </ul>
+                  </div>
+                  <div className="p-4 border rounded-lg">
+                    <h4 className="font-medium mb-2">Best Practices</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1">
+                      <li>• Cache responses when possible</li>
+                      <li>• Implement exponential backoff</li>
+                      <li>• Monitor rate limit headers</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Error Codes */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">Common Error Codes</h3>
+                <div className="space-y-2">
+                  {[
+                    { code: "200", desc: "Success - Request completed successfully" },
+                    { code: "400", desc: "Bad Request - Invalid wallet address format" },
+                    { code: "401", desc: "Unauthorized - Invalid or missing API key" },
+                    { code: "429", desc: "Rate Limited - Too many requests" },
+                    { code: "500", desc: "Server Error - Internal processing error" }
+                  ].map((error) => (
+                    <div key={error.code} className="flex items-center space-x-3 p-3 border rounded-lg">
+                      <Badge variant={error.code === "200" ? "default" : "destructive"} className="font-mono">
+                        {error.code}
+                      </Badge>
+                      <span className="text-sm">{error.desc}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>

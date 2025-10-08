@@ -651,11 +651,154 @@ app.get("/api/dusting-victims/:address", validateToken_1.validateToken, (req, re
         });
     }
 }));
+/**
+ * Real-time threat metrics endpoint
+ */
+app.get('/api/threat-metrics', validateToken_1.validateToken, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const requestId = `threat-metrics-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    console.log(`[${requestId}] Starting threat metrics request`);
+    try {
+        const metrics = yield db_utils_1.default.pool.executeQuery(`
+      SELECT 
+        COUNT(CASE WHEN is_potential_dust = true THEN 1 END) as dust_24h,
+        COUNT(CASE WHEN is_potential_poisoning = true THEN 1 END) as poisoning_24h,
+        COUNT(DISTINCT sender) as active_attackers_24h,
+        COUNT(DISTINCT recipient) as active_victims_24h,
+        AVG(risk_score) as avg_risk_score,
+        MAX(timestamp) as last_activity
+      FROM dust_transactions 
+      WHERE timestamp > NOW() - INTERVAL '24 hours'
+    `);
+        console.log(`[${requestId}] Threat metrics retrieved successfully`);
+        res.json(metrics.rows[0]);
+    }
+    catch (error) {
+        console.error(`[${requestId}] Error fetching threat metrics:`, error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+}));
+/**
+ * Attack patterns timeline endpoint
+ */
+app.get('/api/attack-patterns', validateToken_1.validateToken, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const requestId = `attack-patterns-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    console.log(`[${requestId}] Starting attack patterns request`);
+    try {
+        const { hours = 24 } = req.query;
+        const patterns = yield db_utils_1.default.pool.executeQuery(`
+      SELECT 
+        DATE_TRUNC('hour', timestamp) as hour,
+        COUNT(*) as attack_count,
+        COUNT(CASE WHEN is_potential_dust = true THEN 1 END) as dust_count,
+        COUNT(CASE WHEN is_potential_poisoning = true THEN 1 END) as poisoning_count,
+        COUNT(DISTINCT sender) as unique_attackers,
+        AVG(amount) as avg_amount
+      FROM dust_transactions 
+      WHERE timestamp > NOW() - INTERVAL '${parseInt(hours)} hours'
+      GROUP BY DATE_TRUNC('hour', timestamp)
+      ORDER BY hour DESC
+    `);
+        console.log(`[${requestId}] Attack patterns retrieved: ${patterns.rows.length} hours`);
+        res.json(patterns.rows);
+    }
+    catch (error) {
+        console.error(`[${requestId}] Error fetching attack patterns:`, error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+}));
+/**
+ * Network graph data endpoint
+ */
+app.get('/api/network-graph', validateToken_1.validateToken, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const requestId = `network-graph-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    console.log(`[${requestId}] Starting network graph request`);
+    try {
+        const { limit = 500, minWeight = 2 } = req.query;
+        const networkData = yield db_utils_1.default.pool.executeQuery(`
+      SELECT 
+        sender as source,
+        recipient as target,
+        COUNT(*) as weight,
+        AVG(amount) as avg_amount,
+        MAX(timestamp) as last_interaction,
+        COUNT(CASE WHEN is_potential_dust = true THEN 1 END) as dust_txs,
+        COUNT(CASE WHEN is_potential_poisoning = true THEN 1 END) as poisoning_txs
+      FROM dust_transactions 
+      WHERE sender IS NOT NULL 
+        AND recipient IS NOT NULL
+        AND timestamp > NOW() - INTERVAL '7 days'
+      GROUP BY sender, recipient
+      HAVING COUNT(*) >= $1
+      ORDER BY weight DESC
+      LIMIT $2
+    `, [minWeight, limit]);
+        console.log(`[${requestId}] Network graph data retrieved: ${networkData.rows.length} edges`);
+        res.json(networkData.rows);
+    }
+    catch (error) {
+        console.error(`[${requestId}] Error fetching network graph:`, error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+}));
+/**
+ * Top threats summary endpoint
+ */
+app.get('/api/top-threats', validateToken_1.validateToken, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const requestId = `top-threats-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    console.log(`[${requestId}] Starting top threats request`);
+    try {
+        const topAttackers = yield db_utils_1.default.pool.executeQuery(`
+      SELECT address, small_transfers_count, unique_victims_count, risk_score, wallet_age_days, total_transaction_volume
+      FROM dusting_attackers 
+      ORDER BY small_transfers_count DESC 
+      LIMIT 10
+    `);
+        const topVictims = yield db_utils_1.default.pool.executeQuery(`
+      SELECT address, dust_transactions_count, unique_attackers_count, risk_score, wallet_age_days, wallet_value_estimate
+      FROM dusting_victims 
+      ORDER BY dust_transactions_count DESC 
+      LIMIT 10
+    `);
+        console.log(`[${requestId}] Top threats retrieved: ${topAttackers.rows.length} attackers, ${topVictims.rows.length} victims`);
+        res.json({
+            topAttackers: topAttackers.rows,
+            topVictims: topVictims.rows
+        });
+    }
+    catch (error) {
+        console.error(`[${requestId}] Error fetching top threats:`, error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+}));
+/**
+ * Dusting candidates endpoint
+ */
+app.get('/api/dusting-candidates', validateToken_1.validateToken, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const requestId = `candidates-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    console.log(`[${requestId}] Starting dusting candidates request`);
+    try {
+        const { minRiskScore = 0.3, limit = 100 } = req.query;
+        const candidates = yield db_utils_1.default.pool.executeQuery(`
+      SELECT address, risk_score, first_detected_at, last_updated
+      FROM dusting_candidates 
+      WHERE risk_score >= $1
+      ORDER BY risk_score DESC, last_updated DESC
+      LIMIT $2
+    `, [minRiskScore, limit]);
+        console.log(`[${requestId}] Dusting candidates retrieved: ${candidates.rows.length} candidates`);
+        res.json(candidates.rows);
+    }
+    catch (error) {
+        console.error(`[${requestId}] Error fetching dusting candidates:`, error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+}));
 // Start the server
 app.listen(PORT, () => {
     console.log(`🚀 Solana Dust Detector API running on port ${PORT}`);
     console.log(`📊 Debug logging enabled for all endpoints`);
     console.log(`🔍 Request IDs will be generated for tracking`);
+    console.log(`🆕 New endpoints added: /api/threat-metrics, /api/attack-patterns, /api/network-graph, /api/top-threats, /api/dusting-candidates`);
 });
 // Export the Express app
 exports.default = app;
