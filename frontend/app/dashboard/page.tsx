@@ -4,6 +4,7 @@
 import OverviewTab from "@/components/dashboard/overview-tab";
 import ThreatIntelligenceTab from "@/components/dashboard/threat-intelligence-tab";
 import NetworkAnalysisTab from "@/components/dashboard/network-analysis-tab";
+import MLAnalyticsTab from "@/components/dashboard/ml-analytics-tab";
 import TransactionsTab from "@/components/dashboard/transactions-tab";
 import SettingsApiTab from "@/components/dashboard/settings-api-tab";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
@@ -109,6 +110,8 @@ function DashboardContent() {
         return <ThreatIntelligenceTab />;
       case "network-analysis":
         return <NetworkAnalysisTab />;
+      case "ml-analytics":
+        return <MLAnalyticsTab />;
       case "transactions":
         return <TransactionsTab dashboardData={dashboardData} />;
       case "settings-api":

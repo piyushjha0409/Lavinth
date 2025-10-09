@@ -38,6 +38,14 @@ interface CandidateStats {
   recentDetections: number;
 }
 
+interface SystemStatus {
+  enhancedDetection: { status: string; label: string };
+  walletIntelligence: { status: string; label: string };
+  realTimeUpdates: { status: string; label: string };
+  coverageImprovement: { ratio: number; label: string };
+  lastUpdated: string;
+}
+
 // Configuration for production
 const RISK_THRESHOLDS = {
   HIGH: 0.7,
@@ -61,16 +69,26 @@ export default function DustingCandidatesTab() {
   const [searchAddress, setSearchAddress] = useState("");
   const [sortBy, setSortBy] = useState("risk_score");
   const [stats, setStats] = useState<CandidateStats | null>(null);
+  const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
 
   const fetchCandidates = async (showLoading = true) => {
     if (showLoading) setIsLoading(true);
     try {
-      const response = await fetch(`/api/dusting-candidates?minRiskScore=${minRiskScore[0]}&limit=${limit[0]}`);
-      if (response.ok) {
-        const data = await response.json();
+      const [candidatesRes, statusRes] = await Promise.all([
+        fetch(`/api/dusting-candidates?minRiskScore=${minRiskScore[0]}&limit=${limit[0]}`),
+        fetch('/api/system-status')
+      ]);
+      
+      if (candidatesRes.ok) {
+        const data = await candidatesRes.json();
         setCandidates(data);
         setFilteredCandidates(data);
         calculateStats(data);
+      }
+      
+      if (statusRes.ok) {
+        const statusData = await statusRes.json();
+        setSystemStatus(statusData);
       }
     } catch (error) {
       console.error('Error fetching candidates:', error);
@@ -431,27 +449,60 @@ export default function DustingCandidatesTab() {
                 <CardContent>
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm">Enhanced Detection Active</span>
-                      <Badge variant="secondary" className="bg-green-100 text-green-800">
-                        ✓ Enabled
+                      <span className="text-sm">Enhanced Detection</span>
+                      <Badge 
+                        variant="secondary" 
+                        className={`${
+                          systemStatus?.enhancedDetection.status === 'enabled' 
+                            ? 'bg-green-100 text-green-800' 
+                            : systemStatus?.enhancedDetection.status === 'error'
+                            ? 'bg-red-100 text-red-800'
+                            : 'bg-gray-100 text-gray-800'
+                        }`}
+                      >
+                        {systemStatus?.enhancedDetection.status === 'enabled' ? '✓' : 
+                         systemStatus?.enhancedDetection.status === 'error' ? '✗' : '○'} {systemStatus?.enhancedDetection.label || 'Loading...'}
                       </Badge>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm">Wallet Intelligence</span>
-                      <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-                        ✓ Active
+                      <Badge 
+                        variant="secondary" 
+                        className={`${
+                          systemStatus?.walletIntelligence.status === 'active' 
+                            ? 'bg-blue-100 text-blue-800' 
+                            : systemStatus?.walletIntelligence.status === 'limited'
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : 'bg-gray-100 text-gray-800'
+                        }`}
+                      >
+                        {systemStatus?.walletIntelligence.status === 'active' ? '✓' : 
+                         systemStatus?.walletIntelligence.status === 'limited' ? '◐' : '○'} {systemStatus?.walletIntelligence.label || 'Loading...'}
                       </Badge>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm">Real-time Updates</span>
-                      <Badge variant="secondary" className="bg-green-100 text-green-800">
-                        ✓ Live
+                      <Badge 
+                        variant="secondary" 
+                        className={`${
+                          systemStatus?.realTimeUpdates.status === 'live' 
+                            ? 'bg-green-100 text-green-800' 
+                            : systemStatus?.realTimeUpdates.status === 'idle'
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : 'bg-gray-100 text-gray-800'
+                        }`}
+                      >
+                        {systemStatus?.realTimeUpdates.status === 'live' ? '✓' : 
+                         systemStatus?.realTimeUpdates.status === 'idle' ? '◐' : '○'} {systemStatus?.realTimeUpdates.label || 'Loading...'}
                       </Badge>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm">Coverage Improvement</span>
-                      <Badge variant="secondary" className="bg-purple-100 text-purple-800">
-                        5-10x Better
+                      <Badge 
+                        variant="secondary" 
+                        className="bg-purple-100 text-purple-800"
+                      >
+                        {systemStatus?.coverageImprovement.label || 'Calculating...'}
                       </Badge>
                     </div>
                   </div>

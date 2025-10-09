@@ -23,6 +23,7 @@ import {
   Eye,
   Zap,
   Settings,
+  Brain,
 } from "lucide-react";
 import { SidebarUser } from "./sidebar-user";
 import Link from "next/link";
@@ -49,6 +50,12 @@ const navigation = [
     href: "/dashboard?tab=network-analysis",
     tab: "network-analysis",
     icon: Network,
+  },
+  {
+    name: "ML Analytics",
+    href: "/dashboard?tab=ml-analytics",
+    tab: "ml-analytics",
+    icon: Brain,
   },
   {
     name: "Transaction Monitor",
