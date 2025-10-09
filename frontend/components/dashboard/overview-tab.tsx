@@ -132,7 +132,7 @@ export default function OverviewTab({
               <div>
                 <StatsCard
                   title="Active Threats"
-                  value={threatMetrics ? threatMetrics.dust_24h + threatMetrics.poisoning_24h : 0}
+                  value={threatMetrics ? Number(threatMetrics.dust_24h) + Number(threatMetrics.poisoning_24h) : 0}
                   icon={<AlertTriangle className="h-8 w-8 text-destructive" />}
                   trend="neutral"
                 />
