@@ -4,11 +4,10 @@ import { auth } from "@/lib/auth";
 const apiKey = process.env.API_KEY;
 const apiBaseURL = process.env.API_BASE_URL;
 
-export async function GET({
-  params,
-}: {
-  params: Promise<{ address: string }>;
-}) {
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ address: string }> }
+) {
   const session = await auth();
 
   if (!session || !session.user) {

@@ -108,7 +108,7 @@ export default function ApiKeysTab() {
 
       if (response.ok) {
         const data = await response.json();
-        setNewApiKey(data.key);
+        setNewApiKey(data.apiKey);
         await fetchApiKeys();
         toast({
           title: "Success",
@@ -272,7 +272,7 @@ export default function ApiKeysTab() {
             </DialogContent>
           </Dialog>
         </div>
-        
+
         <TabsContent value="keys" className="space-y-6">
           <Card>
             <CardHeader>
@@ -281,7 +281,8 @@ export default function ApiKeysTab() {
                 API Key Management
               </CardTitle>
               <CardDescription>
-                Create, manage, and monitor your API keys for secure access to the Lavinth Wallet Check API
+                Create, manage, and monitor your API keys for secure access to
+                the Lavinth Wallet Check API
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -302,8 +303,9 @@ export default function ApiKeysTab() {
                   <div className="text-center space-y-2">
                     <h3 className="text-xl font-semibold">No API Keys Yet</h3>
                     <p className="text-sm text-muted-foreground max-w-md">
-                      Get started by creating your first API key to access the Lavinth Wallet Check API. 
-                      Your keys will appear here for easy management.
+                      Get started by creating your first API key to access the
+                      Lavinth Wallet Check API. Your keys will appear here for
+                      easy management.
                     </p>
                   </div>
                   <Button
@@ -338,7 +340,11 @@ export default function ApiKeysTab() {
                               <div>
                                 <p className="font-medium">{key.name}</p>
                                 <p className="text-xs text-muted-foreground">
-                                  Created {format(new Date(key.createdAt), "MMM d, yyyy")}
+                                  Created{" "}
+                                  {format(
+                                    new Date(key.createdAt),
+                                    "MMM d, yyyy"
+                                  )}
                                 </p>
                               </div>
                             </div>
@@ -368,8 +374,14 @@ export default function ApiKeysTab() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => handleCopyApiKey(key.key)}
-                                className="h-6 w-6 p-0 hover:bg-blue-50"
+                                onClick={() => {
+                                  toast({
+                                    title: "API Key Not Available",
+                                    description: "For security reasons, API keys are only shown once when created. Please create a new key if needed.",
+                                    variant: "destructive",
+                                  });
+                                }}
+                                className="h-6 w-6 p-0 hover:bg-red-50"
                               >
                                 <Copy className="h-3 w-3" />
                               </Button>
@@ -395,7 +407,8 @@ export default function ApiKeysTab() {
             </CardContent>
             <CardFooter className="border-t px-6 py-4">
               <p className="text-sm text-muted-foreground">
-                API keys are used to authenticate requests to the Wallet Check API.
+                API keys are used to authenticate requests to the Wallet Check
+                API.
               </p>
             </CardFooter>
           </Card>
@@ -419,24 +432,36 @@ export default function ApiKeysTab() {
                 <div className="grid gap-4 md:grid-cols-3">
                   <div className="p-4 border rounded-lg">
                     <div className="flex items-center space-x-2 mb-2">
-                      <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-xs font-bold text-blue-600">1</div>
+                      <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-xs font-bold text-blue-600">
+                        1
+                      </div>
                       <h4 className="font-medium">Get API Key</h4>
                     </div>
-                    <p className="text-sm text-muted-foreground">Create an API key from the API Keys tab</p>
+                    <p className="text-sm text-muted-foreground">
+                      Create an API key from the API Keys tab
+                    </p>
                   </div>
                   <div className="p-4 border rounded-lg">
                     <div className="flex items-center space-x-2 mb-2">
-                      <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-xs font-bold text-blue-600">2</div>
+                      <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-xs font-bold text-blue-600">
+                        2
+                      </div>
                       <h4 className="font-medium">Make Request</h4>
                     </div>
-                    <p className="text-sm text-muted-foreground">Send POST request to wallet-check endpoint</p>
+                    <p className="text-sm text-muted-foreground">
+                      Send GET request to wallet-check endpoint
+                    </p>
                   </div>
                   <div className="p-4 border rounded-lg">
                     <div className="flex items-center space-x-2 mb-2">
-                      <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-xs font-bold text-blue-600">3</div>
+                      <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-xs font-bold text-blue-600">
+                        3
+                      </div>
                       <h4 className="font-medium">Get Results</h4>
                     </div>
-                    <p className="text-sm text-muted-foreground">Receive risk score and security findings</p>
+                    <p className="text-sm text-muted-foreground">
+                      Receive risk score and security findings
+                    </p>
                   </div>
                 </div>
               </div>
@@ -447,9 +472,11 @@ export default function ApiKeysTab() {
               <div className="space-y-3">
                 <h3 className="text-lg font-semibold">Base URL</h3>
                 <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                  <code className="text-sm font-mono">https://api.lavinth.com</code>
-                  <Button 
-                    variant="outline" 
+                  <code className="text-sm font-mono">
+                    https://api.lavinth.com
+                  </code>
+                  <Button
+                    variant="outline"
                     size="sm"
                     onClick={() => handleCopyApiKey("https://api.lavinth.com")}
                   >
@@ -464,14 +491,18 @@ export default function ApiKeysTab() {
               <div className="space-y-3">
                 <h3 className="text-lg font-semibold">Authentication</h3>
                 <p className="text-sm text-muted-foreground">
-                  Include your API key in the Authorization header of every request:
+                  Include your API key in the x-api-key header of every request:
                 </p>
                 <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                  <code className="text-sm font-mono">Authorization: Bearer lav_live_your_api_key</code>
-                  <Button 
-                    variant="outline" 
+                  <code className="text-sm font-mono">
+                    x-api-key: lav_live_your_api_key
+                  </code>
+                  <Button
+                    variant="outline"
                     size="sm"
-                    onClick={() => handleCopyApiKey("Authorization: Bearer lav_live_your_api_key")}
+                    onClick={() =>
+                      handleCopyApiKey("x-api-key: lav_live_your_api_key")
+                    }
                   >
                     <Copy className="h-4 w-4" />
                   </Button>
@@ -487,46 +518,76 @@ export default function ApiKeysTab() {
                   <div className="p-4 border rounded-lg">
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center space-x-2">
-                        <Badge variant="default" className="font-mono text-xs">POST</Badge>
-                        <code className="text-sm font-mono">/v1/wallet-check</code>
+                        <Badge variant="default" className="font-mono text-xs">
+                          GET
+                        </Badge>
+                        <code className="text-sm font-mono">
+                          /api/wallet-check/{"{address}"}
+                        </code>
                       </div>
-                      <Button 
-                        variant="outline" 
+                      <Button
+                        variant="outline"
                         size="sm"
-                        onClick={() => handleCopyApiKey("POST https://api.lavinth.com/v1/wallet-check")}
+                        onClick={() =>
+                          handleCopyApiKey(
+                            "GET https://api.lavinth.com/api/wallet-check/{address}"
+                          )
+                        }
                       >
                         <Copy className="h-4 w-4" />
                       </Button>
                     </div>
                     <p className="text-sm text-muted-foreground mb-3">
-                      Check a wallet address for security risks and potential threats
+                      Check a wallet address for security risks and potential
+                      threats
                     </p>
-                    
+
                     <div className="space-y-3">
                       <div>
-                        <h4 className="text-sm font-medium mb-2">Request Body:</h4>
+                        <h4 className="text-sm font-medium mb-2">
+                          Example Request:
+                        </h4>
                         <div className="bg-muted rounded p-3">
                           <code className="text-xs">
-                            {JSON.stringify({ wallet_address: "0x1234567890abcdef1234567890abcdef12345678" }, null, 2)}
+                            {`curl -X GET "https://api.lavinth.com/api/wallet-check/Ghdd6xxZzwEizgLn9nmSgDFwmH3twqKoAzNem17prrhL" \\
+  -H "x-api-key: lav_live_your_api_key"`}
                           </code>
                         </div>
                       </div>
-                      
+
                       <div>
                         <h4 className="text-sm font-medium mb-2">Response:</h4>
                         <div className="bg-muted rounded p-3">
                           <code className="text-xs">
-                            {JSON.stringify({
-                              wallet_address: "0x1234567890abcdef1234567890abcdef12345678",
-                              risk_score: 85,
-                              risk_level: "high",
-                              findings: [{
-                                type: "dust_attack",
-                                severity: "high",
-                                description: "Wallet has received dust from known attacker addresses"
-                              }],
-                              last_updated: "2025-07-22T03:35:00+05:30"
-                            }, null, 2)}
+                            {JSON.stringify(
+                              {
+                                status: "success",
+                                data: {
+                                  wallet_address:
+                                    "Ghdd6xxZzwEizgLn9nmSgDFwmH3twqKoAzNem17prrhL",
+                                  risk_score: 85,
+                                  risk_level: "high",
+                                  is_dust_victim: true,
+                                  is_dust_attacker: false,
+                                  findings: [
+                                    {
+                                      type: "dust_attack",
+                                      severity: "high",
+                                      description:
+                                        "Wallet has received dust from known attacker addresses",
+                                      count: 12,
+                                    },
+                                  ],
+                                  network_analysis: {
+                                    connected_attackers: 3,
+                                    suspicious_transactions: 15,
+                                  },
+                                  last_updated: "2025-10-09T17:45:00+05:30",
+                                },
+                              },
+                              null,
+                              2
+                            )}
                           </code>
                         </div>
                       </div>
@@ -567,14 +628,34 @@ export default function ApiKeysTab() {
                 <h3 className="text-lg font-semibold">Common Error Codes</h3>
                 <div className="space-y-2">
                   {[
-                    { code: "200", desc: "Success - Request completed successfully" },
-                    { code: "400", desc: "Bad Request - Invalid wallet address format" },
-                    { code: "401", desc: "Unauthorized - Invalid or missing API key" },
+                    {
+                      code: "200",
+                      desc: "Success - Request completed successfully",
+                    },
+                    {
+                      code: "400",
+                      desc: "Bad Request - Invalid wallet address format",
+                    },
+                    {
+                      code: "401",
+                      desc: "Unauthorized - Invalid or missing API key",
+                    },
                     { code: "429", desc: "Rate Limited - Too many requests" },
-                    { code: "500", desc: "Server Error - Internal processing error" }
+                    {
+                      code: "500",
+                      desc: "Server Error - Internal processing error",
+                    },
                   ].map((error) => (
-                    <div key={error.code} className="flex items-center space-x-3 p-3 border rounded-lg">
-                      <Badge variant={error.code === "200" ? "default" : "destructive"} className="font-mono">
+                    <div
+                      key={error.code}
+                      className="flex items-center space-x-3 p-3 border rounded-lg"
+                    >
+                      <Badge
+                        variant={
+                          error.code === "200" ? "default" : "destructive"
+                        }
+                        className="font-mono"
+                      >
                         {error.code}
                       </Badge>
                       <span className="text-sm">{error.desc}</span>
