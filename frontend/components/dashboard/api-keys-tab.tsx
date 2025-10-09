@@ -460,7 +460,7 @@ export default function ApiKeysTab() {
                       <h4 className="font-medium">Make Request</h4>
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      Send GET request to wallet-check endpoint
+                      Send GET request to check-wallet endpoint
                     </p>
                   </div>
                   <div className="p-4 border rounded-lg">
@@ -533,7 +533,7 @@ export default function ApiKeysTab() {
                           GET
                         </Badge>
                         <code className="text-sm font-mono">
-                          /api/wallet-check/{"{address}"}
+                          /api/check-wallet/{"{address}"}
                         </code>
                       </div>
                       <Button
@@ -541,7 +541,7 @@ export default function ApiKeysTab() {
                         size="sm"
                         onClick={() =>
                           handleCopyApiKey(
-                            "GET https://api.lavinth.com/api/wallet-check/{address}"
+                            "GET https://api.lavinth.com/api/check-wallet/{address}"
                           )
                         }
                       >
@@ -560,7 +560,7 @@ export default function ApiKeysTab() {
                         </h4>
                         <div className="bg-muted rounded p-3">
                           <code className="text-xs">
-                            {`curl -X GET "https://api.lavinth.com/api/wallet-check/Ghdd6xxZzwEizgLn9nmSgDFwmH3twqKoAzNem17prrhL" \\
+                            {`curl -X GET "https://api.lavinth.com/api/check-wallet/Ghdd6xxZzwEizgLn9nmSgDFwmH3twqKoAzNem17prrhL" \\
   -H "x-api-key: lav_live_your_api_key"`}
                           </code>
                         </div>
