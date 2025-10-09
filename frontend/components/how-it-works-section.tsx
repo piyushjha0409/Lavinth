@@ -106,17 +106,12 @@ export default function HowItWorksSection() {
             <div className="p-4 font-mono text-sm">
               <div className="text-blue-400">// Check if a wallet address is poisoned</div>
               <div className="text-gray-300 mt-2">const response = await fetch(</div>
-              <div className="text-green-400 ml-4">'https://api.lavinth.com/api/check-wallet',</div>
+              <div className="text-green-400 ml-4">'https://api.lavinth.com/api/check-wallet/8xrt67qLVBw4MFN6a9WnQgcj2fZvCQXMQMg9YQ9Yif3J',</div>
               <div className="text-gray-300 ml-4">{"{"}</div>
-              <div className="text-gray-300 ml-8">method: 'POST',</div>
+              <div className="text-gray-300 ml-8">method: 'GET',</div>
               <div className="text-gray-300 ml-8">
-                headers: {"{"} 'Content-Type': 'application/json' {"}"},
+                headers: {"{"} 'x-api-key': 'lav_live_your_api_key' {"}"}
               </div>
-              <div className="text-gray-300 ml-8">body: JSON.stringify({"{"}</div>
-              <div className="text-gray-300 ml-12">
-                address: <span className="text-yellow-400">'8xrt67qLVBw4MFN6a9WnQgcj2fZvCQXMQMg9YQ9Yif3J'</span>
-              </div>
-              <div className="text-gray-300 ml-8">{"}"})</div>
               <div className="text-gray-300 ml-4">{"}"});</div>
               <div className="text-gray-300 mt-2">const data = await response.json();</div>
               <div className="text-gray-300 mt-2">console.log(data);</div>
@@ -126,28 +121,40 @@ export default function HowItWorksSection() {
                 status: <span className="text-green-400">'success'</span>,
                 </div>
                 <div className="text-gray-300 ml-4">
-                isDusted: <span className="text-red-400">true</span>,
-                </div>
-                <div className="text-gray-300 ml-4">
-                riskScore: <span className="text-yellow-400">0.39</span>,
-                </div>
-                <div className="text-gray-300 ml-4">
-                attackerDetails: <span className="text-gray-300">{"{"}</span>
+                data: <span className="text-gray-300">{"{"}</span>
                 </div>
                 <div className="text-gray-300 ml-8">
-                smallTransfersCount: <span className="text-yellow-400">3</span>,
+                wallet_address: <span className="text-yellow-400">'8xrt67qLVBw4MFN6a9WnQgcj2fZvCQXMQMg9YQ9Yif3J'</span>,
                 </div>
                 <div className="text-gray-300 ml-8">
-                uniqueVictimsCount: <span className="text-yellow-400">3</span>,
+                risk_score: <span className="text-yellow-400">85</span>,
                 </div>
                 <div className="text-gray-300 ml-8">
-                lastUpdated: <span className="text-yellow-400">'2025-05-16T14:32:08.327Z'</span>,
+                risk_level: <span className="text-red-400">'high'</span>,
+                </div>
+                <div className="text-gray-300 ml-8">
+                is_dust_victim: <span className="text-red-400">true</span>,
+                </div>
+                <div className="text-gray-300 ml-8">
+                is_dust_attacker: <span className="text-red-400">false</span>,
+                </div>
+                <div className="text-gray-300 ml-8">
+                findings: <span className="text-gray-300">[{"{"}</span>
+                </div>
+                <div className="text-gray-300 ml-12">
+                type: <span className="text-yellow-400">'dust_attack'</span>,
+                </div>
+                <div className="text-gray-300 ml-12">
+                severity: <span className="text-red-400">'high'</span>,
+                </div>
+                <div className="text-gray-300 ml-12">
+                description: <span className="text-yellow-400">'Wallet has received dust from known attacker addresses'</span>
+                </div>
+                <div className="text-gray-300 ml-8">
+                <span className="text-gray-300">{"}"}]</span>
                 </div>
                 <div className="text-gray-300 ml-4">
-                <span className="text-gray-300">{"}"}</span>,
-                </div>
-                <div className="text-gray-300 ml-4">
-                message: <span className="text-yellow-400">'This wallet address is flagged as a confirmed dusting attacker with a risk score of 0.3900.'</span>
+                <span className="text-gray-300">{"}"}</span>
                 </div>
                 <div className="text-gray-300">{"}"}</div>
             </div>
