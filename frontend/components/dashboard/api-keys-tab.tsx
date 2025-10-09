@@ -112,8 +112,9 @@ export default function ApiKeysTab() {
         await fetchApiKeys();
         toast({
           title: "Success",
-          description: "API key created successfully",
+          description: "API key created successfully. Please copy and save it now.",
         });
+        // Don't close the dialog - let the user see and copy the key
       } else {
         throw new Error("Failed to create API key");
       }
@@ -124,6 +125,10 @@ export default function ApiKeysTab() {
         description: "Failed to create API key",
         variant: "destructive",
       });
+      // Close dialog on error
+      setIsCreateDialogOpen(false);
+      setNewApiKey("");
+      setNewKeyName("");
     } finally {
       setIsLoading(false);
     }
@@ -167,6 +172,16 @@ export default function ApiKeysTab() {
     });
   };
 
+  // Handle dialog open/close state changes
+  const handleDialogOpenChange = (open: boolean) => {
+    setIsCreateDialogOpen(open);
+    if (!open) {
+      // Reset form when closing dialog
+      setNewApiKey("");
+      setNewKeyName("");
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Tabs defaultValue="keys" className="space-y-6">
@@ -183,7 +198,7 @@ export default function ApiKeysTab() {
           </TabsList>
           <Dialog
             open={isCreateDialogOpen}
-            onOpenChange={setIsCreateDialogOpen}
+            onOpenChange={handleDialogOpenChange}
           >
             <DialogTrigger asChild>
               <Button className="flex items-center gap-2">
@@ -230,11 +245,7 @@ export default function ApiKeysTab() {
                   </div>
                   <DialogFooter>
                     <Button
-                      onClick={() => {
-                        setIsCreateDialogOpen(false);
-                        setNewApiKey("");
-                        setNewKeyName("");
-                      }}
+                      onClick={() => handleDialogOpenChange(false)}
                     >
                       Done
                     </Button>
@@ -256,7 +267,7 @@ export default function ApiKeysTab() {
                   <DialogFooter>
                     <Button
                       variant="outline"
-                      onClick={() => setIsCreateDialogOpen(false)}
+                      onClick={() => handleDialogOpenChange(false)}
                     >
                       Cancel
                     </Button>
