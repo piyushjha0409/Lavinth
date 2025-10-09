@@ -1,7 +1,7 @@
 "use strict";
 /**
  * Machine Learning Integration for Dust Attack Detection
- * This module provides ML-based classification for potential dusting attackers and victims
+ * Enhanced with comprehensive ML pipeline integration
  */
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }

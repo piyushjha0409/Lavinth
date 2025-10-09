@@ -1,10 +1,9 @@
 /**
  * Machine Learning Integration for Dust Attack Detection
- * This module provides ML-based classification for potential dusting attackers and victims
+ * Enhanced with comprehensive ML pipeline integration
  */
 
-import { DustingAttacker, DustingVictim } from './db/db-utils';
-import db from './db/db-utils';
+import { DustingAttacker, DustingVictim, DustTransaction } from './db/db-utils';
 
 export interface MLFeatures {
   transactionFrequency: number;
@@ -14,10 +13,13 @@ export interface MLFeatures {
   networkFeatures: number[];
 }
 
+// Legacy interface for backward compatibility
 export interface MLPrediction {
   attackerScore: number;
   victimScore: number;
   confidence: number;
+  modelVersion?: string;
+  features?: Record<string, number>;
 }
 
 export class DustDetectionModel {

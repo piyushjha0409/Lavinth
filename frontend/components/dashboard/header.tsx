@@ -1,40 +1,15 @@
 "use client";
 
 import { useState, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Shield, Menu, PanelLeftClose } from "lucide-react";
 import { MobileSidebar } from "./sidebar";
 import { WalletCheckModal } from "./wallet-check-modal";
 
-const getTabTitle = (activeTab: string | null) => {
-  switch (activeTab) {
-    case "transactions":
-      return "Transactions";
-    case "dusting":
-      return "Dusting Analysis";
-    case "api-keys":
-      return "API Keys";
-    case "poisoning":
-      return "Poisoning Detection";
-    case "attackers":
-      return "Attackers";
-    case "victims":
-      return "Victims";
-    case "alerts":
-      return "Alerts";
-    default:
-      return "Dashboard Overview";
-  }
-};
-
 function HeaderContent() {
   const [isWalletCheckOpen, setIsWalletCheckOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const searchParams = useSearchParams();
-  const activeTab = searchParams.get("tab");
-  const title = getTabTitle(activeTab);
-
+  
   const toggleSidebar = () => {
     setIsSidebarCollapsed(!isSidebarCollapsed);
     document.dispatchEvent(
@@ -65,9 +40,6 @@ function HeaderContent() {
         </span>
       </Button>
 
-      <h1 className="text-lg font-semibold md:text-xl hidden md:block">
-        {title}
-      </h1>
       <div className="flex-1" />
 
       <Button

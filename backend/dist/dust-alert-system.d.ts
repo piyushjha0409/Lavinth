@@ -56,6 +56,110 @@ export declare class DustingAlertSystem {
     monitorInRealTime(): Promise<void>;
     stopMonitoring(): void;
     private checkForNewThreats;
+    /**
+     * Analyze new attackers with enhanced confidence scoring
+     */
+    private analyzeNewAttackers;
+    /**
+     * Calculate attacker confidence based on multiple factors
+     */
+    private calculateAttackerConfidence;
+    /**
+     * Analyze attacker patterns for additional context
+     */
+    private analyzeAttackerPatterns;
+    /**
+     * Calculate alert priority based on confidence and patterns
+     */
+    private calculateAlertPriority;
+    /**
+     * Analyze new victims with enhanced detection
+     */
+    private analyzeNewVictims;
+    /**
+     * Assess victim risk with multiple factors
+     */
+    private assessVictimRisk;
+    /**
+     * Analyze activity patterns with enhanced context
+     */
+    private analyzeActivityPatterns;
+    /**
+     * Detect coordinated attacks across multiple addresses
+     */
+    private detectCoordinatedAttacks;
+    /**
+     * Detect address poisoning campaigns
+     */
+    private detectPoisoningCampaigns;
+    /**
+     * Send enhanced alert with better formatting and context
+     */
+    private sendEnhancedAlert;
+    /**
+     * Send Discord alert
+     */
+    private sendDiscordAlert;
+    /**
+     * Send email alert
+     */
+    private sendEmailAlert;
+    /**
+     * Format enhanced alert messages with better context
+     */
+    private formatEnhancedAlertMessage;
+    /**
+     * Legacy alert function - kept for backward compatibility
+     * Use sendEnhancedAlert for new implementations
+     */
     private sendAlert;
+    /**
+     * Get real-time system statistics
+     */
+    getSystemStats(): {
+        isRunning: boolean;
+        totalAlertsToday: number;
+        lastAlertTime: number | null;
+        activeThreats: {
+            highRiskAttackers: number;
+            highRiskVictims: number;
+            coordinatedAttacks: number;
+        };
+        systemHealth: "healthy" | "warning" | "critical";
+    };
+    /**
+     * Update alert configuration dynamically
+     */
+    updateConfig(newConfig: Partial<AlertConfig>): void;
+    /**
+     * Test alert system connectivity
+     */
+    testAlertSystem(): Promise<{
+        discord: {
+            success: boolean;
+            error?: string;
+        };
+        email: {
+            success: boolean;
+            error?: string;
+        };
+    }>;
+    /**
+     * Get alert history and statistics
+     */
+    getAlertHistory(hours?: number): Promise<{
+        totalAlerts: number;
+        alertsByType: Record<string, number>;
+        alertsByPriority: Record<string, number>;
+        timeline: Array<{
+            timestamp: number;
+            type: string;
+            count: number;
+        }>;
+    }>;
+    /**
+     * Manually trigger alert for testing or emergency situations
+     */
+    triggerManualAlert(type: "emergency" | "maintenance" | "test", message: string, priority?: "low" | "medium" | "high" | "critical"): Promise<void>;
     private formatAlertMessage;
 }

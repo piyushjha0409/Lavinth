@@ -21,6 +21,46 @@ export declare class AdaptiveThresholds {
         transferCountThreshold: number;
         timeWindowThreshold: number;
     }>;
+    /**
+     * Get enhanced network metrics including TPS, congestion, and fee trends
+     */
+    private getEnhancedNetworkMetrics;
+    /**
+     * Analyze historical dust detection patterns
+     */
+    private analyzeHistoricalPatterns;
+    /**
+     * Calculate false positive rate from recent detections
+     */
+    private calculateFalsePositiveRate;
+    /**
+     * Calculate base dust threshold from network fees
+     */
+    private calculateBaseDustThreshold;
+    /**
+     * Calculate adjustment factors based on various metrics
+     */
+    private calculateAdjustmentFactors;
+    /**
+     * Calculate new dust threshold with enhanced logic
+     */
+    private calculateNewDustThreshold;
+    /**
+     * Calculate new transfer count threshold
+     */
+    private calculateNewTransferThreshold;
+    /**
+     * Calculate new time window threshold
+     */
+    private calculateNewTimeWindowThreshold;
+    /**
+     * Validate thresholds are within reasonable bounds
+     */
+    private validateThresholds;
+    /**
+     * Log threshold changes for monitoring
+     */
+    private logThresholdChanges;
     getCurrentThresholds(): {
         dustAmountThreshold: number;
         transferCountThreshold: number;

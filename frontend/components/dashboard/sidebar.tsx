@@ -19,6 +19,10 @@ import {
   Target,
   Menu,
   Key,
+  Network,
+  Eye,
+  Zap,
+  Settings,
 } from "lucide-react";
 import { SidebarUser } from "./sidebar-user";
 import Link from "next/link";
@@ -29,52 +33,34 @@ import logo from "@/public/lavinth-logo.png";
 
 const navigation = [
   {
-    name: "Overview",
+    name: "Dashboard Overview",
     href: "/dashboard",
     tab: "overview",
     icon: BarChart3,
   },
   {
-    name: "Transactions",
+    name: "Threat Intelligence",
+    href: "/dashboard?tab=threat-intelligence",
+    tab: "threat-intelligence",
+    icon: AlertTriangle,
+  },
+  {
+    name: "Network Analysis",
+    href: "/dashboard?tab=network-analysis",
+    tab: "network-analysis",
+    icon: Network,
+  },
+  {
+    name: "Transaction Monitor",
     href: "/dashboard?tab=transactions",
     tab: "transactions",
     icon: Activity,
   },
   {
-    name: "Dusting Analysis",
-    href: "/dashboard?tab=dusting",
-    tab: "dusting",
-    icon: Target,
-  },
-  {
-    name: "API Keys",
-    href: "/dashboard?tab=api-keys",
-    tab: "api-keys",
-    icon: Key,
-  },
-  {
-    name: "Poisoning Detection",
-    href: "/dashboard?tab=poisoning",
-    tab: "poisoning",
-    icon: Shield,
-  },
-  {
-    name: "Attackers",
-    href: "/dashboard?tab=attackers",
-    tab: "attackers",
-    icon: AlertTriangle,
-  },
-  {
-    name: "Victims",
-    href: "/dashboard?tab=victims",
-    tab: "victims",
-    icon: Users,
-  },
-  {
-    name: "Alerts",
-    href: "/dashboard?tab=alerts",
-    tab: "alerts",
-    icon: AlertTriangle,
+    name: "Settings & API",
+    href: "/dashboard?tab=settings-api",
+    tab: "settings-api",
+    icon: Settings,
   },
 ];
 

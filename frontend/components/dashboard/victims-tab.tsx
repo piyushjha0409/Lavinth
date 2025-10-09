@@ -7,6 +7,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   User,
+  RefreshCw,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { StatsCard } from "./overview-tab";
@@ -99,14 +100,20 @@ export default function VictimsTab() {
 
   return (
     <>
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold text-cyan-200">Dusting Victims</h2>
-        <div className="flex items-center space-x-2">
-          <span className="text-sm text-muted-foreground">
-            {victimsTotalItems > 0 &&
-              `Showing ${victimsPage} of ${victimsTotalPages} pages (${victimsTotalItems} total)`}
-          </span>
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Potential Victims</h2>
+          <p className="text-muted-foreground">
+            {victimsTotalItems > 0 
+              ? `${victimsTotalItems} addresses at risk identified`
+              : "Loading victim profiles..."
+            }
+          </p>
         </div>
+        <Button variant="outline" onClick={fetchDustingVictims} disabled={isVictimsLoading}>
+          <RefreshCw className={`h-4 w-4 mr-2 ${isVictimsLoading ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
       </div>
 
       {isVictimsLoading ? (

@@ -1,13 +1,11 @@
 "use client";
 
 // Direct API call to dashboard route
-import AlertsTab from "@/components/dashboard/alerts-tab";
-import AttackersTab from "@/components/dashboard/attackers-tab";
-import DustingAnalysisTab from "@/components/dashboard/dusting-analysis-tab";
 import OverviewTab from "@/components/dashboard/overview-tab";
-import PoisoningDetectionTab from "@/components/dashboard/poisoning-detection-tab";
+import ThreatIntelligenceTab from "@/components/dashboard/threat-intelligence-tab";
+import NetworkAnalysisTab from "@/components/dashboard/network-analysis-tab";
 import TransactionsTab from "@/components/dashboard/transactions-tab";
-import VictimsTab from "@/components/dashboard/victims-tab";
+import SettingsApiTab from "@/components/dashboard/settings-api-tab";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -107,25 +105,14 @@ function DashboardContent() {
 
   const renderContent = () => {
     switch (activeTab) {
+      case "threat-intelligence":
+        return <ThreatIntelligenceTab />;
+      case "network-analysis":
+        return <NetworkAnalysisTab />;
       case "transactions":
         return <TransactionsTab dashboardData={dashboardData} />;
-      case "dusting":
-        return (
-          <DustingAnalysisTab
-            dashboardData={dashboardData}
-            topDusters={topDusters}
-          />
-        );
-      case "api-keys":
-        return <ApiKeysTab />;
-      case "poisoning":
-        return <PoisoningDetectionTab />;
-      case "attackers":
-        return <AttackersTab />;
-      case "victims":
-        return <VictimsTab />;
-      case "alerts":
-        return <AlertsTab />;
+      case "settings-api":
+        return <SettingsApiTab />;
       default:
         return <OverviewTab dashboardData={dashboardData} />;
     }

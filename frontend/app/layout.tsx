@@ -14,14 +14,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <head>
-        <meta
-          name="solads-site-verification"
-          content="solads_verify_1756328321020_361278ce66e77c69da78b0eedc79b352"
-        />
-      </head>
-      <body>
+    <html lang="en" className="dark">
+      <body className="dark">
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

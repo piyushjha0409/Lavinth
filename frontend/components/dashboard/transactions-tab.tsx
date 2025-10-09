@@ -5,6 +5,9 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  RefreshCw,
+  Activity,
+  BarChart3,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
@@ -20,6 +23,7 @@ import {
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader } from "../ui/card";
 import { Progress } from "../ui/progress";
+import { Badge } from "../ui/badge";
 
 interface ApiTransaction {
   id: number;
@@ -133,36 +137,55 @@ export default function TransactionsTab({ dashboardData }: { dashboardData: Dash
   }, [currentPage, pageSize]);
 
   return (
-    <>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Transaction Monitor</h2>
+          <p className="text-muted-foreground">
+            {paginationMetadata?.total 
+              ? `${paginationMetadata.total.toLocaleString()} transactions monitored in real-time`
+              : "Loading transaction data..."
+            }
+          </p>
+        </div>
+        <Button variant="outline" onClick={fetchPaginatedTransactions} disabled={isTableLoading}>
+          <RefreshCw className={`h-4 w-4 mr-2 ${isTableLoading ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
+      </div>
+
+      {/* Transaction Summary */}
       <Card>
-        <CardHeader className="pb-2">
-          <h3 className="text-lg font-semibold text-cyan-200">
-            Transaction Summary
+        <CardHeader>
+          <h3 className="text-lg font-semibold flex items-center">
+            <BarChart3 className="h-5 w-5 mr-2" />
+            Transaction Overview
           </h3>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div className="flex flex-col space-y-1">
-              <span className="text-muted-foreground text-sm">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div className="flex flex-col space-y-2 p-4 bg-blue-50 rounded-lg">
+              <span className="text-muted-foreground text-sm font-medium">
                 Total Volume
               </span>
-              <span className="text-2xl font-bold">
+              <span className="text-2xl font-bold text-blue-600">
                 {formatNumber(dashboardData?.totalVolume || 0)} SOL
               </span>
             </div>
-            <div className="flex flex-col space-y-1">
-              <span className="text-muted-foreground text-sm">
+            <div className="flex flex-col space-y-2 p-4 bg-green-50 rounded-lg">
+              <span className="text-muted-foreground text-sm font-medium">
                 Avg Transaction Size
               </span>
-              <span className="text-2xl font-bold">
+              <span className="text-2xl font-bold text-green-600">
                 {formatNumber(dashboardData?.averageTransactionSize || 0)} SOL
               </span>
             </div>
-            <div className="flex flex-col space-y-1">
-              <span className="text-muted-foreground text-sm">
+            <div className="flex flex-col space-y-2 p-4 bg-purple-50 rounded-lg">
+              <span className="text-muted-foreground text-sm font-medium">
                 Success Rate
               </span>
-              <span className="text-2xl font-bold">
+              <span className="text-2xl font-bold text-purple-600">
                 {dashboardData && dashboardData.activeTransactions > 0
                   ? (
                       (dashboardData.successfulTransactions /
@@ -175,7 +198,8 @@ export default function TransactionsTab({ dashboardData }: { dashboardData: Dash
             </div>
           </div>
 
-          <h4 className="text-lg font-semibold text-cyan-200 mb-4">
+          <h4 className="text-lg font-semibold mb-4 flex items-center">
+            <Activity className="h-5 w-5 mr-2" />
             Transaction Success vs Failure
           </h4>
           <div className="h-64 rounded-md">
@@ -238,13 +262,16 @@ export default function TransactionsTab({ dashboardData }: { dashboardData: Dash
         </CardContent>
       </Card>
 
-      {/* New Paginated Transactions Table */}
+      {/* Transaction Table */}
       <Card>
-        <CardHeader className="pb-2">
-          <h3 className="text-lg font-semibold">All Transactions</h3>
-          <h3 className="text-lg font-semibold text-cyan-200">
-            Recent Suspicious Activity
+        <CardHeader>
+          <h3 className="text-lg font-semibold flex items-center">
+            <Activity className="h-5 w-5 mr-2" />
+            Recent Transaction Activity
           </h3>
+          <p className="text-sm text-muted-foreground">
+            {paginationMetadata ? `Showing ${allTransactions.length} of ${paginationMetadata.total} transactions` : 'Loading...'}
+          </p>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -258,85 +285,77 @@ export default function TransactionsTab({ dashboardData }: { dashboardData: Dash
                 </div>
               </div>
             ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b">
-                    <th className="py-2 text-left">Signature</th>
-                    <th className="py-2 text-left">Timestamp</th>
-                    <th className="py-2 text-left">From</th>
-                    <th className="py-2 text-left">To</th>
-                    <th className="py-2 text-left">Amount</th>
-                    <th className="py-2 text-left">Type</th>
-                    <th className="py-2 text-left">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {allTransactions.length > 0 ? (
-                    allTransactions.map((tx, idx) => (
-                      <tr
-                        key={tx.id}
-                        className={idx % 2 === 0 ? "bg-gray-50 text-black" : ""}
-                      >
-                        <td className="py-2">
-                          {tx.signature
-                            ? tx.signature.substring(0, 8) + "..."
-                            : "N/A"}
-                        </td>
-                        <td className="py-2">
-                          {new Date(tx.timestamp).toLocaleString()}
-                        </td>
-                        <td className="py-2">
-                          {tx.sender
-                            ? tx.sender.substring(0, 6) + "..."
-                            : "N/A"}
-                        </td>
-                        <td className="py-2">
-                          {tx.recipient
-                            ? tx.recipient.substring(0, 6) + "..."
-                            : "N/A"}
-                        </td>
-                        <td className="py-2">
-                          {tx.amount} {tx.token_type || "SOL"}
-                        </td>
-                        <td className="py-2">
+              <div className="space-y-3">
+                {allTransactions.length > 0 ? (
+                  allTransactions.map((tx, idx) => (
+                    <div
+                      key={tx.id}
+                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/30 transition-colors"
+                    >
+                      <div className="flex items-center space-x-4 flex-1">
+                        <div className="flex-shrink-0">
                           {tx.is_potential_dust ? (
-                            <span className="px-2 py-1 rounded bg-yellow-100 text-yellow-800 text-xs">
+                            <Badge variant="secondary" className="bg-amber-100 text-amber-800">
                               Dust
-                            </span>
+                            </Badge>
                           ) : tx.is_potential_poisoning ? (
-                            <span className="px-2 py-1 rounded bg-red-100 text-red-800 text-xs">
+                            <Badge variant="destructive">
                               Poisoning
-                            </span>
+                            </Badge>
                           ) : (
-                            <span className="px-2 py-1 rounded bg-gray-100 text-gray-800 text-xs">
+                            <Badge variant="outline">
                               Normal
-                            </span>
+                            </Badge>
                           )}
-                        </td>
-                        <td className="py-2">
-                          {tx.success ? (
-                            <span className="px-2 py-1 rounded bg-green-100 text-green-800 text-xs">
-                              Success
-                            </span>
-                          ) : (
-                            <span className="px-2 py-1 rounded bg-red-100 text-red-800 text-xs">
-                              Failed
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={7} className="py-8 text-center">
-                        <p className="text-muted-foreground">
-                          No transactions found
-                        </p>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                        </div>
+                        <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4">
+                          <div>
+                            <p className="text-xs text-muted-foreground">Transaction</p>
+                            <p className="font-mono text-sm font-medium">
+                              {tx.signature ? tx.signature.substring(0, 12) + "..." : "N/A"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">From → To</p>
+                            <p className="font-mono text-sm">
+                              {tx.sender ? tx.sender.substring(0, 6) + "..." : "N/A"} → {tx.recipient ? tx.recipient.substring(0, 6) + "..." : "N/A"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">Amount</p>
+                            <p className="text-sm font-semibold">
+                              {parseFloat(tx.amount).toFixed(6)} {tx.token_type || "SOL"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">Time</p>
+                            <p className="text-sm">
+                              {new Date(tx.timestamp).toLocaleTimeString()}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground">Risk Score</p>
+                          <p className="text-sm font-bold">
+                            {(parseFloat(tx.risk_score) * 100).toFixed(1)}%
+                          </p>
+                        </div>
+                        <Badge variant={tx.success ? "default" : "destructive"} className="text-xs">
+                          {tx.success ? "Success" : "Failed"}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-muted-foreground">
+                      No transactions found
+                    </p>
+                  </div>
+                )}
+              </div>
             )}
           </div>
 
@@ -420,6 +439,6 @@ export default function TransactionsTab({ dashboardData }: { dashboardData: Dash
           </div>
         </CardContent>
       </Card>
-    </>
+    </div>
   );
 }
