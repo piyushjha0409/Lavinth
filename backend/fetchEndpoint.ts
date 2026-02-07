@@ -14,8 +14,8 @@ const PORT = process.env.PORT || 3001;
 // Middleware
 app.use(
   cors({
-    origin: "https://www.lavinth.com",
-    methods: ["GET"],
+    origin: ["https://www.lavinth.com", "http://localhost:3000", "http://localhost:3002"],
+    methods: ["GET", "POST", "DELETE", "PUT", "PATCH"],
     allowedHeaders: ["Content-Type", "x-access-token", "x-api-key"],
   })
 );
@@ -1063,12 +1063,1408 @@ app.get('/api/system-status', validateToken, async (req: Request, res: Response)
   }
 });
 
+// ============================================
+// WalletShield Recovery Endpoints (Phase 1)
+// ============================================
+
+import { approvalScanner } from "./services/approval-scanner";
+import { revocationEngine } from "./services/revocation-engine";
+
+/**
+ * Scan wallet for token approvals
+ * GET /api/approvals/scan/:address
+ */
+app.get('/api/approvals/scan/:address', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `approvals-scan-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { address } = req.params;
+  console.log(`[${requestId}] Starting approval scan for wallet: ${address}`);
+
+  try {
+    // Validate address format
+    if (!address || address.length < 32 || address.length > 44) {
+      res.status(400).json({ error: 'Invalid wallet address format' });
+      return;
+    }
+
+    const scanResult = await approvalScanner.scanWallet(address);
+
+    if (!scanResult.success) {
+      console.error(`[${requestId}] Scan failed:`, scanResult.error);
+      res.status(500).json({ error: scanResult.error });
+      return;
+    }
+
+    console.log(`[${requestId}] Scan completed: ${scanResult.profile?.totalApprovals} approvals found`);
+    res.json({
+      success: true,
+      walletAddress: address,
+      profile: scanResult.profile,
+      scannedAt: new Date().toISOString()
+    });
+  } catch (error: any) {
+    console.error(`[${requestId}] Error scanning approvals:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Get cached approvals for a wallet
+ * GET /api/approvals/:address
+ */
+app.get('/api/approvals/:address', validateApiKey, async (req: Request, res: Response) => {
+  const requestId = `approvals-get-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { address } = req.params;
+  console.log(`[${requestId}] Fetching approvals for wallet: ${address}`);
+
+  try {
+    const approvals = await approvalScanner.getApprovals(address);
+    const profile = await approvalScanner.getSecurityProfile(address);
+
+    console.log(`[${requestId}] Retrieved ${approvals.length} approvals`);
+    res.json({
+      walletAddress: address,
+      profile,
+      approvals
+    });
+  } catch (error: any) {
+    console.error(`[${requestId}] Error fetching approvals:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Get security profile for a wallet
+ * GET /api/security-profile/:address
+ */
+app.get('/api/security-profile/:address', validateApiKey, async (req: Request, res: Response) => {
+  const requestId = `security-profile-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { address } = req.params;
+  console.log(`[${requestId}] Fetching security profile for wallet: ${address}`);
+
+  try {
+    let profile = await approvalScanner.getSecurityProfile(address);
+
+    // If no cached profile, do a fresh scan
+    if (!profile) {
+      console.log(`[${requestId}] No cached profile, performing fresh scan`);
+      const scanResult = await approvalScanner.scanWallet(address);
+      profile = scanResult.profile;
+    }
+
+    res.json({
+      walletAddress: address,
+      profile,
+      retrievedAt: new Date().toISOString()
+    });
+  } catch (error: any) {
+    console.error(`[${requestId}] Error fetching security profile:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Create revocation plan for a wallet
+ * POST /api/revocation/plan
+ */
+app.post('/api/revocation/plan', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `revocation-plan-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { walletAddress, approvalIds } = req.body;
+  console.log(`[${requestId}] Creating revocation plan for wallet: ${walletAddress}`);
+
+  try {
+    if (!walletAddress) {
+      res.status(400).json({ error: 'walletAddress is required' });
+      return;
+    }
+
+    const plan = await revocationEngine.createRevocationPlan(walletAddress);
+
+    console.log(`[${requestId}] Revocation plan created: ${plan.totalApprovals} approvals, ${plan.totalTransactions} transactions`);
+    res.json({
+      success: true,
+      plan: {
+        sessionId: plan.sessionId,
+        walletAddress: plan.walletAddress,
+        totalApprovals: plan.totalApprovals,
+        totalTransactions: plan.totalTransactions,
+        estimatedTotalFee: plan.estimatedTotalFee,
+        createdAt: plan.createdAt
+      }
+    });
+  } catch (error: any) {
+    console.error(`[${requestId}] Error creating revocation plan:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Build unsigned transactions for revocation
+ * POST /api/revocation/build
+ */
+app.post('/api/revocation/build', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `revocation-build-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { walletAddress } = req.body;
+  console.log(`[${requestId}] Building revocation transactions for wallet: ${walletAddress}`);
+
+  try {
+    if (!walletAddress) {
+      res.status(400).json({ error: 'walletAddress is required' });
+      return;
+    }
+
+    // Create plan and build transactions
+    const plan = await revocationEngine.createRevocationPlan(walletAddress);
+    const transactions = await revocationEngine.buildUnsignedTransactions(plan);
+
+    console.log(`[${requestId}] Built ${transactions.length} unsigned transactions`);
+    res.json({
+      success: true,
+      sessionId: plan.sessionId,
+      walletAddress,
+      totalApprovals: plan.totalApprovals,
+      transactions: transactions,
+      estimatedTotalFee: plan.estimatedTotalFee
+    });
+  } catch (error: any) {
+    console.error(`[${requestId}] Error building revocation transactions:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Submit signed revocation transactions
+ * POST /api/revocation/submit
+ */
+app.post('/api/revocation/submit', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `revocation-submit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { sessionId, signedTransactions } = req.body;
+  console.log(`[${requestId}] Submitting signed transactions for session: ${sessionId}`);
+
+  try {
+    if (!sessionId || !signedTransactions || !Array.isArray(signedTransactions)) {
+      res.status(400).json({ error: 'sessionId and signedTransactions array are required' });
+      return;
+    }
+
+    const result = await revocationEngine.submitSignedTransactions(sessionId, signedTransactions);
+
+    console.log(`[${requestId}] Submission complete: ${result.totalRevoked} revoked, ${result.totalFailed} failed`);
+    res.json(result);
+  } catch (error: any) {
+    console.error(`[${requestId}] Error submitting revocation transactions:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Emergency revoke all high-risk approvals
+ * POST /api/revocation/emergency
+ */
+app.post('/api/revocation/emergency', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `emergency-revoke-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { walletAddress } = req.body;
+  console.log(`[${requestId}] Creating EMERGENCY revocation plan for wallet: ${walletAddress}`);
+
+  try {
+    if (!walletAddress) {
+      res.status(400).json({ error: 'walletAddress is required' });
+      return;
+    }
+
+    const plan = await revocationEngine.createEmergencyRevokePlan(walletAddress);
+    const transactions = await revocationEngine.buildUnsignedTransactions(plan);
+
+    console.log(`[${requestId}] Emergency plan created: ${plan.totalApprovals} high-risk approvals`);
+    res.json({
+      success: true,
+      isEmergency: true,
+      sessionId: plan.sessionId,
+      walletAddress,
+      totalHighRiskApprovals: plan.totalApprovals,
+      transactions: transactions,
+      estimatedTotalFee: plan.estimatedTotalFee
+    });
+  } catch (error: any) {
+    console.error(`[${requestId}] Error creating emergency revocation:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Get recovery session status
+ * GET /api/recovery/session/:sessionId
+ */
+app.get('/api/recovery/session/:sessionId', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `recovery-session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { sessionId } = req.params;
+  console.log(`[${requestId}] Fetching recovery session: ${sessionId}`);
+
+  try {
+    const session = await revocationEngine.getRecoverySession(sessionId);
+
+    if (!session) {
+      res.status(404).json({ error: 'Session not found' });
+      return;
+    }
+
+    res.json(session);
+  } catch (error: any) {
+    console.error(`[${requestId}] Error fetching recovery session:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Get all recovery sessions for a wallet
+ * GET /api/recovery/history/:address
+ */
+app.get('/api/recovery/history/:address', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `recovery-history-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { address } = req.params;
+  console.log(`[${requestId}] Fetching recovery history for wallet: ${address}`);
+
+  try {
+    const sessions = await revocationEngine.getRecoverySessionsForWallet(address);
+
+    res.json({
+      walletAddress: address,
+      sessions,
+      total: sessions.length
+    });
+  } catch (error: any) {
+    console.error(`[${requestId}] Error fetching recovery history:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Report a malicious delegate address
+ * POST /api/report/malicious-delegate
+ */
+app.post('/api/report/malicious-delegate', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `report-delegate-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { address, label, category, reportedLosses } = req.body;
+  console.log(`[${requestId}] Reporting malicious delegate: ${address}`);
+
+  try {
+    if (!address || !label || !category) {
+      res.status(400).json({ error: 'address, label, and category are required' });
+      return;
+    }
+
+    await approvalScanner.reportMaliciousDelegate(address, label, category, reportedLosses || 0);
+
+    console.log(`[${requestId}] Malicious delegate reported successfully`);
+    res.json({
+      success: true,
+      message: 'Malicious delegate reported successfully'
+    });
+  } catch (error: any) {
+    console.error(`[${requestId}] Error reporting malicious delegate:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================
+// WalletShield Recovery Endpoints (Phase 2)
+// Compromise Detection & Fund Tracking
+// ============================================
+
+import { compromiseDetector } from "./services/compromise-detector";
+import { fundTracker } from "./services/fund-tracker";
+import { alertManager } from "./services/alert-manager";
+
+/**
+ * Analyze wallet for signs of compromise
+ * GET /api/compromise/analyze/:address
+ */
+app.get('/api/compromise/analyze/:address', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `compromise-analyze-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { address } = req.params;
+  console.log(`[${requestId}] Analyzing wallet for compromise: ${address}`);
+
+  try {
+    if (!address || address.length < 32 || address.length > 44) {
+      res.status(400).json({ error: 'Invalid wallet address format' });
+      return;
+    }
+
+    const result = await compromiseDetector.analyzeWallet(address);
+
+    console.log(`[${requestId}] Analysis complete: isCompromised=${result.isCompromised}, alerts=${result.alerts.length}`);
+    res.json({
+      success: true,
+      walletAddress: address,
+      isCompromised: result.isCompromised,
+      riskScore: result.riskScore,
+      alertCount: result.alerts.length,
+      alerts: result.alerts,
+      recentTransactions: result.transactions.slice(0, 10),
+      analyzedAt: new Date().toISOString()
+    });
+  } catch (error: any) {
+    console.error(`[${requestId}] Error analyzing wallet:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Register wallet for monitoring
+ * POST /api/compromise/monitor
+ */
+app.post('/api/compromise/monitor', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `monitor-register-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { walletAddress, userId, alertChannels, monitoringLevel } = req.body;
+  console.log(`[${requestId}] Registering wallet for monitoring: ${walletAddress}`);
+
+  try {
+    if (!walletAddress) {
+      res.status(400).json({ error: 'walletAddress is required' });
+      return;
+    }
+
+    const wallet = await compromiseDetector.registerWallet(
+      walletAddress,
+      userId,
+      alertChannels,
+      monitoringLevel || 'standard'
+    );
+
+    // Also create alert subscription if channels provided
+    if (alertChannels) {
+      await alertManager.createSubscription(walletAddress, alertChannels, { userId });
+    }
+
+    console.log(`[${requestId}] Wallet registered for monitoring`);
+    res.json({
+      success: true,
+      wallet
+    });
+  } catch (error: any) {
+    console.error(`[${requestId}] Error registering wallet:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Get monitored wallet info
+ * GET /api/compromise/monitor/:address
+ */
+app.get('/api/compromise/monitor/:address', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `monitor-get-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { address } = req.params;
+  console.log(`[${requestId}] Fetching monitored wallet: ${address}`);
+
+  try {
+    const wallet = await compromiseDetector.getMonitoredWallet(address);
+
+    if (!wallet) {
+      res.status(404).json({ error: 'Wallet not found in monitoring list' });
+      return;
+    }
+
+    res.json(wallet);
+  } catch (error: any) {
+    console.error(`[${requestId}] Error fetching monitored wallet:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Get alerts for a wallet
+ * GET /api/compromise/alerts/:address
+ */
+app.get('/api/compromise/alerts/:address', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `alerts-get-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { address } = req.params;
+  const { limit = 50 } = req.query;
+  console.log(`[${requestId}] Fetching alerts for wallet: ${address}`);
+
+  try {
+    const alerts = await compromiseDetector.getAlerts(address, parseInt(limit as string));
+
+    res.json({
+      walletAddress: address,
+      alertCount: alerts.length,
+      alerts
+    });
+  } catch (error: any) {
+    console.error(`[${requestId}] Error fetching alerts:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Acknowledge an alert
+ * POST /api/compromise/alerts/:alertId/acknowledge
+ */
+app.post('/api/compromise/alerts/:alertId/acknowledge', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `alert-ack-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { alertId } = req.params;
+  console.log(`[${requestId}] Acknowledging alert: ${alertId}`);
+
+  try {
+    await compromiseDetector.acknowledgeAlert(alertId);
+
+    res.json({
+      success: true,
+      message: 'Alert acknowledged'
+    });
+  } catch (error: any) {
+    console.error(`[${requestId}] Error acknowledging alert:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Get recent transactions for a wallet
+ * GET /api/compromise/transactions/:address
+ */
+app.get('/api/compromise/transactions/:address', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `transactions-get-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { address } = req.params;
+  const { limit = 50 } = req.query;
+  console.log(`[${requestId}] Fetching transactions for wallet: ${address}`);
+
+  try {
+    const transactions = await compromiseDetector.getTransactions(address, parseInt(limit as string));
+
+    res.json({
+      walletAddress: address,
+      transactionCount: transactions.length,
+      transactions
+    });
+  } catch (error: any) {
+    console.error(`[${requestId}] Error fetching transactions:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================
+// Fund Tracking Endpoints
+// ============================================
+
+/**
+ * Start tracing stolen funds
+ * POST /api/funds/trace
+ */
+app.post('/api/funds/trace', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `trace-start-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { sourceWallet, initialAmount, tokenMint } = req.body;
+  console.log(`[${requestId}] Starting fund trace for wallet: ${sourceWallet}`);
+
+  try {
+    if (!sourceWallet || !initialAmount) {
+      res.status(400).json({ error: 'sourceWallet and initialAmount are required' });
+      return;
+    }
+
+    const trace = await fundTracker.startTrace(sourceWallet, initialAmount, tokenMint);
+
+    console.log(`[${requestId}] Trace started: ${trace.traceId}`);
+    res.json({
+      success: true,
+      trace
+    });
+  } catch (error: any) {
+    console.error(`[${requestId}] Error starting trace:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Get trace status and details
+ * GET /api/funds/trace/:traceId
+ */
+app.get('/api/funds/trace/:traceId', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `trace-get-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { traceId } = req.params;
+  console.log(`[${requestId}] Fetching trace: ${traceId}`);
+
+  try {
+    const trace = await fundTracker.getTrace(traceId);
+
+    if (!trace) {
+      res.status(404).json({ error: 'Trace not found' });
+      return;
+    }
+
+    res.json(trace);
+  } catch (error: any) {
+    console.error(`[${requestId}] Error fetching trace:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Get all traces for a wallet
+ * GET /api/funds/traces/:address
+ */
+app.get('/api/funds/traces/:address', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `traces-get-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { address } = req.params;
+  console.log(`[${requestId}] Fetching traces for wallet: ${address}`);
+
+  try {
+    const traces = await fundTracker.getTracesForWallet(address);
+
+    res.json({
+      walletAddress: address,
+      traceCount: traces.length,
+      traces
+    });
+  } catch (error: any) {
+    console.error(`[${requestId}] Error fetching traces:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Generate recovery report
+ * GET /api/funds/report/:traceId
+ */
+app.get('/api/funds/report/:traceId', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `report-generate-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { traceId } = req.params;
+  console.log(`[${requestId}] Generating recovery report for trace: ${traceId}`);
+
+  try {
+    const report = await fundTracker.generateRecoveryReport(traceId);
+
+    if (!report) {
+      res.status(404).json({ error: 'Trace not found' });
+      return;
+    }
+
+    console.log(`[${requestId}] Report generated: ${report.recoveryProbability}% recovery probability`);
+    res.json(report);
+  } catch (error: any) {
+    console.error(`[${requestId}] Error generating report:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Create freeze request for exchange
+ * POST /api/funds/freeze-request
+ */
+app.post('/api/funds/freeze-request', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `freeze-create-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { traceId, exchangeDeposit, victimInfo } = req.body;
+  console.log(`[${requestId}] Creating freeze request for trace: ${traceId}`);
+
+  try {
+    if (!traceId || !exchangeDeposit) {
+      res.status(400).json({ error: 'traceId and exchangeDeposit are required' });
+      return;
+    }
+
+    const request = await fundTracker.createFreezeRequest(traceId, exchangeDeposit);
+
+    // Generate template if victimInfo provided
+    let template: string | undefined;
+    if (victimInfo) {
+      template = fundTracker.generateFreezeRequestTemplate(request, victimInfo);
+    }
+
+    console.log(`[${requestId}] Freeze request created: ${request.requestId}`);
+    res.json({
+      success: true,
+      request,
+      template
+    });
+  } catch (error: any) {
+    console.error(`[${requestId}] Error creating freeze request:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================
+// Alert Management Endpoints
+// ============================================
+
+/**
+ * Create or update alert subscription
+ * POST /api/alerts/subscribe
+ */
+app.post('/api/alerts/subscribe', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `subscribe-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { walletAddress, channels, userId, severityFilter, alertTypes } = req.body;
+  console.log(`[${requestId}] Creating alert subscription for wallet: ${walletAddress}`);
+
+  try {
+    if (!walletAddress || !channels) {
+      res.status(400).json({ error: 'walletAddress and channels are required' });
+      return;
+    }
+
+    const subscription = await alertManager.createSubscription(walletAddress, channels, {
+      userId,
+      severityFilter,
+      alertTypes
+    });
+
+    console.log(`[${requestId}] Subscription created: ${subscription.subscriptionId}`);
+    res.json({
+      success: true,
+      subscription
+    });
+  } catch (error: any) {
+    console.error(`[${requestId}] Error creating subscription:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Get alert subscription for wallet
+ * GET /api/alerts/subscription/:address
+ */
+app.get('/api/alerts/subscription/:address', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `subscription-get-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { address } = req.params;
+  console.log(`[${requestId}] Fetching subscription for wallet: ${address}`);
+
+  try {
+    const subscription = await alertManager.getSubscription(address);
+
+    if (!subscription) {
+      res.status(404).json({ error: 'Subscription not found' });
+      return;
+    }
+
+    res.json(subscription);
+  } catch (error: any) {
+    console.error(`[${requestId}] Error fetching subscription:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Deactivate alert subscription
+ * DELETE /api/alerts/subscription/:address
+ */
+app.delete('/api/alerts/subscription/:address', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `subscription-delete-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { address } = req.params;
+  console.log(`[${requestId}] Deactivating subscription for wallet: ${address}`);
+
+  try {
+    await alertManager.deactivateSubscription(address);
+
+    res.json({
+      success: true,
+      message: 'Subscription deactivated'
+    });
+  } catch (error: any) {
+    console.error(`[${requestId}] Error deactivating subscription:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Get notification history for wallet
+ * GET /api/alerts/history/:address
+ */
+app.get('/api/alerts/history/:address', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `notifications-history-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { address } = req.params;
+  const { limit = 50 } = req.query;
+  console.log(`[${requestId}] Fetching notification history for wallet: ${address}`);
+
+  try {
+    const notifications = await alertManager.getNotificationHistory(address, parseInt(limit as string));
+
+    res.json({
+      walletAddress: address,
+      notificationCount: notifications.length,
+      notifications
+    });
+  } catch (error: any) {
+    console.error(`[${requestId}] Error fetching notifications:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Get known exchanges list
+ * GET /api/data/exchanges
+ */
+app.get('/api/data/exchanges', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `exchanges-get-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  console.log(`[${requestId}] Fetching known exchanges`);
+
+  try {
+    const result = await db.pool.executeQuery(
+      `SELECT address, exchange_name, exchange_type, is_verified FROM known_exchanges ORDER BY exchange_name`
+    );
+
+    res.json({
+      count: result.rows.length,
+      exchanges: result.rows
+    });
+  } catch (error: any) {
+    console.error(`[${requestId}] Error fetching exchanges:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Get known bridges list
+ * GET /api/data/bridges
+ */
+app.get('/api/data/bridges', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `bridges-get-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  console.log(`[${requestId}] Fetching known bridges`);
+
+  try {
+    const result = await db.pool.executeQuery(
+      `SELECT address, bridge_name, destination_chains, is_active FROM known_bridges ORDER BY bridge_name`
+    );
+
+    res.json({
+      count: result.rows.length,
+      bridges: result.rows
+    });
+  } catch (error: any) {
+    console.error(`[${requestId}] Error fetching bridges:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================
+// WalletShield Recovery Endpoints (Phase 3)
+// Exchange Coordination & Freeze Requests
+// ============================================
+
+import { exchangeCoordinator } from "./services/exchange-coordinator";
+
+/**
+ * List all exchange contacts
+ * GET /api/exchanges/contacts
+ */
+app.get('/api/exchanges/contacts', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `exchanges-contacts-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  console.log(`[${requestId}] Fetching exchange contacts`);
+
+  try {
+    const contacts = await exchangeCoordinator.listExchangeContacts();
+
+    res.json({
+      count: contacts.length,
+      contacts
+    });
+  } catch (error: any) {
+    console.error(`[${requestId}] Error fetching exchange contacts:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Get exchange contact by ID
+ * GET /api/exchanges/contacts/:exchangeId
+ */
+app.get('/api/exchanges/contacts/:exchangeId', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `exchange-contact-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { exchangeId } = req.params;
+  console.log(`[${requestId}] Fetching exchange contact: ${exchangeId}`);
+
+  try {
+    const contact = await exchangeCoordinator.getExchangeContact(exchangeId);
+
+    if (!contact) {
+      res.status(404).json({ error: 'Exchange contact not found' });
+      return;
+    }
+
+    res.json(contact);
+  } catch (error: any) {
+    console.error(`[${requestId}] Error fetching exchange contact:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Get exchange by deposit address
+ * GET /api/exchanges/by-address/:address
+ */
+app.get('/api/exchanges/by-address/:address', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `exchange-by-addr-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { address } = req.params;
+  console.log(`[${requestId}] Fetching exchange by address: ${address}`);
+
+  try {
+    const contact = await exchangeCoordinator.getExchangeByAddress(address);
+
+    if (!contact) {
+      res.status(404).json({ error: 'Exchange not found for this address' });
+      return;
+    }
+
+    res.json(contact);
+  } catch (error: any) {
+    console.error(`[${requestId}] Error fetching exchange by address:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Create a new freeze request
+ * POST /api/freeze-requests
+ */
+app.post('/api/freeze-requests', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `freeze-create-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { traceId, exchangeName, depositAddress, depositSignature, amount, victimWallet, tokenMint, tokenSymbol } = req.body;
+  console.log(`[${requestId}] Creating freeze request for trace: ${traceId}`);
+
+  try {
+    if (!traceId || !exchangeName || !depositAddress || !depositSignature || !amount || !victimWallet) {
+      res.status(400).json({
+        error: 'Missing required fields: traceId, exchangeName, depositAddress, depositSignature, amount, victimWallet'
+      });
+      return;
+    }
+
+    const request = await exchangeCoordinator.createFreezeRequest(
+      traceId,
+      exchangeName,
+      depositAddress,
+      depositSignature,
+      amount,
+      victimWallet,
+      tokenMint,
+      tokenSymbol
+    );
+
+    console.log(`[${requestId}] Freeze request created: ${request.requestId}`);
+    res.status(201).json({
+      success: true,
+      request
+    });
+  } catch (error: any) {
+    console.error(`[${requestId}] Error creating freeze request:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * List all pending freeze requests
+ * GET /api/freeze-requests/pending
+ * NOTE: This must be before /:requestId route
+ */
+app.get('/api/freeze-requests/pending', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `freeze-pending-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  console.log(`[${requestId}] Fetching pending freeze requests`);
+
+  try {
+    const requests = await exchangeCoordinator.listPendingRequests();
+
+    res.json({
+      count: requests.length,
+      requests
+    });
+  } catch (error: any) {
+    console.error(`[${requestId}] Error fetching pending requests:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Get requests needing follow-up
+ * GET /api/freeze-requests/follow-up
+ * NOTE: This must be before /:requestId route
+ */
+app.get('/api/freeze-requests/follow-up', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `follow-up-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  console.log(`[${requestId}] Fetching requests needing follow-up`);
+
+  try {
+    const requests = await exchangeCoordinator.getRequestsNeedingFollowUp();
+
+    res.json({
+      count: requests.length,
+      requests
+    });
+  } catch (error: any) {
+    console.error(`[${requestId}] Error fetching follow-up requests:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Get freeze request statistics
+ * GET /api/freeze-requests/statistics
+ * NOTE: This must be before /:requestId route
+ */
+app.get('/api/freeze-requests/statistics', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `freeze-stats-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  console.log(`[${requestId}] Fetching freeze request statistics`);
+
+  try {
+    const statistics = await exchangeCoordinator.getStatistics();
+
+    res.json(statistics);
+  } catch (error: any) {
+    console.error(`[${requestId}] Error fetching statistics:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * List freeze requests for a trace
+ * GET /api/freeze-requests/trace/:traceId
+ * NOTE: This must be before /:requestId route
+ */
+app.get('/api/freeze-requests/trace/:traceId', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `freeze-list-trace-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { traceId } = req.params;
+  console.log(`[${requestId}] Fetching freeze requests for trace: ${traceId}`);
+
+  try {
+    const requests = await exchangeCoordinator.listFreezeRequestsForTrace(traceId);
+
+    res.json({
+      traceId,
+      count: requests.length,
+      requests
+    });
+  } catch (error: any) {
+    console.error(`[${requestId}] Error fetching freeze requests:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Get freeze request by ID
+ * GET /api/freeze-requests/:requestId
+ * NOTE: This MUST be after all specific freeze-requests routes
+ */
+app.get('/api/freeze-requests/:requestId', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `freeze-get-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { requestId: freezeRequestId } = req.params;
+  console.log(`[${requestId}] Fetching freeze request: ${freezeRequestId}`);
+
+  try {
+    const request = await exchangeCoordinator.getFreezeRequest(freezeRequestId);
+
+    if (!request) {
+      res.status(404).json({ error: 'Freeze request not found' });
+      return;
+    }
+
+    res.json(request);
+  } catch (error: any) {
+    console.error(`[${requestId}] Error fetching freeze request:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Update freeze request status
+ * PATCH /api/freeze-requests/:requestId/status
+ */
+app.patch('/api/freeze-requests/:requestId/status', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const reqId = `freeze-status-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { requestId } = req.params;
+  const { status, exchangeTicketId, exchangeResponse } = req.body;
+  console.log(`[${reqId}] Updating freeze request status: ${requestId} -> ${status}`);
+
+  try {
+    if (!status) {
+      res.status(400).json({ error: 'status is required' });
+      return;
+    }
+
+    await exchangeCoordinator.updateRequestStatus(requestId, status, exchangeTicketId, exchangeResponse);
+
+    console.log(`[${reqId}] Status updated successfully`);
+    res.json({
+      success: true,
+      message: `Status updated to ${status}`
+    });
+  } catch (error: any) {
+    console.error(`[${reqId}] Error updating status:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Generate evidence package for a freeze request
+ * POST /api/freeze-requests/:requestId/evidence
+ */
+app.post('/api/freeze-requests/:requestId/evidence', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const reqId = `evidence-gen-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { requestId } = req.params;
+  const { traceId, victimWallet, victimStatement } = req.body;
+  console.log(`[${reqId}] Generating evidence package for request: ${requestId}`);
+
+  try {
+    if (!traceId || !victimWallet) {
+      res.status(400).json({ error: 'traceId and victimWallet are required' });
+      return;
+    }
+
+    const evidencePackage = await exchangeCoordinator.generateEvidencePackage(
+      requestId,
+      traceId,
+      victimWallet,
+      victimStatement
+    );
+
+    console.log(`[${reqId}] Evidence package generated: ${evidencePackage.packageId}`);
+    res.status(201).json({
+      success: true,
+      evidencePackage
+    });
+  } catch (error: any) {
+    console.error(`[${reqId}] Error generating evidence:`, error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+/**
+ * Get evidence package by ID
+ * GET /api/evidence/:packageId
+ */
+app.get('/api/evidence/:packageId', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const reqId = `evidence-get-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { packageId } = req.params;
+  console.log(`[${reqId}] Fetching evidence package: ${packageId}`);
+
+  try {
+    const evidencePackage = await exchangeCoordinator.getEvidencePackage(packageId);
+
+    if (!evidencePackage) {
+      res.status(404).json({ error: 'Evidence package not found' });
+      return;
+    }
+
+    res.json(evidencePackage);
+  } catch (error: any) {
+    console.error(`[${reqId}] Error fetching evidence:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Generate freeze request email template
+ * POST /api/freeze-requests/:requestId/email-template
+ */
+app.post('/api/freeze-requests/:requestId/email-template', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const reqId = `email-template-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { requestId } = req.params;
+  console.log(`[${reqId}] Generating email template for request: ${requestId}`);
+
+  try {
+    const request = await exchangeCoordinator.getFreezeRequest(requestId);
+    if (!request) {
+      res.status(404).json({ error: 'Freeze request not found' });
+      return;
+    }
+
+    if (!request.evidencePackageId) {
+      res.status(400).json({ error: 'Evidence package must be generated first' });
+      return;
+    }
+
+    const evidencePackage = await exchangeCoordinator.getEvidencePackage(request.evidencePackageId);
+    if (!evidencePackage) {
+      res.status(404).json({ error: 'Evidence package not found' });
+      return;
+    }
+
+    const exchangeContact = await exchangeCoordinator.getExchangeContact(request.exchangeId);
+    if (!exchangeContact) {
+      res.status(404).json({ error: 'Exchange contact not found' });
+      return;
+    }
+
+    const template = exchangeCoordinator.generateFreezeRequestEmail(request, evidencePackage, exchangeContact);
+
+    console.log(`[${reqId}] Email template generated`);
+    res.json({
+      success: true,
+      template,
+      recipientEmail: exchangeContact.complianceEmail || exchangeContact.emergencyEmail
+    });
+  } catch (error: any) {
+    console.error(`[${reqId}] Error generating email template:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Record follow-up action
+ * POST /api/freeze-requests/:requestId/follow-up
+ */
+app.post('/api/freeze-requests/:requestId/follow-up', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const reqId = `record-follow-up-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { requestId } = req.params;
+  const { nextFollowUpHours = 24 } = req.body;
+  console.log(`[${reqId}] Recording follow-up for request: ${requestId}`);
+
+  try {
+    await exchangeCoordinator.recordFollowUp(requestId, nextFollowUpHours);
+
+    res.json({
+      success: true,
+      message: `Follow-up recorded, next follow-up in ${nextFollowUpHours} hours`
+    });
+  } catch (error: any) {
+    console.error(`[${reqId}] Error recording follow-up:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================
+// WalletShield Recovery Endpoints (Phase 5)
+// Transaction Simulation & Prevention
+// ============================================
+
+import { transactionSimulator } from "./services/transaction-simulator";
+
+/**
+ * Simulate a transaction before signing
+ * POST /api/simulation/simulate
+ */
+app.post('/api/simulation/simulate', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `simulate-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { serializedTransaction, walletAddress, storeResult = true } = req.body;
+  console.log(`[${requestId}] Simulating transaction for wallet: ${walletAddress}`);
+
+  try {
+    if (!serializedTransaction || !walletAddress) {
+      res.status(400).json({ error: 'serializedTransaction and walletAddress are required' });
+      return;
+    }
+
+    const result = await transactionSimulator.simulateTransaction(
+      serializedTransaction,
+      walletAddress,
+      storeResult
+    );
+
+    console.log(`[${requestId}] Simulation complete: risk=${result.riskLevel}, score=${result.riskScore}`);
+    res.json({
+      success: true,
+      simulation: result
+    });
+  } catch (error: any) {
+    console.error(`[${requestId}] Error simulating transaction:`, error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+/**
+ * Quick risk check for a transaction (lightweight)
+ * POST /api/simulation/quick-check
+ */
+app.post('/api/simulation/quick-check', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `quick-check-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { serializedTransaction } = req.body;
+  console.log(`[${requestId}] Quick risk check`);
+
+  try {
+    if (!serializedTransaction) {
+      res.status(400).json({ error: 'serializedTransaction is required' });
+      return;
+    }
+
+    const result = await transactionSimulator.quickRiskCheck(serializedTransaction);
+
+    console.log(`[${requestId}] Quick check complete: risk=${result.riskLevel}, score=${result.riskScore}`);
+    res.json({
+      success: true,
+      check: result
+    });
+  } catch (error: any) {
+    console.error(`[${requestId}] Error in quick check:`, error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+/**
+ * Get simulation history for a wallet
+ * GET /api/simulation/history/:walletAddress
+ */
+app.get('/api/simulation/history/:walletAddress', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `sim-history-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { walletAddress } = req.params;
+  const { limit = 50 } = req.query;
+  console.log(`[${requestId}] Fetching simulation history for wallet: ${walletAddress}`);
+
+  try {
+    const history = await transactionSimulator.getSimulationHistory(
+      walletAddress,
+      parseInt(limit as string)
+    );
+
+    res.json({
+      walletAddress,
+      count: history.length,
+      simulations: history
+    });
+  } catch (error: any) {
+    console.error(`[${requestId}] Error fetching simulation history:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Get a specific simulation by ID
+ * GET /api/simulation/:simulationId
+ */
+app.get('/api/simulation/:simulationId', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `sim-get-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { simulationId } = req.params;
+  console.log(`[${requestId}] Fetching simulation: ${simulationId}`);
+
+  try {
+    const simulation = await transactionSimulator.getSimulation(simulationId);
+
+    if (!simulation) {
+      res.status(404).json({ error: 'Simulation not found' });
+      return;
+    }
+
+    res.json(simulation);
+  } catch (error: any) {
+    console.error(`[${requestId}] Error fetching simulation:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Get list of verified programs
+ * GET /api/simulation/programs
+ * NOTE: This must be before /:simulationId route - but we define it here, Express handles it correctly
+ */
+app.get('/api/programs/verified', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `programs-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  console.log(`[${requestId}] Fetching verified programs`);
+
+  try {
+    const result = await db.pool.executeQuery(
+      `SELECT program_id, program_name, category, description, website_url, is_verified, is_audited, risk_level
+       FROM verified_programs
+       ORDER BY program_name`
+    );
+
+    res.json({
+      count: result.rows.length,
+      programs: result.rows
+    });
+  } catch (error: any) {
+    console.error(`[${requestId}] Error fetching verified programs:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Check if a program is verified
+ * GET /api/programs/:programId
+ */
+app.get('/api/programs/:programId', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `program-check-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { programId } = req.params;
+  console.log(`[${requestId}] Checking program: ${programId}`);
+
+  try {
+    const result = await db.pool.executeQuery(
+      `SELECT program_id, program_name, category, description, website_url, is_verified, is_audited, audit_url, risk_level
+       FROM verified_programs
+       WHERE program_id = $1`,
+      [programId]
+    );
+
+    if (result.rows.length === 0) {
+      res.json({
+        programId,
+        isVerified: false,
+        isKnown: false,
+        message: 'Program not found in verified database'
+      });
+      return;
+    }
+
+    res.json({
+      ...result.rows[0],
+      isKnown: true
+    });
+  } catch (error: any) {
+    console.error(`[${requestId}] Error checking program:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Get simulation alerts for a wallet
+ * GET /api/simulation/alerts/:walletAddress
+ */
+app.get('/api/simulation/alerts/:walletAddress', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `sim-alerts-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { walletAddress } = req.params;
+  const { limit = 50, acknowledged } = req.query;
+  console.log(`[${requestId}] Fetching simulation alerts for wallet: ${walletAddress}`);
+
+  try {
+    let query = `SELECT * FROM simulation_alerts WHERE wallet_address = $1`;
+    const params: any[] = [walletAddress];
+
+    if (acknowledged !== undefined) {
+      query += ` AND is_acknowledged = $2`;
+      params.push(acknowledged === 'true');
+    }
+
+    query += ` ORDER BY created_at DESC LIMIT $${params.length + 1}`;
+    params.push(parseInt(limit as string));
+
+    const result = await db.pool.executeQuery(query, params);
+
+    res.json({
+      walletAddress,
+      count: result.rows.length,
+      alerts: result.rows
+    });
+  } catch (error: any) {
+    console.error(`[${requestId}] Error fetching simulation alerts:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Acknowledge a simulation alert
+ * POST /api/simulation/alerts/:alertId/acknowledge
+ */
+app.post('/api/simulation/alerts/:alertId/acknowledge', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `ack-sim-alert-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { alertId } = req.params;
+  console.log(`[${requestId}] Acknowledging simulation alert: ${alertId}`);
+
+  try {
+    await db.pool.executeQuery(
+      `UPDATE simulation_alerts SET is_acknowledged = true, acknowledged_at = NOW() WHERE alert_id = $1`,
+      [alertId]
+    );
+
+    res.json({
+      success: true,
+      message: 'Alert acknowledged'
+    });
+  } catch (error: any) {
+    console.error(`[${requestId}] Error acknowledging alert:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Start the server
 app.listen(PORT, () => {
-  console.log(`🚀 Solana Dust Detector API running on port ${PORT}`);
+  console.log(`🚀 Lavinth Recovery API running on port ${PORT}`);
   console.log(`📊 Debug logging enabled for all endpoints`);
   console.log(`🔍 Request IDs will be generated for tracking`);
-  console.log(`🆕 New endpoints added: /api/threat-metrics, /api/attack-patterns, /api/network-graph, /api/top-threats, /api/dusting-candidates, /api/system-status`);
+  console.log(`🆕 Phase 1: /api/approvals/*, /api/revocation/*, /api/recovery/*, /api/security-profile/*`);
+  console.log(`🆕 Phase 2: /api/compromise/*, /api/funds/*, /api/alerts/*, /api/data/*`);
+  console.log(`🆕 Phase 3: /api/exchanges/*, /api/freeze-requests/*, /api/evidence/*`);
+  console.log(`🆕 Phase 5: /api/simulation/*, /api/programs/*`);
 });
 
 // Export the Express app

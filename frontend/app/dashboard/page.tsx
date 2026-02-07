@@ -7,6 +7,10 @@ import NetworkAnalysisTab from "@/components/dashboard/network-analysis-tab";
 import MLAnalyticsTab from "@/components/dashboard/ml-analytics-tab";
 import TransactionsTab from "@/components/dashboard/transactions-tab";
 import SettingsApiTab from "@/components/dashboard/settings-api-tab";
+import WalletSecurityTab from "@/components/dashboard/wallet-security-tab";
+import RecoveryTab from "@/components/dashboard/recovery-tab";
+import FreezeRequestsTab from "@/components/dashboard/freeze-requests-tab";
+import SimulationTab from "@/components/dashboard/simulation-tab";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -106,6 +110,14 @@ function DashboardContent() {
 
   const renderContent = () => {
     switch (activeTab) {
+      case "wallet-security":
+        return <WalletSecurityTab />;
+      case "simulation":
+        return <SimulationTab />;
+      case "recovery":
+        return <RecoveryTab />;
+      case "freeze-requests":
+        return <FreezeRequestsTab />;
       case "threat-intelligence":
         return <ThreatIntelligenceTab />;
       case "network-analysis":

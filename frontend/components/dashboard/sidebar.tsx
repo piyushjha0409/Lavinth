@@ -13,6 +13,7 @@ import {
 import {
   BarChart3,
   Shield,
+  ShieldCheck,
   Users,
   AlertTriangle,
   Activity,
@@ -24,6 +25,9 @@ import {
   Zap,
   Settings,
   Brain,
+  Radar,
+  Snowflake,
+  PlayCircle,
 } from "lucide-react";
 import { SidebarUser } from "./sidebar-user";
 import Link from "next/link";
@@ -38,6 +42,30 @@ const navigation = [
     href: "/dashboard",
     tab: "overview",
     icon: BarChart3,
+  },
+  {
+    name: "Wallet Security",
+    href: "/dashboard?tab=wallet-security",
+    tab: "wallet-security",
+    icon: ShieldCheck,
+  },
+  {
+    name: "Transaction Simulation",
+    href: "/dashboard?tab=simulation",
+    tab: "simulation",
+    icon: PlayCircle,
+  },
+  {
+    name: "Recovery",
+    href: "/dashboard?tab=recovery",
+    tab: "recovery",
+    icon: Radar,
+  },
+  {
+    name: "Freeze Requests",
+    href: "/dashboard?tab=freeze-requests",
+    tab: "freeze-requests",
+    icon: Snowflake,
   },
   {
     name: "Threat Intelligence",
