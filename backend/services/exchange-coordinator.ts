@@ -8,6 +8,7 @@
 import * as dotenv from "dotenv";
 import { v4 as uuidv4 } from "uuid";
 import pool from "../db/config";
+import type { ThreatIntelligenceService } from "./threat-intelligence";
 
 dotenv.config();
 
@@ -144,9 +145,17 @@ export interface FreezeRequestTemplate {
  */
 export class ExchangeCoordinator {
   private exchangeContacts: Map<string, ExchangeContact> = new Map();
+  private threatIntel: ThreatIntelligenceService | null = null;
 
   constructor() {
     this.loadExchangeContacts();
+  }
+
+  /**
+   * Set the threat intelligence service for Arkham entity fallback
+   */
+  setThreatIntel(service: ThreatIntelligenceService): void {
+    this.threatIntel = service;
   }
 
   /**
@@ -241,28 +250,68 @@ export class ExchangeCoordinator {
         [address]
       );
 
-      if (result.rows.length === 0) return null;
+      if (result.rows.length > 0) {
+        const row = result.rows[0];
+        return {
+          exchangeId: row.exchange_id,
+          exchangeName: row.exchange_name,
+          exchangeType: row.exchange_type,
+          complianceEmail: row.compliance_email,
+          compliancePhone: row.compliance_phone,
+          emergencyEmail: row.emergency_email,
+          apiEndpoint: row.api_endpoint,
+          responseTimeSla: row.response_time_sla || 24,
+          freezeCapability: row.freeze_capability,
+          kycRequired: row.kyc_required,
+          minFreezeAmount: parseFloat(row.min_freeze_amount || 0),
+          supportedTokens: row.supported_tokens || [],
+          documentationUrl: row.documentation_url,
+          notes: row.notes,
+          isVerified: row.is_verified,
+          avgResponseTime: row.avg_response_time,
+          successRate: row.success_rate,
+        };
+      }
 
-      const row = result.rows[0];
-      return {
-        exchangeId: row.exchange_id,
-        exchangeName: row.exchange_name,
-        exchangeType: row.exchange_type,
-        complianceEmail: row.compliance_email,
-        compliancePhone: row.compliance_phone,
-        emergencyEmail: row.emergency_email,
-        apiEndpoint: row.api_endpoint,
-        responseTimeSla: row.response_time_sla || 24,
-        freezeCapability: row.freeze_capability,
-        kycRequired: row.kyc_required,
-        minFreezeAmount: parseFloat(row.min_freeze_amount || 0),
-        supportedTokens: row.supported_tokens || [],
-        documentationUrl: row.documentation_url,
-        notes: row.notes,
-        isVerified: row.is_verified,
-        avgResponseTime: row.avg_response_time,
-        successRate: row.success_rate,
-      };
+      // Arkham fallback: try entity resolution for unknown addresses
+      if (this.threatIntel) {
+        try {
+          const entity = await this.threatIntel.lookupEntityCached(address);
+          if (entity?.entityType?.toLowerCase().includes("exchange") && entity.entityName) {
+            // Check if we have this exchange by name
+            const byName = await pool.executeQuery(
+              `SELECT * FROM exchange_contacts WHERE LOWER(exchange_name) = LOWER($1)`,
+              [entity.entityName]
+            );
+            if (byName.rows.length > 0) {
+              const row = byName.rows[0];
+              return {
+                exchangeId: row.exchange_id,
+                exchangeName: row.exchange_name,
+                exchangeType: row.exchange_type,
+                complianceEmail: row.compliance_email,
+                compliancePhone: row.compliance_phone,
+                emergencyEmail: row.emergency_email,
+                apiEndpoint: row.api_endpoint,
+                responseTimeSla: row.response_time_sla || 24,
+                freezeCapability: row.freeze_capability,
+                kycRequired: row.kyc_required,
+                minFreezeAmount: parseFloat(row.min_freeze_amount || 0),
+                supportedTokens: row.supported_tokens || [],
+                documentationUrl: row.documentation_url,
+                notes: row.notes,
+                isVerified: row.is_verified,
+                avgResponseTime: row.avg_response_time,
+                successRate: row.success_rate,
+              };
+            }
+          }
+        } catch (err) {
+          // Arkham fallback failed, return null
+        }
+      }
+
+      return null;
     } catch (error) {
       console.error("Error getting exchange by address:", error);
       return null;

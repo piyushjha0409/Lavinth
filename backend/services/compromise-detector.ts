@@ -14,6 +14,7 @@ import {
 import * as dotenv from "dotenv";
 import { v4 as uuidv4 } from "uuid";
 import pool from "../db/config";
+import type { ThreatIntelligenceService } from "./threat-intelligence";
 
 dotenv.config();
 
@@ -114,12 +115,27 @@ export class CompromiseDetector {
   private knownDrainers: Set<string> = new Set();
   private knownExchanges: Map<string, string> = new Map();
   private knownBridges: Map<string, string> = new Map();
+  private threatIntel: ThreatIntelligenceService | null = null;
 
   constructor() {
     this.connections = RPC_ENDPOINTS.map(
       (endpoint) => new Connection(endpoint, "confirmed")
     );
     this.loadKnownAddresses();
+  }
+
+  /**
+   * Set the threat intelligence service for enhanced detection
+   */
+  setThreatIntel(service: ThreatIntelligenceService): void {
+    this.threatIntel = service;
+  }
+
+  /**
+   * Refresh known addresses from database (public wrapper)
+   */
+  async refreshKnownAddresses(): Promise<void> {
+    await this.loadKnownAddresses();
   }
 
   /**
@@ -401,6 +417,30 @@ export class CompromiseDetector {
       if (counterparty && this.knownBridges.has(counterparty)) {
         suspicionReasons.push(`Bridge transfer: ${this.knownBridges.get(counterparty)}`);
         riskScore += 15;
+      }
+
+      // Helius enhanced parsing for richer type classification
+      if (this.threatIntel) {
+        try {
+          const enhanced = await this.threatIntel.parseTransactionSignatures([sigInfo.signature]);
+          if (enhanced.length > 0) {
+            const eTx = enhanced[0];
+            if (eTx.type && eTx.type !== "UNKNOWN") {
+              transactionType = eTx.type.toLowerCase();
+            }
+            // Extract counterparty from native transfers if not already found
+            if (!counterparty && eTx.nativeTransfers?.length > 0) {
+              const outTransfer = eTx.nativeTransfers.find(
+                (t) => t.fromUserAccount === walletAddress
+              );
+              if (outTransfer) {
+                counterparty = outTransfer.toUserAccount;
+              }
+            }
+          }
+        } catch (err) {
+          // Helius enhancement failed, continue with raw parsing
+        }
       }
 
       const isSuspicious = suspicionReasons.length > 0;

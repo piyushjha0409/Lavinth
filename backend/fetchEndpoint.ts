@@ -21,6 +21,18 @@ app.use(
 );
 app.use(express.json());
 
+// Helper: sanitize pagination params to prevent Postgres errors
+function sanitizeLimit(val: any, defaultVal = 10, max = 10000): number {
+  const n = parseInt(val, 10);
+  if (isNaN(n) || n < 1) return defaultVal;
+  return Math.min(n, max);
+}
+function sanitizeOffset(val: any, defaultVal = 0): number {
+  const n = parseInt(val, 10);
+  if (isNaN(n) || n < 0) return defaultVal;
+  return n;
+}
+
 app.get(
   "/api/dust-transactions",
   validateToken,
@@ -133,8 +145,8 @@ app.get(
       queryBase += ` ORDER BY ${sortField} ${order}`;
       queryBase += ` LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
 
-      const limitValue = Number(limit);
-      const offsetValue = Number(offset);
+      const limitValue = sanitizeLimit(limit);
+      const offsetValue = sanitizeOffset(offset);
       const paginationParams = [limitValue, offsetValue];
       const queryParams = [...params, ...paginationParams];
 
@@ -221,8 +233,8 @@ app.get(
       queryBase += ` ORDER BY ${sortField} ${order}`;
       queryBase += " LIMIT $1 OFFSET $2";
 
-      const limitValue = Number(limit);
-      const offsetValue = Number(offset);
+      const limitValue = sanitizeLimit(limit);
+      const offsetValue = sanitizeOffset(offset);
       const params = [limitValue, offsetValue];
 
       // Execute the query
@@ -313,8 +325,8 @@ app.get(
       queryBase += ` ORDER BY ${sortField} ${order}`;
       queryBase += " LIMIT $1 OFFSET $2";
 
-      const limitValue = Number(limit);
-      const offsetValue = Number(offset);
+      const limitValue = sanitizeLimit(limit);
+      const offsetValue = sanitizeOffset(offset);
       const params = [limitValue, offsetValue];
 
       // Execute the query
@@ -550,8 +562,8 @@ app.get(
       queryBase += ` ORDER BY ${sortField} ${order}`;
       queryBase += ` LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
 
-      const limitValue = Number(limit);
-      const offsetValue = Number(offset);
+      const limitValue = sanitizeLimit(limit);
+      const offsetValue = sanitizeOffset(offset);
       const paginationParams = [limitValue, offsetValue];
       const queryParams = [...params, ...paginationParams];
 
@@ -649,8 +661,8 @@ app.get(
       queryBase += ` ORDER BY ${sortField} ${order}`;
       queryBase += ` LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
 
-      const limitValue = Number(limit);
-      const offsetValue = Number(offset);
+      const limitValue = sanitizeLimit(limit);
+      const offsetValue = sanitizeOffset(offset);
       const paginationParams = [limitValue, offsetValue];
       const queryParams = [...params, ...paginationParams];
 
@@ -1481,7 +1493,7 @@ app.get('/api/compromise/alerts/:address', validateApiKey, async (req: Request, 
   console.log(`[${requestId}] Fetching alerts for wallet: ${address}`);
 
   try {
-    const alerts = await compromiseDetector.getAlerts(address, parseInt(limit as string));
+    const alerts = await compromiseDetector.getAlerts(address, sanitizeLimit(limit, 50));
 
     res.json({
       walletAddress: address,
@@ -1527,7 +1539,7 @@ app.get('/api/compromise/transactions/:address', validateApiKey, async (req: Req
   console.log(`[${requestId}] Fetching transactions for wallet: ${address}`);
 
   try {
-    const transactions = await compromiseDetector.getTransactions(address, parseInt(limit as string));
+    const transactions = await compromiseDetector.getTransactions(address, sanitizeLimit(limit, 50));
 
     res.json({
       walletAddress: address,
@@ -1772,7 +1784,7 @@ app.get('/api/alerts/history/:address', validateApiKey, async (req: Request, res
   console.log(`[${requestId}] Fetching notification history for wallet: ${address}`);
 
   try {
-    const notifications = await alertManager.getNotificationHistory(address, parseInt(limit as string));
+    const notifications = await alertManager.getNotificationHistory(address, sanitizeLimit(limit, 50));
 
     res.json({
       walletAddress: address,
@@ -2239,11 +2251,10 @@ app.post('/api/simulation/simulate', validateApiKey, async (req: Request, res: R
 
     const result = await transactionSimulator.simulateTransaction(
       serializedTransaction,
-      walletAddress,
-      storeResult
+      walletAddress
     );
 
-    console.log(`[${requestId}] Simulation complete: risk=${result.riskLevel}, score=${result.riskScore}`);
+    console.log(`[${requestId}] Simulation complete: risk=${result.riskLevel}`);
     res.json({
       success: true,
       simulation: result
@@ -2271,7 +2282,7 @@ app.post('/api/simulation/quick-check', validateApiKey, async (req: Request, res
 
     const result = await transactionSimulator.quickRiskCheck(serializedTransaction);
 
-    console.log(`[${requestId}] Quick check complete: risk=${result.riskLevel}, score=${result.riskScore}`);
+    console.log(`[${requestId}] Quick check complete: risk=${result.riskLevel}`);
     res.json({
       success: true,
       check: result
@@ -2295,7 +2306,7 @@ app.get('/api/simulation/history/:walletAddress', validateApiKey, async (req: Re
   try {
     const history = await transactionSimulator.getSimulationHistory(
       walletAddress,
-      parseInt(limit as string)
+      sanitizeLimit(limit, 50)
     );
 
     res.json({
@@ -2319,12 +2330,26 @@ app.get('/api/simulation/:simulationId', validateApiKey, async (req: Request, re
   console.log(`[${requestId}] Fetching simulation: ${simulationId}`);
 
   try {
-    const simulation = await transactionSimulator.getSimulation(simulationId);
+    const simResult = await db.pool.executeQuery(
+      `SELECT * FROM transaction_simulations WHERE simulation_id = $1`,
+      [simulationId]
+    );
 
-    if (!simulation) {
+    if (simResult.rows.length === 0) {
       res.status(404).json({ error: 'Simulation not found' });
       return;
     }
+
+    const row = simResult.rows[0];
+    const simulation = {
+      simulationId: row.simulation_id,
+      success: row.success,
+      riskLevel: row.risk_level,
+      riskScore: row.risk_score,
+      warnings: row.warnings || [],
+      effects: row.effects || [],
+      simulatedAt: row.simulated_at,
+    };
 
     res.json(simulation);
   } catch (error: any) {
@@ -2416,7 +2441,7 @@ app.get('/api/simulation/alerts/:walletAddress', validateApiKey, async (req: Req
     }
 
     query += ` ORDER BY created_at DESC LIMIT $${params.length + 1}`;
-    params.push(parseInt(limit as string));
+    params.push(sanitizeLimit(limit, 50));
 
     const result = await db.pool.executeQuery(query, params);
 
@@ -2456,6 +2481,197 @@ app.post('/api/simulation/alerts/:alertId/acknowledge', validateApiKey, async (r
   }
 });
 
+// ============================================
+// WalletShield Recovery Endpoints (Phase 6)
+// Threat Intelligence Data Source Integration
+// ============================================
+
+import { threatIntelligenceService } from "./services/threat-intelligence";
+
+// Wire up threat intelligence to existing services
+compromiseDetector.setThreatIntel(threatIntelligenceService);
+fundTracker.setThreatIntel(threatIntelligenceService);
+exchangeCoordinator.setThreatIntel(threatIntelligenceService);
+
+/**
+ * Trigger threat intel sync (all or specific source)
+ * POST /api/threat-intel/sync
+ */
+app.post('/api/threat-intel/sync', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `threat-sync-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { sourceId } = req.body;
+  console.log(`[${requestId}] Triggering threat intel sync${sourceId ? `: ${sourceId}` : ' (all)'}`);
+
+  try {
+    if (sourceId) {
+      const result = await threatIntelligenceService.syncSource(sourceId);
+
+      // Refresh service caches after sync
+      await Promise.all([
+        compromiseDetector.refreshKnownAddresses(),
+        fundTracker.refreshKnownAddresses(),
+      ]);
+
+      console.log(`[${requestId}] Source sync complete: ${result.addressesNew} new, ${result.addressesUpdated} updated`);
+      res.json({ success: true, results: [result] });
+    } else {
+      const results = await threatIntelligenceService.syncAll();
+
+      // Refresh service caches after sync
+      await Promise.all([
+        compromiseDetector.refreshKnownAddresses(),
+        fundTracker.refreshKnownAddresses(),
+      ]);
+
+      console.log(`[${requestId}] Full sync complete: ${results.length} sources`);
+      res.json({ success: true, results });
+    }
+  } catch (error: any) {
+    console.error(`[${requestId}] Error during threat intel sync:`, error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+/**
+ * Get threat intel system status
+ * GET /api/threat-intel/status
+ */
+app.get('/api/threat-intel/status', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `threat-status-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  console.log(`[${requestId}] Fetching threat intel status`);
+
+  try {
+    const status = await threatIntelligenceService.getStatus();
+
+    console.log(`[${requestId}] Status retrieved: ${status.sources.length} sources, ${status.totalMaliciousAddresses} addresses`);
+    res.json(status);
+  } catch (error: any) {
+    console.error(`[${requestId}] Error fetching threat intel status:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * List threat intel sources with per-source statistics
+ * GET /api/threat-intel/sources
+ */
+app.get('/api/threat-intel/sources', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `threat-sources-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  console.log(`[${requestId}] Fetching threat intel sources`);
+
+  try {
+    const sources = await threatIntelligenceService.getSources();
+
+    console.log(`[${requestId}] Sources retrieved: ${sources.length}`);
+    res.json({
+      count: sources.length,
+      sources
+    });
+  } catch (error: any) {
+    console.error(`[${requestId}] Error fetching threat intel sources:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Arkham entity lookup for a specific address
+ * GET /api/threat-intel/entity/:address
+ */
+app.get('/api/threat-intel/entity/:address', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `entity-lookup-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { address } = req.params;
+  console.log(`[${requestId}] Looking up entity for address: ${address}`);
+
+  try {
+    if (!address || address.length < 32 || address.length > 44) {
+      res.status(400).json({ error: 'Invalid address format' });
+      return;
+    }
+
+    const entity = await threatIntelligenceService.lookupEntityCached(address);
+
+    console.log(`[${requestId}] Entity lookup: ${entity ? entity.entityName || 'unknown' : 'not found'}`);
+    res.json({
+      address,
+      entity,
+      source: entity ? 'arkham' : null,
+      cached: entity ? true : false,
+    });
+  } catch (error: any) {
+    console.error(`[${requestId}] Error looking up entity:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Check if a domain is known scam/phishing
+ * GET /api/threat-intel/domain/:domain
+ */
+app.get('/api/threat-intel/domain/:domain', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `domain-check-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { domain } = req.params;
+  console.log(`[${requestId}] Checking domain: ${domain}`);
+
+  try {
+    if (!domain || domain.length < 3) {
+      res.status(400).json({ error: 'Invalid domain' });
+      return;
+    }
+
+    const result = await threatIntelligenceService.checkDomain(domain);
+
+    console.log(`[${requestId}] Domain check: ${result.isScam ? 'SCAM' : 'clean'}`);
+    res.json(result);
+  } catch (error: any) {
+    console.error(`[${requestId}] Error checking domain:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Real-time address risk check (local DB + GoPlus)
+ * GET /api/threat-intel/address/:address
+ */
+app.get('/api/threat-intel/address/:address', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const requestId = `addr-check-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const { address } = req.params;
+  console.log(`[${requestId}] Address risk check: ${address}`);
+
+  try {
+    // Validate base58 format (32-44 alphanumeric, no 0/O/I/l)
+    if (!address || !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address)) {
+      res.status(400).json({ error: 'Invalid base58 address format' });
+      return;
+    }
+
+    // Check local DB first
+    const localResult = await db.pool.executeQuery(
+      `SELECT address, label, category, external_sources, confidence_score
+       FROM known_malicious_delegates WHERE address = $1`,
+      [address]
+    );
+
+    const isMalicious = localResult.rows.length > 0;
+    const sources: string[] = isMalicious ? (localResult.rows[0].external_sources || []) : [];
+
+    // Query GoPlus for real-time risk data
+    const goPlusResult = await threatIntelligenceService.checkAddressGoPlus(address);
+
+    console.log(`[${requestId}] local=${isMalicious}, goplus_risky=${goPlusResult.isRisky}`);
+    res.json({
+      address,
+      isMalicious: isMalicious || goPlusResult.isRisky,
+      sources,
+      goPlusRisk: goPlusResult.isRisky || goPlusResult.riskFlags.length > 0
+        ? { isRisky: goPlusResult.isRisky, riskFlags: goPlusResult.riskFlags }
+        : null,
+    });
+  } catch (error: any) {
+    console.error(`[${requestId}] Error checking address:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Start the server
 app.listen(PORT, () => {
   console.log(`🚀 Lavinth Recovery API running on port ${PORT}`);
@@ -2465,6 +2681,7 @@ app.listen(PORT, () => {
   console.log(`🆕 Phase 2: /api/compromise/*, /api/funds/*, /api/alerts/*, /api/data/*`);
   console.log(`🆕 Phase 3: /api/exchanges/*, /api/freeze-requests/*, /api/evidence/*`);
   console.log(`🆕 Phase 5: /api/simulation/*, /api/programs/*`);
+  console.log(`🆕 Phase 6: /api/threat-intel/*`);
 });
 
 // Export the Express app

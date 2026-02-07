@@ -13,6 +13,10 @@ import {
   TransactionInstruction,
 } from '@solana/web3.js';
 import { Pool } from 'pg';
+import pool from '../db/config';
+import * as dotenv from 'dotenv';
+
+dotenv.config();
 
 // Known program IDs
 const KNOWN_PROGRAMS = {
@@ -252,7 +256,7 @@ export class TransactionSimulator {
         estimatedFee: 5000, // Base fee in lamports
         computeUnits: simulationResponse?.unitsConsumed || 200000,
         simulatedAt: new Date().toISOString(),
-        rawLogs: simulationResponse?.logs,
+        rawLogs: simulationResponse?.logs || undefined,
       };
     } catch (error: any) {
       console.error('Simulation failed:', error);
@@ -828,7 +832,7 @@ export class TransactionSimulator {
         // Check for unknown program
         if (!this.verifiedPrograms.has(programId)) {
           warnings.push('Interacts with unverified program');
-          if (highestRisk === 'safe' || highestRisk === 'low') {
+          if (['safe', 'low'].includes(highestRisk)) {
             highestRisk = 'medium';
           }
         }
@@ -853,7 +857,12 @@ export class TransactionSimulator {
   }
 }
 
-// Export singleton creator
-export function createTransactionSimulator(connection: Connection, pool: Pool): TransactionSimulator {
-  return new TransactionSimulator(connection, pool);
-}
+// Create singleton instance
+const HELIUS_API_KEYS = (process.env.HELIUS_API_KEYS || '').split(',').filter(Boolean);
+const rpcEndpoint = HELIUS_API_KEYS.length > 0
+  ? `https://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEYS[0]}`
+  : 'https://api.mainnet-beta.solana.com';
+const connection = new Connection(rpcEndpoint, 'confirmed');
+
+export const transactionSimulator = new TransactionSimulator(connection, pool);
+export default transactionSimulator;

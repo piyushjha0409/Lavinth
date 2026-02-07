@@ -15,6 +15,7 @@ import {
 import * as dotenv from "dotenv";
 import { v4 as uuidv4 } from "uuid";
 import pool from "../db/config";
+import type { ThreatIntelligenceService } from "./threat-intelligence";
 
 dotenv.config();
 
@@ -179,12 +180,75 @@ export class FundTracker {
   private knownBridges: Map<string, string> = new Map();
   private knownMixers: Set<string> = new Set();
   private knownDrainers: Set<string> = new Set();
+  private threatIntel: ThreatIntelligenceService | null = null;
 
   constructor() {
     this.connections = RPC_ENDPOINTS.map(
       (endpoint) => new Connection(endpoint, "confirmed")
     );
     this.loadKnownAddresses();
+  }
+
+  /**
+   * Set the threat intelligence service for enhanced classification
+   */
+  setThreatIntel(service: ThreatIntelligenceService): void {
+    this.threatIntel = service;
+  }
+
+  /**
+   * Refresh known addresses from database (public wrapper)
+   */
+  async refreshKnownAddresses(): Promise<void> {
+    await this.loadKnownAddresses();
+  }
+
+  /**
+   * Enhanced address classification using Arkham entity lookup as fallback
+   */
+  async classifyAddressEnhanced(address: string): Promise<NodeType> {
+    // Try local classification first
+    const localType = this.classifyAddress(address);
+    if (localType !== "intermediate") return localType;
+
+    // Try Arkham entity lookup for unclassified addresses
+    if (this.threatIntel) {
+      try {
+        const entity = await this.threatIntel.lookupEntityCached(address);
+        if (entity?.entityType) {
+          const type = entity.entityType.toLowerCase();
+          if (type.includes("exchange") || type.includes("cex")) return "exchange";
+          if (type.includes("bridge")) return "bridge";
+          if (type.includes("mixer") || type.includes("tornado")) return "mixer";
+          if (type.includes("drainer") || type.includes("scam") || type.includes("phish")) return "drainer";
+        }
+      } catch (err) {
+        // Arkham lookup failed, fall back to local
+      }
+    }
+
+    return "intermediate";
+  }
+
+  /**
+   * Enhanced address label using Arkham entity name as fallback
+   */
+  async getAddressLabelEnhanced(address: string): Promise<string | undefined> {
+    // Try local label first
+    const localLabel = this.getAddressLabel(address);
+    if (localLabel) return localLabel;
+
+    // Try Arkham
+    if (this.threatIntel) {
+      try {
+        const entity = await this.threatIntel.lookupEntityCached(address);
+        if (entity?.entityName) return entity.entityName;
+      } catch (err) {
+        // Arkham lookup failed
+      }
+    }
+
+    return undefined;
   }
 
   /**
@@ -338,15 +402,20 @@ export class FundTracker {
         };
         graph.edges.push(edge);
 
-        // Classify destination
-        const nodeType = this.classifyAddress(outflow.toAddress);
+        // Classify destination (enhanced with Arkham fallback)
+        const nodeType = this.threatIntel
+          ? await this.classifyAddressEnhanced(outflow.toAddress)
+          : this.classifyAddress(outflow.toAddress);
 
         // Add or update node
         if (!graph.nodes.has(outflow.toAddress)) {
+          const label = this.threatIntel
+            ? await this.getAddressLabelEnhanced(outflow.toAddress)
+            : this.getAddressLabel(outflow.toAddress);
           const node: FundNode = {
             address: outflow.toAddress,
             nodeType,
-            label: this.getAddressLabel(outflow.toAddress),
+            label,
             totalReceived: outflow.amount,
             totalSent: 0,
             currentBalance: outflow.amount,
