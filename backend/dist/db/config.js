@@ -41,10 +41,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CustomPool = void 0;
 const dotenv = __importStar(require("dotenv"));
 const pg_1 = require("pg");
+const logger_1 = __importDefault(require("../logger"));
 dotenv.config();
 // Create a custom pool class with built-in retry logic
 class CustomPool extends pg_1.Pool {
@@ -59,11 +63,11 @@ class CustomPool extends pg_1.Pool {
         });
         // On successful connection
         this.on('connect', () => {
-            console.log('Connected to Neon PostgreSQL');
+            logger_1.default.info('Connected to Neon PostgreSQL');
         });
         // Log idle client errors
         this.on('error', (err) => {
-            console.error('Unexpected error on idle PostgreSQL client:', err);
+            logger_1.default.error({ err }, 'Unexpected error on idle PostgreSQL client');
         });
     }
     // Add retry-enabled query execution function
@@ -81,10 +85,10 @@ class CustomPool extends pg_1.Pool {
                 catch (error) {
                     lastError = error;
                     retries++;
-                    console.error(`Query error (attempt ${retries}/${maxRetries}):`, error.message);
+                    logger_1.default.error({ err: error, attempt: retries, maxRetries }, 'Query error');
                     if (retries < maxRetries) {
                         const delay = 1000 * Math.pow(2, (retries - 1));
-                        console.log(`Retrying in ${delay}ms...`);
+                        logger_1.default.info({ delay }, 'Retrying database query');
                         yield new Promise((res) => setTimeout(res, delay));
                     }
                 }
@@ -93,7 +97,7 @@ class CustomPool extends pg_1.Pool {
                         client.release();
                 }
             }
-            console.error(`All ${maxRetries} database query attempts failed.`);
+            logger_1.default.error({ maxRetries }, 'All database query attempts failed');
             throw lastError;
         });
     }

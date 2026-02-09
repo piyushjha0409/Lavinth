@@ -4,9 +4,17 @@ import express, { Application, Request, Response } from "express";
 import db from "./db/db-utils";
 import { validateToken } from "./middlewares/validateToken";
 import { validateApiKey } from "./middlewares/validateApiKey";
+import { globalLimiter, strictLimiter } from "./middlewares/rateLimiter";
+import { validateEnv } from "./validateEnv";
+import "./processHandlers";
+import pinoHttp from 'pino-http';
+import logger from './logger';
 
 // Load environment variables
 dotenv.config();
+
+// Validate required env vars at startup
+validateEnv();
 
 const app: Application = express();
 const PORT = process.env.PORT || 3001;
@@ -20,6 +28,31 @@ app.use(
   })
 );
 app.use(express.json());
+app.use(pinoHttp({ logger }));
+app.use(globalLimiter);
+
+// Health check endpoint (no auth, before rate limiter would apply to it via ordering)
+app.get('/api/health', async (_req, res) => {
+  const checks: Record<string, string> = {};
+  let healthy = true;
+
+  try {
+    await db.pool.executeQuery('SELECT 1', [], 1);
+    checks.database = 'healthy';
+  } catch {
+    checks.database = 'unhealthy';
+    healthy = false;
+  }
+
+  const status = healthy ? 'healthy' : 'degraded';
+  res.status(healthy ? 200 : 503).json({
+    status,
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    checks,
+    version: '1.0.0',
+  });
+});
 
 // Helper: sanitize pagination params to prevent Postgres errors
 function sanitizeLimit(val: any, defaultVal = 10, max = 10000): number {
@@ -33,468 +66,62 @@ function sanitizeOffset(val: any, defaultVal = 0): number {
   return n;
 }
 
-app.get(
-  "/api/dust-transactions",
-  validateToken,
-  async (req: Request, res: Response) => {
-    const requestId = `dust-tx-${Date.now()}-${Math.random()
-      .toString(36)
-      .substr(2, 9)}`;
-    console.log(`[${requestId}] Starting dust transactions request`);
-    console.log(`[${requestId}] Query parameters:`, req.query);
-
-    try {
-      const {
-        limit = 10,
-        offset = 0,
-        sender,
-        recipient,
-        minRiskScore,
-        isPotentialDust,
-        isPotentialPoisoning,
-        startDate,
-        endDate,
-        sortBy = "timestamp",
-        sortOrder = "desc",
-      } = req.query;
-
-      console.log(`[${requestId}] Parsed parameters:`, {
-        limit,
-        offset,
-        sender,
-        recipient,
-        minRiskScore,
-        isPotentialDust,
-        isPotentialPoisoning,
-        startDate,
-        endDate,
-        sortBy,
-        sortOrder,
-      });
-
-      // Build the main query with filters
-      let queryBase = "SELECT * FROM dust_transactions WHERE 1=1";
-      let countQueryBase =
-        "SELECT COUNT(*) as total FROM dust_transactions WHERE 1=1";
-      const params: any[] = [];
-      let paramIndex = 1;
-
-      // Add filters if provided
-      if (sender) {
-        const filterClause = ` AND sender = $${paramIndex++}`;
-        queryBase += filterClause;
-        countQueryBase += filterClause;
-        params.push(sender);
-      }
-
-      if (recipient) {
-        const filterClause = ` AND recipient = $${paramIndex++}`;
-        queryBase += filterClause;
-        countQueryBase += filterClause;
-        params.push(recipient);
-      }
-
-      if (minRiskScore !== undefined) {
-        const filterClause = ` AND risk_score >= $${paramIndex++}`;
-        queryBase += filterClause;
-        countQueryBase += filterClause;
-        params.push(minRiskScore);
-      }
-
-      if (isPotentialDust !== undefined) {
-        const filterClause = ` AND is_potential_dust = $${paramIndex++}`;
-        queryBase += filterClause;
-        countQueryBase += filterClause;
-        params.push(isPotentialDust === "true");
-      }
-
-      if (isPotentialPoisoning !== undefined) {
-        const filterClause = ` AND is_potential_poisoning = $${paramIndex++}`;
-        queryBase += filterClause;
-        countQueryBase += filterClause;
-        params.push(isPotentialPoisoning === "true");
-      }
-
-      if (startDate) {
-        const filterClause = ` AND timestamp >= $${paramIndex++}`;
-        queryBase += filterClause;
-        countQueryBase += filterClause;
-        params.push(new Date(startDate as string));
-      }
-
-      if (endDate) {
-        const filterClause = ` AND timestamp <= $${paramIndex++}`;
-        queryBase += filterClause;
-        countQueryBase += filterClause;
-        params.push(new Date(endDate as string));
-      }
-
-      // Add sorting and pagination to the main query
-      const validSortFields = [
-        "timestamp",
-        "amount",
-        "risk_score",
-        "slot",
-        "fee",
-      ];
-      const sortField = validSortFields.includes(sortBy as string)
-        ? sortBy
-        : "timestamp";
-      const order = sortOrder === "asc" ? "ASC" : "DESC";
-
-      queryBase += ` ORDER BY ${sortField} ${order}`;
-      queryBase += ` LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
-
-      const limitValue = sanitizeLimit(limit);
-      const offsetValue = sanitizeOffset(offset);
-      const paginationParams = [limitValue, offsetValue];
-      const queryParams = [...params, ...paginationParams];
-
-      // Execute the main query
-      const result = await db.pool.executeQuery(queryBase, queryParams);
-
-      // Execute count query to get total records (for pagination metadata)
-      const countResult = await db.pool.executeQuery(countQueryBase, params);
-      const totalCount = parseInt(countResult.rows[0].total);
-      const totalPages = Math.ceil(totalCount / limitValue);
-      const currentPage = Math.floor(offsetValue / limitValue) + 1;
-
-      // Return the results with pagination metadata
-      res.status(200).json({
-        status: "success",
-        count: result.rowCount,
-        pagination: {
-          total: totalCount,
-          totalPages,
-          currentPage,
-          limit: limitValue,
-          offset: offsetValue,
-          hasNextPage: currentPage < totalPages,
-          hasPrevPage: currentPage > 1,
-        },
-        data: result.rows,
-      });
-    } catch (error) {
-      console.error(`[${requestId}] Error fetching dust transactions:`, error);
-      console.error(`[${requestId}] Error stack:`, (error as Error).stack);
-      res.status(500).json({
-        status: "error",
-        message: "Failed to fetch dust transactions",
-        error: (error as Error).message,
-      });
-    }
-  }
-);
-
-app.get(
-  "/api/dust-transactions/potential-dust",
-  validateToken,
-  async (req: Request, res: Response) => {
-    const requestId = `pot-dust-${Date.now()}-${Math.random()
-      .toString(36)
-      .substr(2, 9)}`;
-    console.log(`[${requestId}] Starting potential dust transactions request`);
-    console.log(`[${requestId}] Query parameters:`, req.query);
-
-    try {
-      const {
-        limit = 10,
-        offset = 0,
-        sortBy = "timestamp",
-        sortOrder = "desc",
-      } = req.query;
-
-      console.log(`[${requestId}] Parsed parameters:`, {
-        limit,
-        offset,
-        sortBy,
-        sortOrder,
-      });
-
-      // Build the query for potential dust transactions
-      let queryBase =
-        "SELECT * FROM dust_transactions WHERE is_potential_dust = true";
-      const countQueryBase =
-        "SELECT COUNT(*) as total FROM dust_transactions WHERE is_potential_dust = true";
-
-      // Add sorting and pagination
-      const validSortFields = [
-        "timestamp",
-        "amount",
-        "risk_score",
-        "slot",
-        "fee",
-      ];
-      const sortField = validSortFields.includes(sortBy as string)
-        ? sortBy
-        : "timestamp";
-      const order = sortOrder === "asc" ? "ASC" : "DESC";
-
-      queryBase += ` ORDER BY ${sortField} ${order}`;
-      queryBase += " LIMIT $1 OFFSET $2";
-
-      const limitValue = sanitizeLimit(limit);
-      const offsetValue = sanitizeOffset(offset);
-      const params = [limitValue, offsetValue];
-
-      // Execute the query
-      const result = await db.pool.executeQuery(queryBase, params);
-
-      // Execute count query to get total records (for pagination metadata)
-      const countResult = await db.pool.executeQuery(countQueryBase);
-      const totalCount = parseInt(countResult.rows[0].total);
-      const totalPages = Math.ceil(totalCount / limitValue);
-      const currentPage = Math.floor(offsetValue / limitValue) + 1;
-
-      // Return the results with pagination metadata
-      res.status(200).json({
-        status: "success",
-        count: result.rowCount,
-        pagination: {
-          total: totalCount,
-          totalPages,
-          currentPage,
-          limit: limitValue,
-          offset: offsetValue,
-          hasNextPage: currentPage < totalPages,
-          hasPrevPage: currentPage > 1,
-        },
-        data: result.rows,
-      });
-    } catch (error) {
-      console.error(
-        `[${requestId}] Error fetching potential dust transactions:`,
-        error
-      );
-      console.error(`[${requestId}] Error stack:`, (error as Error).stack);
-      res.status(500).json({
-        status: "error",
-        message: "Failed to fetch potential dust transactions",
-        error: (error as Error).message,
-      });
-    }
-  }
-);
-
-app.get(
-  "/api/dust-transactions/potential-poisoning",
-  validateToken,
-  async (req: Request, res: Response) => {
-    const requestId = `pot-poison-${Date.now()}-${Math.random()
-      .toString(36)
-      .substr(2, 9)}`;
-    console.log(
-      `[${requestId}] Starting potential poisoning transactions request`
-    );
-    console.log(`[${requestId}] Query parameters:`, req.query);
-
-    try {
-      const {
-        limit = 10,
-        offset = 0,
-        sortBy = "timestamp",
-        sortOrder = "desc",
-      } = req.query;
-
-      console.log(`[${requestId}] Parsed parameters:`, {
-        limit,
-        offset,
-        sortBy,
-        sortOrder,
-      });
-
-      // Build the query for potential poisoning transactions
-      let queryBase =
-        "SELECT * FROM dust_transactions WHERE is_potential_poisoning = true";
-      const countQueryBase =
-        "SELECT COUNT(*) as total FROM dust_transactions WHERE is_potential_poisoning = true";
-
-      // Add sorting and pagination
-      const validSortFields = [
-        "timestamp",
-        "amount",
-        "risk_score",
-        "slot",
-        "fee",
-      ];
-      const sortField = validSortFields.includes(sortBy as string)
-        ? sortBy
-        : "timestamp";
-      const order = sortOrder === "asc" ? "ASC" : "DESC";
-
-      queryBase += ` ORDER BY ${sortField} ${order}`;
-      queryBase += " LIMIT $1 OFFSET $2";
-
-      const limitValue = sanitizeLimit(limit);
-      const offsetValue = sanitizeOffset(offset);
-      const params = [limitValue, offsetValue];
-
-      // Execute the query
-      const result = await db.pool.executeQuery(queryBase, params);
-
-      // Execute count query to get total records (for pagination metadata)
-      const countResult = await db.pool.executeQuery(countQueryBase);
-      const totalCount = parseInt(countResult.rows[0].total);
-      const totalPages = Math.ceil(totalCount / limitValue);
-      const currentPage = Math.floor(offsetValue / limitValue) + 1;
-
-      // Return the results with pagination metadata
-      res.status(200).json({
-        status: "success",
-        count: result.rowCount,
-        pagination: {
-          total: totalCount,
-          totalPages,
-          currentPage,
-          limit: limitValue,
-          offset: offsetValue,
-          hasNextPage: currentPage < totalPages,
-          hasPrevPage: currentPage > 1,
-        },
-        data: result.rows,
-      });
-    } catch (error) {
-      console.error(
-        `[${requestId}] Error fetching potential poisoning transactions:`,
-        error
-      );
-      console.error(`[${requestId}] Error stack:`, (error as Error).stack);
-      res.status(500).json({
-        status: "error",
-        message: "Failed to fetch potential poisoning transactions",
-        error: (error as Error).message,
-      });
-    }
-  }
-);
-
-app.get("/api/overview", validateToken, async (req: Request, res: Response) => {
-  const requestId = `overview-${Date.now()}-${Math.random()
-    .toString(36)
-    .substr(2, 9)}`;
-  console.log(`[${requestId}] Starting overview statistics request`);
-
-  try {
-    // Use the new getOverviewStatistics method to fetch all statistics at once
-    console.log(`[${requestId}] Fetching overview statistics...`);
-    const statistics = await db.getOverviewStatistics();
-    console.log(`[${requestId}] Overview statistics retrieved:`, statistics);
-
-    // Return all statistics
-    console.log(`[${requestId}] Sending successful response`);
-    res.status(200).json({
-      status: "success",
-      data: statistics,
-    });
-  } catch (error) {
-    console.error(`[${requestId}] Error fetching overview statistics:`, error);
-    console.error(`[${requestId}] Error stack:`, (error as Error).stack);
-    res.status(500).json({
-      status: "error",
-      message: "Failed to fetch overview statistics",
-      error: (error as Error).message,
-    });
-  }
-});
 
 app.get(
   "/api/check-wallet/:address",
+  strictLimiter,
   validateApiKey,
   async (req: Request, res: Response): Promise<any> => {
-    const requestId = `wallet-check-${Date.now()}-${Math.random()
-      .toString(36)
-      .substr(2, 9)}`;
-    console.log(`[${requestId}] Starting wallet check request`);
-
     try {
       const { address } = req.params;
-      console.log(`[${requestId}] Checking wallet address:`, address);
 
-      // Validate the address format (basic validation for Solana address)
-      if (!address) {
-        console.log(`[${requestId}] Invalid address format - empty address`);
+      if (!address || !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address)) {
         return res.status(400).json({
           status: "error",
           message: "Invalid wallet address format",
         });
       }
 
-      // Check both dusting_candidates and dusting_attackers tables
-      const candidateQuery =
-        "SELECT address, risk_score FROM dusting_candidates WHERE address = $1";
-      const attackerQuery =
-        "SELECT * FROM dusting_attackers WHERE address = $1";
+      const { threatIntelligenceService } = await import("./services/threat-intelligence");
 
-      console.log(
-        `[${requestId}] Executing parallel queries for candidates and attackers...`
-      );
-      const [candidateResult, attackerResult] = await Promise.all([
-        db.pool.executeQuery(candidateQuery, [address]),
-        db.pool.executeQuery(attackerQuery, [address]),
-      ]);
-
-      console.log(
-        `[${requestId}] Candidate query result: ${candidateResult.rowCount} rows`
-      );
-      console.log(
-        `[${requestId}] Attacker query result: ${attackerResult.rowCount} rows`
+      // Check known_malicious_delegates table
+      const localResult = await db.pool.executeQuery(
+        `SELECT address, label, category, external_sources, confidence_score
+         FROM known_malicious_delegates WHERE address = $1`,
+        [address]
       );
 
-      // Check if address exists in dusting_attackers (more detailed information)
-      if (attackerResult.rowCount && attackerResult.rowCount > 0) {
-        console.log(`[${requestId}] Found in dusting_attackers table`);
-        const attacker = attackerResult.rows[0];
-        const riskScore = parseFloat(attacker.risk_score);
-        console.log(`[${requestId}] Attacker risk score:`, riskScore);
+      const isMalicious = localResult.rows.length > 0;
 
-        return res.status(200).json({
-          status: "success",
-          isDusted: true,
-          riskScore,
-          attackerDetails: {
-            smallTransfersCount: attacker.small_transfers_count,
-            uniqueVictimsCount: attacker.unique_victims_count,
-            temporalPattern: attacker.temporal_pattern,
-            networkPattern: attacker.network_pattern,
-            behavioralIndicators: attacker.behavioral_indicators,
-            lastUpdated: attacker.last_updated,
-          },
-          message: `This wallet address is flagged as a confirmed dusting attacker with a risk score of ${riskScore.toFixed(
-            4
-          )}.`,
-        });
-      }
+      // Query GoPlus for real-time risk data
+      const goPlusResult = await threatIntelligenceService.checkAddressGoPlus(address);
 
-      // Check if address exists in dusting_candidates (basic information)
-      if (candidateResult.rowCount && candidateResult.rowCount > 0) {
-        console.log(`[${requestId}] Found in dusting_candidates table`);
-        const riskScore = parseFloat(candidateResult.rows[0].risk_score);
-        console.log(`[${requestId}] Candidate risk score:`, riskScore);
+      const isFlagged = isMalicious || goPlusResult.isRisky;
+      const riskScore = isMalicious
+        ? parseFloat(localResult.rows[0].confidence_score || '0.8')
+        : goPlusResult.isRisky ? 0.7 : 0;
 
-        return res.status(200).json({
-          status: "success",
-          isDusted: true,
-          riskScore,
-          message: `This wallet address is flagged as a potential dusting source with a risk score of ${riskScore.toFixed(
-            4
-          )}.`,
-        });
-      } else {
-        // Address does not exist in the dusting_candidates table
-        console.log(
-          `[${requestId}] Address not found in any dusting tables - clean wallet`
-        );
-        return res.status(200).json({
-          status: "success",
-          isDusted: false,
-          riskScore: 0,
-          message:
-            "This wallet address is not flagged as a dusting source and appears to be safe.",
-        });
-      }
+      req.log.info({ address, isFlagged, riskScore }, 'Wallet check complete');
+
+      return res.status(200).json({
+        status: "success",
+        isFlagged,
+        riskScore,
+        details: isMalicious ? {
+          label: localResult.rows[0].label,
+          category: localResult.rows[0].category,
+          sources: localResult.rows[0].external_sources || [],
+        } : null,
+        goPlusRisk: goPlusResult.isRisky ? {
+          isRisky: goPlusResult.isRisky,
+          riskFlags: goPlusResult.riskFlags,
+        } : null,
+        message: isFlagged
+          ? `This wallet address is flagged as potentially malicious (risk score: ${riskScore.toFixed(4)}).`
+          : "This wallet address is not flagged and appears to be safe.",
+      });
     } catch (error) {
-      console.error(`[${requestId}] Error checking wallet address:`, error);
-      console.error(`[${requestId}] Error stack:`, (error as Error).stack);
+      req.log.error({ err: error }, 'Error checking wallet address');
       res.status(500).json({
         status: "error",
         message: "Failed to check wallet address",
@@ -503,577 +130,6 @@ app.get(
     }
   }
 );
-
-app.get(
-  "/api/dusting-attackers",
-  validateToken,
-  async (req: Request, res: Response) => {
-    const requestId = `dust-attackers-${Date.now()}-${Math.random()
-      .toString(36)
-      .substr(2, 9)}`;
-    console.log(`[${requestId}] Starting dusting attackers request`);
-    console.log(`[${requestId}] Query parameters:`, req.query);
-
-    try {
-      const {
-        limit = 10,
-        offset = 0,
-        minRiskScore,
-        sortBy = "risk_score",
-        sortOrder = "desc",
-      } = req.query;
-
-      console.log(`[${requestId}] Parsed parameters:`, {
-        limit,
-        offset,
-        minRiskScore,
-        sortBy,
-        sortOrder,
-      });
-
-      // Build the main query with filters
-      let queryBase = "SELECT * FROM dusting_attackers WHERE 1=1";
-      let countQueryBase =
-        "SELECT COUNT(*) as total FROM dusting_attackers WHERE 1=1";
-      const params: any[] = [];
-      let paramIndex = 1;
-
-      // Add filters if provided
-      if (minRiskScore !== undefined) {
-        const filterClause = ` AND risk_score >= $${paramIndex++}`;
-        queryBase += filterClause;
-        countQueryBase += filterClause;
-        params.push(minRiskScore);
-      }
-
-      // Add sorting and pagination to the main query
-      const validSortFields = [
-        "risk_score",
-        "small_transfers_count",
-        "unique_victims_count",
-        "last_updated",
-        "wallet_age_days",
-      ];
-      const sortField = validSortFields.includes(sortBy as string)
-        ? sortBy
-        : "risk_score";
-      const order = sortOrder === "asc" ? "ASC" : "DESC";
-
-      queryBase += ` ORDER BY ${sortField} ${order}`;
-      queryBase += ` LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
-
-      const limitValue = sanitizeLimit(limit);
-      const offsetValue = sanitizeOffset(offset);
-      const paginationParams = [limitValue, offsetValue];
-      const queryParams = [...params, ...paginationParams];
-
-      // Execute the main query
-      const result = await db.pool.executeQuery(queryBase, queryParams);
-
-      // Execute count query to get total records (for pagination metadata)
-      const countResult = await db.pool.executeQuery(countQueryBase, params);
-      const totalCount = parseInt(countResult.rows[0].total);
-      const totalPages = Math.ceil(totalCount / limitValue);
-      const currentPage = Math.floor(offsetValue / limitValue) + 1;
-
-      // Return the results with pagination metadata
-      res.status(200).json({
-        status: "success",
-        count: result.rowCount,
-        pagination: {
-          total: totalCount,
-          totalPages,
-          currentPage,
-          limit: limitValue,
-          offset: offsetValue,
-          hasNextPage: currentPage < totalPages,
-          hasPrevPage: currentPage > 1,
-        },
-        data: result.rows,
-      });
-    } catch (error) {
-      console.error(`[${requestId}] Error fetching dusting attackers:`, error);
-      console.error(`[${requestId}] Error stack:`, (error as Error).stack);
-      res.status(500).json({
-        status: "error",
-        message: "Failed to fetch dusting attackers",
-        error: (error as Error).message,
-      });
-    }
-  }
-);
-
-app.get(
-  "/api/dusting-victims",
-  validateToken,
-  async (req: Request, res: Response) => {
-    const requestId = `dust-victims-${Date.now()}-${Math.random()
-      .toString(36)
-      .substr(2, 9)}`;
-    console.log(`[${requestId}] Starting dusting victims request`);
-    console.log(`[${requestId}] Query parameters:`, req.query);
-
-    try {
-      const {
-        limit = 10,
-        offset = 0,
-        minRiskScore,
-        sortBy = "risk_score",
-        sortOrder = "desc",
-      } = req.query;
-
-      console.log(`[${requestId}] Parsed parameters:`, {
-        limit,
-        offset,
-        minRiskScore,
-        sortBy,
-        sortOrder,
-      });
-
-      // Build the main query with filters
-      let queryBase = "SELECT * FROM dusting_victims WHERE 1=1";
-      let countQueryBase =
-        "SELECT COUNT(*) as total FROM dusting_victims WHERE 1=1";
-      const params: any[] = [];
-      let paramIndex = 1;
-
-      // Add filters if provided
-      if (minRiskScore !== undefined) {
-        const filterClause = ` AND risk_score >= $${paramIndex++}`;
-        queryBase += filterClause;
-        countQueryBase += filterClause;
-        params.push(minRiskScore);
-      }
-
-      // Add sorting and pagination to the main query
-      const validSortFields = [
-        "risk_score",
-        "dust_transactions_count",
-        "unique_attackers_count",
-        "last_updated",
-        "wallet_age_days",
-      ];
-      const sortField = validSortFields.includes(sortBy as string)
-        ? sortBy
-        : "risk_score";
-      const order = sortOrder === "asc" ? "ASC" : "DESC";
-
-      queryBase += ` ORDER BY ${sortField} ${order}`;
-      queryBase += ` LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
-
-      const limitValue = sanitizeLimit(limit);
-      const offsetValue = sanitizeOffset(offset);
-      const paginationParams = [limitValue, offsetValue];
-      const queryParams = [...params, ...paginationParams];
-
-      console.log(`[${requestId}] Final query:`, queryBase);
-      console.log(`[${requestId}] Query parameters:`, queryParams);
-
-      // Execute the main query
-      console.log(`[${requestId}] Executing main query...`);
-      const result = await db.pool.executeQuery(queryBase, queryParams);
-      console.log(`[${requestId}] Main query result: ${result.rowCount} rows`);
-
-      // Execute count query to get total records (for pagination metadata)
-      console.log(`[${requestId}] Executing count query...`);
-      const countResult = await db.pool.executeQuery(countQueryBase, params);
-      const totalCount = parseInt(countResult.rows[0].total);
-      const totalPages = Math.ceil(totalCount / limitValue);
-      const currentPage = Math.floor(offsetValue / limitValue) + 1;
-
-      console.log(`[${requestId}] Pagination metadata:`, {
-        totalCount,
-        totalPages,
-        currentPage,
-        limitValue,
-        offsetValue,
-      });
-
-      // Return the results with pagination metadata
-      console.log(`[${requestId}] Sending successful response`);
-      res.status(200).json({
-        status: "success",
-        count: result.rowCount,
-        pagination: {
-          total: totalCount,
-          totalPages,
-          currentPage,
-          limit: limitValue,
-          offset: offsetValue,
-          hasNextPage: currentPage < totalPages,
-          hasPrevPage: currentPage > 1,
-        },
-        data: result.rows,
-      });
-    } catch (error) {
-      console.error(`[${requestId}] Error fetching dusting victims:`, error);
-      console.error(`[${requestId}] Error stack:`, (error as Error).stack);
-      res.status(500).json({
-        status: "error",
-        message: "Failed to fetch dusting victims",
-        error: (error as Error).message,
-      });
-    }
-  }
-);
-
-/**
- * Get detailed information about a specific dusting attacker
- */
-app.get(
-  "/api/dusting-attackers/:address",
-  validateToken,
-  async (req: Request, res: Response): Promise<any> => {
-    const requestId = `attacker-detail-${Date.now()}-${Math.random()
-      .toString(36)
-      .substr(2, 9)}`;
-    console.log(`[${requestId}] Starting dusting attacker detail request`);
-
-    try {
-      const { address } = req.params;
-      console.log(
-        `[${requestId}] Fetching details for attacker address:`,
-        address
-      );
-
-      // Validate the address format (basic validation for Solana address)
-      if (!address || address.length !== 44) {
-        console.log(
-          `[${requestId}] Invalid address format - length: ${address?.length}`
-        );
-        return res.status(400).json({
-          status: "error",
-          message: "Invalid wallet address format",
-        });
-      }
-
-      const query = "SELECT * FROM dusting_attackers WHERE address = $1";
-      console.log(`[${requestId}] Executing query:`, query);
-      const result = await db.pool.executeQuery(query, [address]);
-      console.log(`[${requestId}] Query result: ${result.rowCount} rows`);
-
-      if (result.rowCount === 0) {
-        console.log(`[${requestId}] Dusting attacker not found`);
-        return res.status(404).json({
-          status: "error",
-          message: "Dusting attacker not found",
-        });
-      }
-
-      console.log(
-        `[${requestId}] Sending successful response with attacker details`
-      );
-      res.status(200).json({
-        status: "success",
-        data: result.rows[0],
-      });
-    } catch (error) {
-      console.error(
-        `[${requestId}] Error fetching dusting attacker details:`,
-        error
-      );
-      console.error(`[${requestId}] Error stack:`, (error as Error).stack);
-      res.status(500).json({
-        status: "error",
-        message: "Failed to fetch dusting attacker details",
-        error: (error as Error).message,
-      });
-    }
-  }
-);
-
-/**
- * Get detailed information about a specific dusting victim
- */
-app.get(
-  "/api/dusting-victims/:address",
-  validateToken,
-  async (req: Request, res: Response): Promise<any> => {
-    const requestId = `victim-detail-${Date.now()}-${Math.random()
-      .toString(36)
-      .substr(2, 9)}`;
-    console.log(`[${requestId}] Starting dusting victim detail request`);
-
-    try {
-      const { address } = req.params;
-      console.log(
-        `[${requestId}] Fetching details for victim address:`,
-        address
-      );
-
-      // Validate the address format (basic validation for Solana address)
-      if (!address || address.length !== 44) {
-        console.log(
-          `[${requestId}] Invalid address format - length: ${address?.length}`
-        );
-        return res.status(400).json({
-          status: "error",
-          message: "Invalid wallet address format",
-        });
-      }
-
-      const query = "SELECT * FROM dusting_victims WHERE address = $1";
-      console.log(`[${requestId}] Executing query:`, query);
-      const result = await db.pool.executeQuery(query, [address]);
-      console.log(`[${requestId}] Query result: ${result.rowCount} rows`);
-
-      if (result.rowCount === 0) {
-        console.log(`[${requestId}] Dusting victim not found`);
-        return res.status(404).json({
-          status: "error",
-          message: "Dusting victim not found",
-        });
-      }
-
-      console.log(
-        `[${requestId}] Sending successful response with victim details`
-      );
-      res.status(200).json({
-        status: "success",
-        data: result.rows[0],
-      });
-    } catch (error) {
-      console.error(
-        `[${requestId}] Error fetching dusting victim details:`,
-        error
-      );
-      console.error(`[${requestId}] Error stack:`, (error as Error).stack);
-      res.status(500).json({
-        status: "error",
-        message: "Failed to fetch dusting victim details",
-        error: (error as Error).message,
-      });
-    }
-  }
-);
-
-/**
- * Real-time threat metrics endpoint
- */
-app.get('/api/threat-metrics', validateToken, async (req: Request, res: Response) => {
-  const requestId = `threat-metrics-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  console.log(`[${requestId}] Starting threat metrics request`);
-  
-  try {
-    const metrics = await db.pool.executeQuery(`
-      SELECT 
-        COUNT(CASE WHEN is_potential_dust = true THEN 1 END) as dust_24h,
-        COUNT(CASE WHEN is_potential_poisoning = true THEN 1 END) as poisoning_24h,
-        COUNT(DISTINCT sender) as active_attackers_24h,
-        COUNT(DISTINCT recipient) as active_victims_24h,
-        AVG(risk_score) as avg_risk_score,
-        MAX(timestamp) as last_activity
-      FROM dust_transactions 
-      WHERE timestamp > NOW() - INTERVAL '24 hours'
-    `);
-    
-    console.log(`[${requestId}] Threat metrics retrieved successfully`);
-    res.json(metrics.rows[0]);
-  } catch (error) {
-    console.error(`[${requestId}] Error fetching threat metrics:`, error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-/**
- * Attack patterns timeline endpoint
- */
-app.get('/api/attack-patterns', validateToken, async (req: Request, res: Response) => {
-  const requestId = `attack-patterns-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  console.log(`[${requestId}] Starting attack patterns request`);
-  
-  try {
-    const { hours = 24 } = req.query;
-    const patterns = await db.pool.executeQuery(`
-      SELECT 
-        DATE_TRUNC('hour', timestamp) as hour,
-        COUNT(*) as attack_count,
-        COUNT(CASE WHEN is_potential_dust = true THEN 1 END) as dust_count,
-        COUNT(CASE WHEN is_potential_poisoning = true THEN 1 END) as poisoning_count,
-        COUNT(DISTINCT sender) as unique_attackers,
-        AVG(amount) as avg_amount
-      FROM dust_transactions 
-      WHERE timestamp > NOW() - INTERVAL '${parseInt(hours as string)} hours'
-      GROUP BY DATE_TRUNC('hour', timestamp)
-      ORDER BY hour DESC
-    `);
-    
-    console.log(`[${requestId}] Attack patterns retrieved: ${patterns.rows.length} hours`);
-    res.json(patterns.rows);
-  } catch (error) {
-    console.error(`[${requestId}] Error fetching attack patterns:`, error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-/**
- * Network graph data endpoint
- */
-app.get('/api/network-graph', validateToken, async (req: Request, res: Response) => {
-  const requestId = `network-graph-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  console.log(`[${requestId}] Starting network graph request`);
-  
-  try {
-    const { limit = 500, minWeight = 2 } = req.query;
-    const networkData = await db.pool.executeQuery(`
-      SELECT 
-        sender as source,
-        recipient as target,
-        COUNT(*) as weight,
-        AVG(amount) as avg_amount,
-        MAX(timestamp) as last_interaction,
-        COUNT(CASE WHEN is_potential_dust = true THEN 1 END) as dust_txs,
-        COUNT(CASE WHEN is_potential_poisoning = true THEN 1 END) as poisoning_txs
-      FROM dust_transactions 
-      WHERE sender IS NOT NULL 
-        AND recipient IS NOT NULL
-        AND timestamp > NOW() - INTERVAL '7 days'
-      GROUP BY sender, recipient
-      HAVING COUNT(*) >= $1
-      ORDER BY weight DESC
-      LIMIT $2
-    `, [minWeight, limit]);
-    
-    console.log(`[${requestId}] Network graph data retrieved: ${networkData.rows.length} edges`);
-    res.json(networkData.rows);
-  } catch (error) {
-    console.error(`[${requestId}] Error fetching network graph:`, error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-/**
- * Top threats summary endpoint
- */
-app.get('/api/top-threats', validateToken, async (req: Request, res: Response) => {
-  const requestId = `top-threats-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  console.log(`[${requestId}] Starting top threats request`);
-  
-  try {
-    const topAttackers = await db.pool.executeQuery(`
-      SELECT address, small_transfers_count, unique_victims_count, risk_score, wallet_age_days, total_transaction_volume
-      FROM dusting_attackers 
-      ORDER BY small_transfers_count DESC 
-      LIMIT 10
-    `);
-    
-    const topVictims = await db.pool.executeQuery(`
-      SELECT address, dust_transactions_count, unique_attackers_count, risk_score, wallet_age_days, wallet_value_estimate
-      FROM dusting_victims 
-      ORDER BY dust_transactions_count DESC 
-      LIMIT 10
-    `);
-    
-    console.log(`[${requestId}] Top threats retrieved: ${topAttackers.rows.length} attackers, ${topVictims.rows.length} victims`);
-    res.json({
-      topAttackers: topAttackers.rows,
-      topVictims: topVictims.rows
-    });
-  } catch (error) {
-    console.error(`[${requestId}] Error fetching top threats:`, error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-/**
- * Dusting candidates endpoint
- */
-app.get('/api/dusting-candidates', validateToken, async (req: Request, res: Response) => {
-  const requestId = `candidates-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  console.log(`[${requestId}] Starting dusting candidates request`);
-  
-  try {
-    const { minRiskScore = 0.3, limit = 100 } = req.query;
-    const candidates = await db.pool.executeQuery(`
-      SELECT address, risk_score, first_detected_at, last_updated
-      FROM dusting_candidates 
-      WHERE risk_score >= $1
-      ORDER BY risk_score DESC, last_updated DESC
-      LIMIT $2
-    `, [minRiskScore, limit]);
-    
-    console.log(`[${requestId}] Dusting candidates retrieved: ${candidates.rows.length} candidates`);
-    res.json(candidates.rows);
-  } catch (error) {
-    console.error(`[${requestId}] Error fetching dusting candidates:`, error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-/**
- * System status endpoint for dynamic status indicators
- */
-app.get('/api/system-status', validateToken, async (req: Request, res: Response) => {
-  const requestId = `system-status-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  console.log(`[${requestId}] Starting system status request`);
-  
-  try {
-    // Get real-time system metrics
-    const [dbStatus, recentActivity, systemHealth] = await Promise.all([
-      // Check database connectivity
-      db.pool.executeQuery('SELECT 1 as status'),
-      // Check recent activity (last 5 minutes)
-      db.pool.executeQuery(`
-        SELECT COUNT(*) as recent_count 
-        FROM dust_transactions 
-        WHERE timestamp > NOW() - INTERVAL '5 minutes'
-      `),
-      // Get system health metrics
-      db.pool.executeQuery(`
-        SELECT 
-          COUNT(*) as total_transactions,
-          COUNT(DISTINCT sender) as unique_addresses,
-          AVG(risk_score) as avg_risk_score
-        FROM dust_transactions 
-        WHERE timestamp > NOW() - INTERVAL '24 hours'
-      `)
-    ]);
-
-    const isDbConnected = dbStatus.rows.length > 0;
-    const hasRecentActivity = parseInt(recentActivity.rows[0].recent_count) > 0;
-    const healthMetrics = systemHealth.rows[0];
-    
-    // Calculate improvement metrics based on actual data
-    const totalTransactions = parseInt(healthMetrics.total_transactions);
-    const uniqueAddresses = parseInt(healthMetrics.unique_addresses);
-    const coverageRatio = uniqueAddresses > 0 ? Math.round(totalTransactions / uniqueAddresses) : 1;
-    
-    const systemStatus = {
-      enhancedDetection: {
-        status: isDbConnected ? 'enabled' : 'disabled',
-        label: isDbConnected ? 'Enabled' : 'Disabled'
-      },
-      walletIntelligence: {
-        status: uniqueAddresses > 100 ? 'active' : 'limited',
-        label: uniqueAddresses > 100 ? 'Active' : 'Limited'
-      },
-      realTimeUpdates: {
-        status: hasRecentActivity ? 'live' : 'idle',
-        label: hasRecentActivity ? 'Live' : 'Idle'
-      },
-      coverageImprovement: {
-        ratio: Math.min(coverageRatio, 10), // Cap at 10x for display
-        label: `${Math.min(coverageRatio, 10)}x Better`
-      },
-      lastUpdated: new Date().toISOString()
-    };
-    
-    console.log(`[${requestId}] System status retrieved successfully`);
-    res.json(systemStatus);
-  } catch (error) {
-    console.error(`[${requestId}] Error fetching system status:`, error);
-    res.status(500).json({ 
-      error: 'Internal server error',
-      systemStatus: {
-        enhancedDetection: { status: 'error', label: 'Error' },
-        walletIntelligence: { status: 'error', label: 'Error' },
-        realTimeUpdates: { status: 'error', label: 'Error' },
-        coverageImprovement: { ratio: 1, label: 'Unknown' },
-        lastUpdated: new Date().toISOString()
-      }
-    });
-  }
-});
 
 // ============================================
 // WalletShield Recovery Endpoints (Phase 1)
@@ -1086,10 +142,8 @@ import { revocationEngine } from "./services/revocation-engine";
  * Scan wallet for token approvals
  * GET /api/approvals/scan/:address
  */
-app.get('/api/approvals/scan/:address', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `approvals-scan-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+app.get('/api/approvals/scan/:address', strictLimiter, validateApiKey, async (req: Request, res: Response): Promise<void> => {
   const { address } = req.params;
-  console.log(`[${requestId}] Starting approval scan for wallet: ${address}`);
 
   try {
     // Validate address format
@@ -1101,12 +155,12 @@ app.get('/api/approvals/scan/:address', validateApiKey, async (req: Request, res
     const scanResult = await approvalScanner.scanWallet(address);
 
     if (!scanResult.success) {
-      console.error(`[${requestId}] Scan failed:`, scanResult.error);
+      req.log.error({ scanError: scanResult.error }, 'Approval scan failed');
       res.status(500).json({ error: scanResult.error });
       return;
     }
 
-    console.log(`[${requestId}] Scan completed: ${scanResult.profile?.totalApprovals} approvals found`);
+    req.log.info({ totalApprovals: scanResult.profile?.totalApprovals }, 'Scan completed');
     res.json({
       success: true,
       walletAddress: address,
@@ -1114,7 +168,7 @@ app.get('/api/approvals/scan/:address', validateApiKey, async (req: Request, res
       scannedAt: new Date().toISOString()
     });
   } catch (error: any) {
-    console.error(`[${requestId}] Error scanning approvals:`, error);
+    req.log.error({ err: error }, 'Error scanning approvals');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1124,22 +178,22 @@ app.get('/api/approvals/scan/:address', validateApiKey, async (req: Request, res
  * GET /api/approvals/:address
  */
 app.get('/api/approvals/:address', validateApiKey, async (req: Request, res: Response) => {
-  const requestId = `approvals-get-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { address } = req.params;
-  console.log(`[${requestId}] Fetching approvals for wallet: ${address}`);
 
   try {
+    const { limit } = req.query;
+    const cap = sanitizeLimit(limit, 100, 500);
     const approvals = await approvalScanner.getApprovals(address);
     const profile = await approvalScanner.getSecurityProfile(address);
 
-    console.log(`[${requestId}] Retrieved ${approvals.length} approvals`);
+    req.log.info({ count: approvals.length }, 'Retrieved approvals');
     res.json({
       walletAddress: address,
       profile,
-      approvals
+      approvals: approvals.slice(0, cap)
     });
   } catch (error: any) {
-    console.error(`[${requestId}] Error fetching approvals:`, error);
+    req.log.error({ err: error }, 'Error fetching approvals');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1149,16 +203,14 @@ app.get('/api/approvals/:address', validateApiKey, async (req: Request, res: Res
  * GET /api/security-profile/:address
  */
 app.get('/api/security-profile/:address', validateApiKey, async (req: Request, res: Response) => {
-  const requestId = `security-profile-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { address } = req.params;
-  console.log(`[${requestId}] Fetching security profile for wallet: ${address}`);
 
   try {
     let profile = await approvalScanner.getSecurityProfile(address);
 
     // If no cached profile, do a fresh scan
     if (!profile) {
-      console.log(`[${requestId}] No cached profile, performing fresh scan`);
+      req.log.info('No cached profile, performing fresh scan');
       const scanResult = await approvalScanner.scanWallet(address);
       profile = scanResult.profile;
     }
@@ -1169,7 +221,7 @@ app.get('/api/security-profile/:address', validateApiKey, async (req: Request, r
       retrievedAt: new Date().toISOString()
     });
   } catch (error: any) {
-    console.error(`[${requestId}] Error fetching security profile:`, error);
+    req.log.error({ err: error }, 'Error fetching security profile');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1179,9 +231,7 @@ app.get('/api/security-profile/:address', validateApiKey, async (req: Request, r
  * POST /api/revocation/plan
  */
 app.post('/api/revocation/plan', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `revocation-plan-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { walletAddress, approvalIds } = req.body;
-  console.log(`[${requestId}] Creating revocation plan for wallet: ${walletAddress}`);
 
   try {
     if (!walletAddress) {
@@ -1191,7 +241,7 @@ app.post('/api/revocation/plan', validateApiKey, async (req: Request, res: Respo
 
     const plan = await revocationEngine.createRevocationPlan(walletAddress);
 
-    console.log(`[${requestId}] Revocation plan created: ${plan.totalApprovals} approvals, ${plan.totalTransactions} transactions`);
+    req.log.info({ totalApprovals: plan.totalApprovals, totalTransactions: plan.totalTransactions }, 'Revocation plan created');
     res.json({
       success: true,
       plan: {
@@ -1204,7 +254,7 @@ app.post('/api/revocation/plan', validateApiKey, async (req: Request, res: Respo
       }
     });
   } catch (error: any) {
-    console.error(`[${requestId}] Error creating revocation plan:`, error);
+    req.log.error({ err: error }, 'Error creating revocation plan');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1214,9 +264,7 @@ app.post('/api/revocation/plan', validateApiKey, async (req: Request, res: Respo
  * POST /api/revocation/build
  */
 app.post('/api/revocation/build', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `revocation-build-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { walletAddress } = req.body;
-  console.log(`[${requestId}] Building revocation transactions for wallet: ${walletAddress}`);
 
   try {
     if (!walletAddress) {
@@ -1228,7 +276,7 @@ app.post('/api/revocation/build', validateApiKey, async (req: Request, res: Resp
     const plan = await revocationEngine.createRevocationPlan(walletAddress);
     const transactions = await revocationEngine.buildUnsignedTransactions(plan);
 
-    console.log(`[${requestId}] Built ${transactions.length} unsigned transactions`);
+    req.log.info({ count: transactions.length }, 'Built unsigned transactions');
     res.json({
       success: true,
       sessionId: plan.sessionId,
@@ -1238,7 +286,7 @@ app.post('/api/revocation/build', validateApiKey, async (req: Request, res: Resp
       estimatedTotalFee: plan.estimatedTotalFee
     });
   } catch (error: any) {
-    console.error(`[${requestId}] Error building revocation transactions:`, error);
+    req.log.error({ err: error }, 'Error building revocation transactions');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1248,9 +296,7 @@ app.post('/api/revocation/build', validateApiKey, async (req: Request, res: Resp
  * POST /api/revocation/submit
  */
 app.post('/api/revocation/submit', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `revocation-submit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { sessionId, signedTransactions } = req.body;
-  console.log(`[${requestId}] Submitting signed transactions for session: ${sessionId}`);
 
   try {
     if (!sessionId || !signedTransactions || !Array.isArray(signedTransactions)) {
@@ -1260,10 +306,10 @@ app.post('/api/revocation/submit', validateApiKey, async (req: Request, res: Res
 
     const result = await revocationEngine.submitSignedTransactions(sessionId, signedTransactions);
 
-    console.log(`[${requestId}] Submission complete: ${result.totalRevoked} revoked, ${result.totalFailed} failed`);
+    req.log.info({ totalRevoked: result.totalRevoked, totalFailed: result.totalFailed }, 'Revocation submission complete');
     res.json(result);
   } catch (error: any) {
-    console.error(`[${requestId}] Error submitting revocation transactions:`, error);
+    req.log.error({ err: error }, 'Error submitting revocation transactions');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1273,9 +319,7 @@ app.post('/api/revocation/submit', validateApiKey, async (req: Request, res: Res
  * POST /api/revocation/emergency
  */
 app.post('/api/revocation/emergency', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `emergency-revoke-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { walletAddress } = req.body;
-  console.log(`[${requestId}] Creating EMERGENCY revocation plan for wallet: ${walletAddress}`);
 
   try {
     if (!walletAddress) {
@@ -1286,7 +330,7 @@ app.post('/api/revocation/emergency', validateApiKey, async (req: Request, res: 
     const plan = await revocationEngine.createEmergencyRevokePlan(walletAddress);
     const transactions = await revocationEngine.buildUnsignedTransactions(plan);
 
-    console.log(`[${requestId}] Emergency plan created: ${plan.totalApprovals} high-risk approvals`);
+    req.log.info({ totalHighRiskApprovals: plan.totalApprovals }, 'Emergency revocation plan created');
     res.json({
       success: true,
       isEmergency: true,
@@ -1297,7 +341,7 @@ app.post('/api/revocation/emergency', validateApiKey, async (req: Request, res: 
       estimatedTotalFee: plan.estimatedTotalFee
     });
   } catch (error: any) {
-    console.error(`[${requestId}] Error creating emergency revocation:`, error);
+    req.log.error({ err: error }, 'Error creating emergency revocation');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1307,9 +351,7 @@ app.post('/api/revocation/emergency', validateApiKey, async (req: Request, res: 
  * GET /api/recovery/session/:sessionId
  */
 app.get('/api/recovery/session/:sessionId', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `recovery-session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { sessionId } = req.params;
-  console.log(`[${requestId}] Fetching recovery session: ${sessionId}`);
 
   try {
     const session = await revocationEngine.getRecoverySession(sessionId);
@@ -1321,7 +363,7 @@ app.get('/api/recovery/session/:sessionId', validateApiKey, async (req: Request,
 
     res.json(session);
   } catch (error: any) {
-    console.error(`[${requestId}] Error fetching recovery session:`, error);
+    req.log.error({ err: error }, 'Error fetching recovery session');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1331,20 +373,20 @@ app.get('/api/recovery/session/:sessionId', validateApiKey, async (req: Request,
  * GET /api/recovery/history/:address
  */
 app.get('/api/recovery/history/:address', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `recovery-history-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { address } = req.params;
-  console.log(`[${requestId}] Fetching recovery history for wallet: ${address}`);
 
   try {
+    const { limit } = req.query;
+    const cap = sanitizeLimit(limit, 50, 200);
     const sessions = await revocationEngine.getRecoverySessionsForWallet(address);
 
     res.json({
       walletAddress: address,
-      sessions,
+      sessions: sessions.slice(0, cap),
       total: sessions.length
     });
   } catch (error: any) {
-    console.error(`[${requestId}] Error fetching recovery history:`, error);
+    req.log.error({ err: error }, 'Error fetching recovery history');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1354,9 +396,7 @@ app.get('/api/recovery/history/:address', validateApiKey, async (req: Request, r
  * POST /api/report/malicious-delegate
  */
 app.post('/api/report/malicious-delegate', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `report-delegate-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { address, label, category, reportedLosses } = req.body;
-  console.log(`[${requestId}] Reporting malicious delegate: ${address}`);
 
   try {
     if (!address || !label || !category) {
@@ -1366,13 +406,13 @@ app.post('/api/report/malicious-delegate', validateApiKey, async (req: Request, 
 
     await approvalScanner.reportMaliciousDelegate(address, label, category, reportedLosses || 0);
 
-    console.log(`[${requestId}] Malicious delegate reported successfully`);
+    req.log.info({ address, category }, 'Malicious delegate reported');
     res.json({
       success: true,
       message: 'Malicious delegate reported successfully'
     });
   } catch (error: any) {
-    console.error(`[${requestId}] Error reporting malicious delegate:`, error);
+    req.log.error({ err: error }, 'Error reporting malicious delegate');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1390,10 +430,8 @@ import { alertManager } from "./services/alert-manager";
  * Analyze wallet for signs of compromise
  * GET /api/compromise/analyze/:address
  */
-app.get('/api/compromise/analyze/:address', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `compromise-analyze-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+app.get('/api/compromise/analyze/:address', strictLimiter, validateApiKey, async (req: Request, res: Response): Promise<void> => {
   const { address } = req.params;
-  console.log(`[${requestId}] Analyzing wallet for compromise: ${address}`);
 
   try {
     if (!address || address.length < 32 || address.length > 44) {
@@ -1403,7 +441,7 @@ app.get('/api/compromise/analyze/:address', validateApiKey, async (req: Request,
 
     const result = await compromiseDetector.analyzeWallet(address);
 
-    console.log(`[${requestId}] Analysis complete: isCompromised=${result.isCompromised}, alerts=${result.alerts.length}`);
+    req.log.info({ isCompromised: result.isCompromised, alertCount: result.alerts.length }, 'Compromise analysis complete');
     res.json({
       success: true,
       walletAddress: address,
@@ -1415,7 +453,7 @@ app.get('/api/compromise/analyze/:address', validateApiKey, async (req: Request,
       analyzedAt: new Date().toISOString()
     });
   } catch (error: any) {
-    console.error(`[${requestId}] Error analyzing wallet:`, error);
+    req.log.error({ err: error }, 'Error analyzing wallet');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1425,9 +463,7 @@ app.get('/api/compromise/analyze/:address', validateApiKey, async (req: Request,
  * POST /api/compromise/monitor
  */
 app.post('/api/compromise/monitor', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `monitor-register-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { walletAddress, userId, alertChannels, monitoringLevel } = req.body;
-  console.log(`[${requestId}] Registering wallet for monitoring: ${walletAddress}`);
 
   try {
     if (!walletAddress) {
@@ -1447,13 +483,13 @@ app.post('/api/compromise/monitor', validateApiKey, async (req: Request, res: Re
       await alertManager.createSubscription(walletAddress, alertChannels, { userId });
     }
 
-    console.log(`[${requestId}] Wallet registered for monitoring`);
+    req.log.info('Wallet registered for monitoring');
     res.json({
       success: true,
       wallet
     });
   } catch (error: any) {
-    console.error(`[${requestId}] Error registering wallet:`, error);
+    req.log.error({ err: error }, 'Error registering wallet');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1463,9 +499,7 @@ app.post('/api/compromise/monitor', validateApiKey, async (req: Request, res: Re
  * GET /api/compromise/monitor/:address
  */
 app.get('/api/compromise/monitor/:address', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `monitor-get-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { address } = req.params;
-  console.log(`[${requestId}] Fetching monitored wallet: ${address}`);
 
   try {
     const wallet = await compromiseDetector.getMonitoredWallet(address);
@@ -1477,7 +511,7 @@ app.get('/api/compromise/monitor/:address', validateApiKey, async (req: Request,
 
     res.json(wallet);
   } catch (error: any) {
-    console.error(`[${requestId}] Error fetching monitored wallet:`, error);
+    req.log.error({ err: error }, 'Error fetching monitored wallet');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1487,10 +521,8 @@ app.get('/api/compromise/monitor/:address', validateApiKey, async (req: Request,
  * GET /api/compromise/alerts/:address
  */
 app.get('/api/compromise/alerts/:address', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `alerts-get-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { address } = req.params;
   const { limit = 50 } = req.query;
-  console.log(`[${requestId}] Fetching alerts for wallet: ${address}`);
 
   try {
     const alerts = await compromiseDetector.getAlerts(address, sanitizeLimit(limit, 50));
@@ -1501,7 +533,7 @@ app.get('/api/compromise/alerts/:address', validateApiKey, async (req: Request, 
       alerts
     });
   } catch (error: any) {
-    console.error(`[${requestId}] Error fetching alerts:`, error);
+    req.log.error({ err: error }, 'Error fetching alerts');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1511,9 +543,7 @@ app.get('/api/compromise/alerts/:address', validateApiKey, async (req: Request, 
  * POST /api/compromise/alerts/:alertId/acknowledge
  */
 app.post('/api/compromise/alerts/:alertId/acknowledge', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `alert-ack-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { alertId } = req.params;
-  console.log(`[${requestId}] Acknowledging alert: ${alertId}`);
 
   try {
     await compromiseDetector.acknowledgeAlert(alertId);
@@ -1523,7 +553,7 @@ app.post('/api/compromise/alerts/:alertId/acknowledge', validateApiKey, async (r
       message: 'Alert acknowledged'
     });
   } catch (error: any) {
-    console.error(`[${requestId}] Error acknowledging alert:`, error);
+    req.log.error({ err: error }, 'Error acknowledging alert');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1533,10 +563,8 @@ app.post('/api/compromise/alerts/:alertId/acknowledge', validateApiKey, async (r
  * GET /api/compromise/transactions/:address
  */
 app.get('/api/compromise/transactions/:address', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `transactions-get-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { address } = req.params;
   const { limit = 50 } = req.query;
-  console.log(`[${requestId}] Fetching transactions for wallet: ${address}`);
 
   try {
     const transactions = await compromiseDetector.getTransactions(address, sanitizeLimit(limit, 50));
@@ -1547,7 +575,7 @@ app.get('/api/compromise/transactions/:address', validateApiKey, async (req: Req
       transactions
     });
   } catch (error: any) {
-    console.error(`[${requestId}] Error fetching transactions:`, error);
+    req.log.error({ err: error }, 'Error fetching transactions');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1560,10 +588,8 @@ app.get('/api/compromise/transactions/:address', validateApiKey, async (req: Req
  * Start tracing stolen funds
  * POST /api/funds/trace
  */
-app.post('/api/funds/trace', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `trace-start-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+app.post('/api/funds/trace', strictLimiter, validateApiKey, async (req: Request, res: Response): Promise<void> => {
   const { sourceWallet, initialAmount, tokenMint } = req.body;
-  console.log(`[${requestId}] Starting fund trace for wallet: ${sourceWallet}`);
 
   try {
     if (!sourceWallet || !initialAmount) {
@@ -1573,13 +599,13 @@ app.post('/api/funds/trace', validateApiKey, async (req: Request, res: Response)
 
     const trace = await fundTracker.startTrace(sourceWallet, initialAmount, tokenMint);
 
-    console.log(`[${requestId}] Trace started: ${trace.traceId}`);
+    req.log.info({ traceId: trace.traceId }, 'Fund trace started');
     res.json({
       success: true,
       trace
     });
   } catch (error: any) {
-    console.error(`[${requestId}] Error starting trace:`, error);
+    req.log.error({ err: error }, 'Error starting trace');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1589,9 +615,7 @@ app.post('/api/funds/trace', validateApiKey, async (req: Request, res: Response)
  * GET /api/funds/trace/:traceId
  */
 app.get('/api/funds/trace/:traceId', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `trace-get-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { traceId } = req.params;
-  console.log(`[${requestId}] Fetching trace: ${traceId}`);
 
   try {
     const trace = await fundTracker.getTrace(traceId);
@@ -1603,7 +627,7 @@ app.get('/api/funds/trace/:traceId', validateApiKey, async (req: Request, res: R
 
     res.json(trace);
   } catch (error: any) {
-    console.error(`[${requestId}] Error fetching trace:`, error);
+    req.log.error({ err: error }, 'Error fetching trace');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1613,20 +637,20 @@ app.get('/api/funds/trace/:traceId', validateApiKey, async (req: Request, res: R
  * GET /api/funds/traces/:address
  */
 app.get('/api/funds/traces/:address', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `traces-get-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { address } = req.params;
-  console.log(`[${requestId}] Fetching traces for wallet: ${address}`);
 
   try {
+    const { limit } = req.query;
+    const cap = sanitizeLimit(limit, 50, 200);
     const traces = await fundTracker.getTracesForWallet(address);
 
     res.json({
       walletAddress: address,
       traceCount: traces.length,
-      traces
+      traces: traces.slice(0, cap)
     });
   } catch (error: any) {
-    console.error(`[${requestId}] Error fetching traces:`, error);
+    req.log.error({ err: error }, 'Error fetching traces');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1636,9 +660,7 @@ app.get('/api/funds/traces/:address', validateApiKey, async (req: Request, res: 
  * GET /api/funds/report/:traceId
  */
 app.get('/api/funds/report/:traceId', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `report-generate-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { traceId } = req.params;
-  console.log(`[${requestId}] Generating recovery report for trace: ${traceId}`);
 
   try {
     const report = await fundTracker.generateRecoveryReport(traceId);
@@ -1648,10 +670,10 @@ app.get('/api/funds/report/:traceId', validateApiKey, async (req: Request, res: 
       return;
     }
 
-    console.log(`[${requestId}] Report generated: ${report.recoveryProbability}% recovery probability`);
+    req.log.info({ recoveryProbability: report.recoveryProbability }, 'Recovery report generated');
     res.json(report);
   } catch (error: any) {
-    console.error(`[${requestId}] Error generating report:`, error);
+    req.log.error({ err: error }, 'Error generating report');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1661,9 +683,7 @@ app.get('/api/funds/report/:traceId', validateApiKey, async (req: Request, res: 
  * POST /api/funds/freeze-request
  */
 app.post('/api/funds/freeze-request', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `freeze-create-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { traceId, exchangeDeposit, victimInfo } = req.body;
-  console.log(`[${requestId}] Creating freeze request for trace: ${traceId}`);
 
   try {
     if (!traceId || !exchangeDeposit) {
@@ -1679,14 +699,14 @@ app.post('/api/funds/freeze-request', validateApiKey, async (req: Request, res: 
       template = fundTracker.generateFreezeRequestTemplate(request, victimInfo);
     }
 
-    console.log(`[${requestId}] Freeze request created: ${request.requestId}`);
+    req.log.info({ freezeRequestId: request.requestId }, 'Freeze request created');
     res.json({
       success: true,
       request,
       template
     });
   } catch (error: any) {
-    console.error(`[${requestId}] Error creating freeze request:`, error);
+    req.log.error({ err: error }, 'Error creating freeze request');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1700,9 +720,7 @@ app.post('/api/funds/freeze-request', validateApiKey, async (req: Request, res: 
  * POST /api/alerts/subscribe
  */
 app.post('/api/alerts/subscribe', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `subscribe-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { walletAddress, channels, userId, severityFilter, alertTypes } = req.body;
-  console.log(`[${requestId}] Creating alert subscription for wallet: ${walletAddress}`);
 
   try {
     if (!walletAddress || !channels) {
@@ -1716,13 +734,13 @@ app.post('/api/alerts/subscribe', validateApiKey, async (req: Request, res: Resp
       alertTypes
     });
 
-    console.log(`[${requestId}] Subscription created: ${subscription.subscriptionId}`);
+    req.log.info({ subscriptionId: subscription.subscriptionId }, 'Alert subscription created');
     res.json({
       success: true,
       subscription
     });
   } catch (error: any) {
-    console.error(`[${requestId}] Error creating subscription:`, error);
+    req.log.error({ err: error }, 'Error creating subscription');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1732,9 +750,7 @@ app.post('/api/alerts/subscribe', validateApiKey, async (req: Request, res: Resp
  * GET /api/alerts/subscription/:address
  */
 app.get('/api/alerts/subscription/:address', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `subscription-get-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { address } = req.params;
-  console.log(`[${requestId}] Fetching subscription for wallet: ${address}`);
 
   try {
     const subscription = await alertManager.getSubscription(address);
@@ -1746,7 +762,7 @@ app.get('/api/alerts/subscription/:address', validateApiKey, async (req: Request
 
     res.json(subscription);
   } catch (error: any) {
-    console.error(`[${requestId}] Error fetching subscription:`, error);
+    req.log.error({ err: error }, 'Error fetching subscription');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1756,9 +772,7 @@ app.get('/api/alerts/subscription/:address', validateApiKey, async (req: Request
  * DELETE /api/alerts/subscription/:address
  */
 app.delete('/api/alerts/subscription/:address', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `subscription-delete-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { address } = req.params;
-  console.log(`[${requestId}] Deactivating subscription for wallet: ${address}`);
 
   try {
     await alertManager.deactivateSubscription(address);
@@ -1768,7 +782,7 @@ app.delete('/api/alerts/subscription/:address', validateApiKey, async (req: Requ
       message: 'Subscription deactivated'
     });
   } catch (error: any) {
-    console.error(`[${requestId}] Error deactivating subscription:`, error);
+    req.log.error({ err: error }, 'Error deactivating subscription');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1778,10 +792,8 @@ app.delete('/api/alerts/subscription/:address', validateApiKey, async (req: Requ
  * GET /api/alerts/history/:address
  */
 app.get('/api/alerts/history/:address', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `notifications-history-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { address } = req.params;
   const { limit = 50 } = req.query;
-  console.log(`[${requestId}] Fetching notification history for wallet: ${address}`);
 
   try {
     const notifications = await alertManager.getNotificationHistory(address, sanitizeLimit(limit, 50));
@@ -1792,7 +804,7 @@ app.get('/api/alerts/history/:address', validateApiKey, async (req: Request, res
       notifications
     });
   } catch (error: any) {
-    console.error(`[${requestId}] Error fetching notifications:`, error);
+    req.log.error({ err: error }, 'Error fetching notifications');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1802,12 +814,12 @@ app.get('/api/alerts/history/:address', validateApiKey, async (req: Request, res
  * GET /api/data/exchanges
  */
 app.get('/api/data/exchanges', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `exchanges-get-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  console.log(`[${requestId}] Fetching known exchanges`);
-
   try {
+    const { limit } = req.query;
+    const cap = sanitizeLimit(limit, 200, 1000);
     const result = await db.pool.executeQuery(
-      `SELECT address, exchange_name, exchange_type, is_verified FROM known_exchanges ORDER BY exchange_name`
+      `SELECT address, exchange_name, exchange_type, is_verified FROM known_exchanges ORDER BY exchange_name LIMIT $1`,
+      [cap]
     );
 
     res.json({
@@ -1815,7 +827,7 @@ app.get('/api/data/exchanges', validateApiKey, async (req: Request, res: Respons
       exchanges: result.rows
     });
   } catch (error: any) {
-    console.error(`[${requestId}] Error fetching exchanges:`, error);
+    req.log.error({ err: error }, 'Error fetching exchanges');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1825,12 +837,12 @@ app.get('/api/data/exchanges', validateApiKey, async (req: Request, res: Respons
  * GET /api/data/bridges
  */
 app.get('/api/data/bridges', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `bridges-get-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  console.log(`[${requestId}] Fetching known bridges`);
-
   try {
+    const { limit } = req.query;
+    const cap = sanitizeLimit(limit, 200, 1000);
     const result = await db.pool.executeQuery(
-      `SELECT address, bridge_name, destination_chains, is_active FROM known_bridges ORDER BY bridge_name`
+      `SELECT address, bridge_name, destination_chains, is_active FROM known_bridges ORDER BY bridge_name LIMIT $1`,
+      [cap]
     );
 
     res.json({
@@ -1838,7 +850,7 @@ app.get('/api/data/bridges', validateApiKey, async (req: Request, res: Response)
       bridges: result.rows
     });
   } catch (error: any) {
-    console.error(`[${requestId}] Error fetching bridges:`, error);
+    req.log.error({ err: error }, 'Error fetching bridges');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1855,18 +867,17 @@ import { exchangeCoordinator } from "./services/exchange-coordinator";
  * GET /api/exchanges/contacts
  */
 app.get('/api/exchanges/contacts', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `exchanges-contacts-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  console.log(`[${requestId}] Fetching exchange contacts`);
-
   try {
+    const { limit } = req.query;
+    const cap = sanitizeLimit(limit, 200, 1000);
     const contacts = await exchangeCoordinator.listExchangeContacts();
 
     res.json({
       count: contacts.length,
-      contacts
+      contacts: contacts.slice(0, cap)
     });
   } catch (error: any) {
-    console.error(`[${requestId}] Error fetching exchange contacts:`, error);
+    req.log.error({ err: error }, 'Error fetching exchange contacts');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1876,9 +887,7 @@ app.get('/api/exchanges/contacts', validateApiKey, async (req: Request, res: Res
  * GET /api/exchanges/contacts/:exchangeId
  */
 app.get('/api/exchanges/contacts/:exchangeId', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `exchange-contact-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { exchangeId } = req.params;
-  console.log(`[${requestId}] Fetching exchange contact: ${exchangeId}`);
 
   try {
     const contact = await exchangeCoordinator.getExchangeContact(exchangeId);
@@ -1890,7 +899,7 @@ app.get('/api/exchanges/contacts/:exchangeId', validateApiKey, async (req: Reque
 
     res.json(contact);
   } catch (error: any) {
-    console.error(`[${requestId}] Error fetching exchange contact:`, error);
+    req.log.error({ err: error }, 'Error fetching exchange contact');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1900,9 +909,7 @@ app.get('/api/exchanges/contacts/:exchangeId', validateApiKey, async (req: Reque
  * GET /api/exchanges/by-address/:address
  */
 app.get('/api/exchanges/by-address/:address', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `exchange-by-addr-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { address } = req.params;
-  console.log(`[${requestId}] Fetching exchange by address: ${address}`);
 
   try {
     const contact = await exchangeCoordinator.getExchangeByAddress(address);
@@ -1914,7 +921,7 @@ app.get('/api/exchanges/by-address/:address', validateApiKey, async (req: Reques
 
     res.json(contact);
   } catch (error: any) {
-    console.error(`[${requestId}] Error fetching exchange by address:`, error);
+    req.log.error({ err: error }, 'Error fetching exchange by address');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1924,9 +931,7 @@ app.get('/api/exchanges/by-address/:address', validateApiKey, async (req: Reques
  * POST /api/freeze-requests
  */
 app.post('/api/freeze-requests', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `freeze-create-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { traceId, exchangeName, depositAddress, depositSignature, amount, victimWallet, tokenMint, tokenSymbol } = req.body;
-  console.log(`[${requestId}] Creating freeze request for trace: ${traceId}`);
 
   try {
     if (!traceId || !exchangeName || !depositAddress || !depositSignature || !amount || !victimWallet) {
@@ -1947,13 +952,13 @@ app.post('/api/freeze-requests', validateApiKey, async (req: Request, res: Respo
       tokenSymbol
     );
 
-    console.log(`[${requestId}] Freeze request created: ${request.requestId}`);
+    req.log.info({ freezeRequestId: request.requestId }, 'Freeze request created');
     res.status(201).json({
       success: true,
       request
     });
   } catch (error: any) {
-    console.error(`[${requestId}] Error creating freeze request:`, error);
+    req.log.error({ err: error }, 'Error creating freeze request');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1964,18 +969,17 @@ app.post('/api/freeze-requests', validateApiKey, async (req: Request, res: Respo
  * NOTE: This must be before /:requestId route
  */
 app.get('/api/freeze-requests/pending', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `freeze-pending-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  console.log(`[${requestId}] Fetching pending freeze requests`);
-
   try {
+    const { limit } = req.query;
+    const cap = sanitizeLimit(limit, 50, 500);
     const requests = await exchangeCoordinator.listPendingRequests();
 
     res.json({
       count: requests.length,
-      requests
+      requests: requests.slice(0, cap)
     });
   } catch (error: any) {
-    console.error(`[${requestId}] Error fetching pending requests:`, error);
+    req.log.error({ err: error }, 'Error fetching pending requests');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1986,18 +990,17 @@ app.get('/api/freeze-requests/pending', validateApiKey, async (req: Request, res
  * NOTE: This must be before /:requestId route
  */
 app.get('/api/freeze-requests/follow-up', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `follow-up-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  console.log(`[${requestId}] Fetching requests needing follow-up`);
-
   try {
+    const { limit } = req.query;
+    const cap = sanitizeLimit(limit, 50, 500);
     const requests = await exchangeCoordinator.getRequestsNeedingFollowUp();
 
     res.json({
       count: requests.length,
-      requests
+      requests: requests.slice(0, cap)
     });
   } catch (error: any) {
-    console.error(`[${requestId}] Error fetching follow-up requests:`, error);
+    req.log.error({ err: error }, 'Error fetching follow-up requests');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -2008,15 +1011,12 @@ app.get('/api/freeze-requests/follow-up', validateApiKey, async (req: Request, r
  * NOTE: This must be before /:requestId route
  */
 app.get('/api/freeze-requests/statistics', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `freeze-stats-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  console.log(`[${requestId}] Fetching freeze request statistics`);
-
   try {
     const statistics = await exchangeCoordinator.getStatistics();
 
     res.json(statistics);
   } catch (error: any) {
-    console.error(`[${requestId}] Error fetching statistics:`, error);
+    req.log.error({ err: error }, 'Error fetching statistics');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -2027,9 +1027,7 @@ app.get('/api/freeze-requests/statistics', validateApiKey, async (req: Request, 
  * NOTE: This must be before /:requestId route
  */
 app.get('/api/freeze-requests/trace/:traceId', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `freeze-list-trace-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { traceId } = req.params;
-  console.log(`[${requestId}] Fetching freeze requests for trace: ${traceId}`);
 
   try {
     const requests = await exchangeCoordinator.listFreezeRequestsForTrace(traceId);
@@ -2040,7 +1038,7 @@ app.get('/api/freeze-requests/trace/:traceId', validateApiKey, async (req: Reque
       requests
     });
   } catch (error: any) {
-    console.error(`[${requestId}] Error fetching freeze requests:`, error);
+    req.log.error({ err: error }, 'Error fetching freeze requests');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -2051,9 +1049,7 @@ app.get('/api/freeze-requests/trace/:traceId', validateApiKey, async (req: Reque
  * NOTE: This MUST be after all specific freeze-requests routes
  */
 app.get('/api/freeze-requests/:requestId', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `freeze-get-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { requestId: freezeRequestId } = req.params;
-  console.log(`[${requestId}] Fetching freeze request: ${freezeRequestId}`);
 
   try {
     const request = await exchangeCoordinator.getFreezeRequest(freezeRequestId);
@@ -2065,7 +1061,7 @@ app.get('/api/freeze-requests/:requestId', validateApiKey, async (req: Request, 
 
     res.json(request);
   } catch (error: any) {
-    console.error(`[${requestId}] Error fetching freeze request:`, error);
+    req.log.error({ err: error }, 'Error fetching freeze request');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -2075,10 +1071,8 @@ app.get('/api/freeze-requests/:requestId', validateApiKey, async (req: Request, 
  * PATCH /api/freeze-requests/:requestId/status
  */
 app.patch('/api/freeze-requests/:requestId/status', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const reqId = `freeze-status-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { requestId } = req.params;
   const { status, exchangeTicketId, exchangeResponse } = req.body;
-  console.log(`[${reqId}] Updating freeze request status: ${requestId} -> ${status}`);
 
   try {
     if (!status) {
@@ -2088,13 +1082,13 @@ app.patch('/api/freeze-requests/:requestId/status', validateApiKey, async (req: 
 
     await exchangeCoordinator.updateRequestStatus(requestId, status, exchangeTicketId, exchangeResponse);
 
-    console.log(`[${reqId}] Status updated successfully`);
+    req.log.info({ freezeRequestId: requestId, status }, 'Freeze request status updated');
     res.json({
       success: true,
       message: `Status updated to ${status}`
     });
   } catch (error: any) {
-    console.error(`[${reqId}] Error updating status:`, error);
+    req.log.error({ err: error }, 'Error updating status');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -2104,10 +1098,8 @@ app.patch('/api/freeze-requests/:requestId/status', validateApiKey, async (req: 
  * POST /api/freeze-requests/:requestId/evidence
  */
 app.post('/api/freeze-requests/:requestId/evidence', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const reqId = `evidence-gen-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { requestId } = req.params;
   const { traceId, victimWallet, victimStatement } = req.body;
-  console.log(`[${reqId}] Generating evidence package for request: ${requestId}`);
 
   try {
     if (!traceId || !victimWallet) {
@@ -2122,13 +1114,13 @@ app.post('/api/freeze-requests/:requestId/evidence', validateApiKey, async (req:
       victimStatement
     );
 
-    console.log(`[${reqId}] Evidence package generated: ${evidencePackage.packageId}`);
+    req.log.info({ packageId: evidencePackage.packageId }, 'Evidence package generated');
     res.status(201).json({
       success: true,
       evidencePackage
     });
   } catch (error: any) {
-    console.error(`[${reqId}] Error generating evidence:`, error);
+    req.log.error({ err: error }, 'Error generating evidence');
     res.status(500).json({ error: error.message || 'Internal server error' });
   }
 });
@@ -2138,9 +1130,7 @@ app.post('/api/freeze-requests/:requestId/evidence', validateApiKey, async (req:
  * GET /api/evidence/:packageId
  */
 app.get('/api/evidence/:packageId', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const reqId = `evidence-get-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { packageId } = req.params;
-  console.log(`[${reqId}] Fetching evidence package: ${packageId}`);
 
   try {
     const evidencePackage = await exchangeCoordinator.getEvidencePackage(packageId);
@@ -2152,7 +1142,7 @@ app.get('/api/evidence/:packageId', validateApiKey, async (req: Request, res: Re
 
     res.json(evidencePackage);
   } catch (error: any) {
-    console.error(`[${reqId}] Error fetching evidence:`, error);
+    req.log.error({ err: error }, 'Error fetching evidence');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -2162,9 +1152,7 @@ app.get('/api/evidence/:packageId', validateApiKey, async (req: Request, res: Re
  * POST /api/freeze-requests/:requestId/email-template
  */
 app.post('/api/freeze-requests/:requestId/email-template', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const reqId = `email-template-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { requestId } = req.params;
-  console.log(`[${reqId}] Generating email template for request: ${requestId}`);
 
   try {
     const request = await exchangeCoordinator.getFreezeRequest(requestId);
@@ -2192,14 +1180,13 @@ app.post('/api/freeze-requests/:requestId/email-template', validateApiKey, async
 
     const template = exchangeCoordinator.generateFreezeRequestEmail(request, evidencePackage, exchangeContact);
 
-    console.log(`[${reqId}] Email template generated`);
     res.json({
       success: true,
       template,
       recipientEmail: exchangeContact.complianceEmail || exchangeContact.emergencyEmail
     });
   } catch (error: any) {
-    console.error(`[${reqId}] Error generating email template:`, error);
+    req.log.error({ err: error }, 'Error generating email template');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -2209,10 +1196,8 @@ app.post('/api/freeze-requests/:requestId/email-template', validateApiKey, async
  * POST /api/freeze-requests/:requestId/follow-up
  */
 app.post('/api/freeze-requests/:requestId/follow-up', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const reqId = `record-follow-up-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { requestId } = req.params;
   const { nextFollowUpHours = 24 } = req.body;
-  console.log(`[${reqId}] Recording follow-up for request: ${requestId}`);
 
   try {
     await exchangeCoordinator.recordFollowUp(requestId, nextFollowUpHours);
@@ -2222,7 +1207,7 @@ app.post('/api/freeze-requests/:requestId/follow-up', validateApiKey, async (req
       message: `Follow-up recorded, next follow-up in ${nextFollowUpHours} hours`
     });
   } catch (error: any) {
-    console.error(`[${reqId}] Error recording follow-up:`, error);
+    req.log.error({ err: error }, 'Error recording follow-up');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -2238,10 +1223,8 @@ import { transactionSimulator } from "./services/transaction-simulator";
  * Simulate a transaction before signing
  * POST /api/simulation/simulate
  */
-app.post('/api/simulation/simulate', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `simulate-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+app.post('/api/simulation/simulate', strictLimiter, validateApiKey, async (req: Request, res: Response): Promise<void> => {
   const { serializedTransaction, walletAddress, storeResult = true } = req.body;
-  console.log(`[${requestId}] Simulating transaction for wallet: ${walletAddress}`);
 
   try {
     if (!serializedTransaction || !walletAddress) {
@@ -2254,13 +1237,13 @@ app.post('/api/simulation/simulate', validateApiKey, async (req: Request, res: R
       walletAddress
     );
 
-    console.log(`[${requestId}] Simulation complete: risk=${result.riskLevel}`);
+    req.log.info({ riskLevel: result.riskLevel }, 'Simulation complete');
     res.json({
       success: true,
       simulation: result
     });
   } catch (error: any) {
-    console.error(`[${requestId}] Error simulating transaction:`, error);
+    req.log.error({ err: error }, 'Error simulating transaction');
     res.status(500).json({ error: error.message || 'Internal server error' });
   }
 });
@@ -2270,9 +1253,7 @@ app.post('/api/simulation/simulate', validateApiKey, async (req: Request, res: R
  * POST /api/simulation/quick-check
  */
 app.post('/api/simulation/quick-check', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `quick-check-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { serializedTransaction } = req.body;
-  console.log(`[${requestId}] Quick risk check`);
 
   try {
     if (!serializedTransaction) {
@@ -2282,13 +1263,13 @@ app.post('/api/simulation/quick-check', validateApiKey, async (req: Request, res
 
     const result = await transactionSimulator.quickRiskCheck(serializedTransaction);
 
-    console.log(`[${requestId}] Quick check complete: risk=${result.riskLevel}`);
+    req.log.info({ riskLevel: result.riskLevel }, 'Quick risk check complete');
     res.json({
       success: true,
       check: result
     });
   } catch (error: any) {
-    console.error(`[${requestId}] Error in quick check:`, error);
+    req.log.error({ err: error }, 'Error in quick check');
     res.status(500).json({ error: error.message || 'Internal server error' });
   }
 });
@@ -2298,10 +1279,8 @@ app.post('/api/simulation/quick-check', validateApiKey, async (req: Request, res
  * GET /api/simulation/history/:walletAddress
  */
 app.get('/api/simulation/history/:walletAddress', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `sim-history-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { walletAddress } = req.params;
   const { limit = 50 } = req.query;
-  console.log(`[${requestId}] Fetching simulation history for wallet: ${walletAddress}`);
 
   try {
     const history = await transactionSimulator.getSimulationHistory(
@@ -2315,7 +1294,7 @@ app.get('/api/simulation/history/:walletAddress', validateApiKey, async (req: Re
       simulations: history
     });
   } catch (error: any) {
-    console.error(`[${requestId}] Error fetching simulation history:`, error);
+    req.log.error({ err: error }, 'Error fetching simulation history');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -2325,9 +1304,7 @@ app.get('/api/simulation/history/:walletAddress', validateApiKey, async (req: Re
  * GET /api/simulation/:simulationId
  */
 app.get('/api/simulation/:simulationId', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `sim-get-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { simulationId } = req.params;
-  console.log(`[${requestId}] Fetching simulation: ${simulationId}`);
 
   try {
     const simResult = await db.pool.executeQuery(
@@ -2353,7 +1330,7 @@ app.get('/api/simulation/:simulationId', validateApiKey, async (req: Request, re
 
     res.json(simulation);
   } catch (error: any) {
-    console.error(`[${requestId}] Error fetching simulation:`, error);
+    req.log.error({ err: error }, 'Error fetching simulation');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -2364,14 +1341,15 @@ app.get('/api/simulation/:simulationId', validateApiKey, async (req: Request, re
  * NOTE: This must be before /:simulationId route - but we define it here, Express handles it correctly
  */
 app.get('/api/programs/verified', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `programs-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  console.log(`[${requestId}] Fetching verified programs`);
-
   try {
+    const { limit } = req.query;
+    const cap = sanitizeLimit(limit, 200, 1000);
     const result = await db.pool.executeQuery(
       `SELECT program_id, program_name, category, description, website_url, is_verified, is_audited, risk_level
        FROM verified_programs
-       ORDER BY program_name`
+       ORDER BY program_name
+       LIMIT $1`,
+      [cap]
     );
 
     res.json({
@@ -2379,7 +1357,7 @@ app.get('/api/programs/verified', validateApiKey, async (req: Request, res: Resp
       programs: result.rows
     });
   } catch (error: any) {
-    console.error(`[${requestId}] Error fetching verified programs:`, error);
+    req.log.error({ err: error }, 'Error fetching verified programs');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -2389,9 +1367,7 @@ app.get('/api/programs/verified', validateApiKey, async (req: Request, res: Resp
  * GET /api/programs/:programId
  */
 app.get('/api/programs/:programId', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `program-check-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { programId } = req.params;
-  console.log(`[${requestId}] Checking program: ${programId}`);
 
   try {
     const result = await db.pool.executeQuery(
@@ -2416,7 +1392,7 @@ app.get('/api/programs/:programId', validateApiKey, async (req: Request, res: Re
       isKnown: true
     });
   } catch (error: any) {
-    console.error(`[${requestId}] Error checking program:`, error);
+    req.log.error({ err: error }, 'Error checking program');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -2426,10 +1402,8 @@ app.get('/api/programs/:programId', validateApiKey, async (req: Request, res: Re
  * GET /api/simulation/alerts/:walletAddress
  */
 app.get('/api/simulation/alerts/:walletAddress', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `sim-alerts-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { walletAddress } = req.params;
   const { limit = 50, acknowledged } = req.query;
-  console.log(`[${requestId}] Fetching simulation alerts for wallet: ${walletAddress}`);
 
   try {
     let query = `SELECT * FROM simulation_alerts WHERE wallet_address = $1`;
@@ -2451,7 +1425,7 @@ app.get('/api/simulation/alerts/:walletAddress', validateApiKey, async (req: Req
       alerts: result.rows
     });
   } catch (error: any) {
-    console.error(`[${requestId}] Error fetching simulation alerts:`, error);
+    req.log.error({ err: error }, 'Error fetching simulation alerts');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -2461,9 +1435,7 @@ app.get('/api/simulation/alerts/:walletAddress', validateApiKey, async (req: Req
  * POST /api/simulation/alerts/:alertId/acknowledge
  */
 app.post('/api/simulation/alerts/:alertId/acknowledge', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `ack-sim-alert-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { alertId } = req.params;
-  console.log(`[${requestId}] Acknowledging simulation alert: ${alertId}`);
 
   try {
     await db.pool.executeQuery(
@@ -2476,7 +1448,7 @@ app.post('/api/simulation/alerts/:alertId/acknowledge', validateApiKey, async (r
       message: 'Alert acknowledged'
     });
   } catch (error: any) {
-    console.error(`[${requestId}] Error acknowledging alert:`, error);
+    req.log.error({ err: error }, 'Error acknowledging simulation alert');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -2498,9 +1470,7 @@ exchangeCoordinator.setThreatIntel(threatIntelligenceService);
  * POST /api/threat-intel/sync
  */
 app.post('/api/threat-intel/sync', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `threat-sync-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { sourceId } = req.body;
-  console.log(`[${requestId}] Triggering threat intel sync${sourceId ? `: ${sourceId}` : ' (all)'}`);
 
   try {
     if (sourceId) {
@@ -2512,7 +1482,7 @@ app.post('/api/threat-intel/sync', validateApiKey, async (req: Request, res: Res
         fundTracker.refreshKnownAddresses(),
       ]);
 
-      console.log(`[${requestId}] Source sync complete: ${result.addressesNew} new, ${result.addressesUpdated} updated`);
+      req.log.info({ sourceId, addressesNew: result.addressesNew, addressesUpdated: result.addressesUpdated }, 'Source sync complete');
       res.json({ success: true, results: [result] });
     } else {
       const results = await threatIntelligenceService.syncAll();
@@ -2523,11 +1493,11 @@ app.post('/api/threat-intel/sync', validateApiKey, async (req: Request, res: Res
         fundTracker.refreshKnownAddresses(),
       ]);
 
-      console.log(`[${requestId}] Full sync complete: ${results.length} sources`);
+      req.log.info({ sourcesCount: results.length }, 'Full threat intel sync complete');
       res.json({ success: true, results });
     }
   } catch (error: any) {
-    console.error(`[${requestId}] Error during threat intel sync:`, error);
+    req.log.error({ err: error }, 'Error during threat intel sync');
     res.status(500).json({ error: error.message || 'Internal server error' });
   }
 });
@@ -2537,16 +1507,13 @@ app.post('/api/threat-intel/sync', validateApiKey, async (req: Request, res: Res
  * GET /api/threat-intel/status
  */
 app.get('/api/threat-intel/status', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `threat-status-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  console.log(`[${requestId}] Fetching threat intel status`);
-
   try {
     const status = await threatIntelligenceService.getStatus();
 
-    console.log(`[${requestId}] Status retrieved: ${status.sources.length} sources, ${status.totalMaliciousAddresses} addresses`);
+    req.log.info({ sources: status.sources.length, totalAddresses: status.totalMaliciousAddresses }, 'Threat intel status retrieved');
     res.json(status);
   } catch (error: any) {
-    console.error(`[${requestId}] Error fetching threat intel status:`, error);
+    req.log.error({ err: error }, 'Error fetching threat intel status');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -2556,19 +1523,17 @@ app.get('/api/threat-intel/status', validateApiKey, async (req: Request, res: Re
  * GET /api/threat-intel/sources
  */
 app.get('/api/threat-intel/sources', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `threat-sources-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  console.log(`[${requestId}] Fetching threat intel sources`);
-
   try {
+    const { limit } = req.query;
+    const cap = sanitizeLimit(limit, 100, 500);
     const sources = await threatIntelligenceService.getSources();
 
-    console.log(`[${requestId}] Sources retrieved: ${sources.length}`);
     res.json({
       count: sources.length,
-      sources
+      sources: sources.slice(0, cap)
     });
   } catch (error: any) {
-    console.error(`[${requestId}] Error fetching threat intel sources:`, error);
+    req.log.error({ err: error }, 'Error fetching threat intel sources');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -2578,9 +1543,7 @@ app.get('/api/threat-intel/sources', validateApiKey, async (req: Request, res: R
  * GET /api/threat-intel/entity/:address
  */
 app.get('/api/threat-intel/entity/:address', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `entity-lookup-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { address } = req.params;
-  console.log(`[${requestId}] Looking up entity for address: ${address}`);
 
   try {
     if (!address || address.length < 32 || address.length > 44) {
@@ -2590,7 +1553,7 @@ app.get('/api/threat-intel/entity/:address', validateApiKey, async (req: Request
 
     const entity = await threatIntelligenceService.lookupEntityCached(address);
 
-    console.log(`[${requestId}] Entity lookup: ${entity ? entity.entityName || 'unknown' : 'not found'}`);
+    req.log.info({ entityName: entity?.entityName || null }, 'Entity lookup complete');
     res.json({
       address,
       entity,
@@ -2598,7 +1561,7 @@ app.get('/api/threat-intel/entity/:address', validateApiKey, async (req: Request
       cached: entity ? true : false,
     });
   } catch (error: any) {
-    console.error(`[${requestId}] Error looking up entity:`, error);
+    req.log.error({ err: error }, 'Error looking up entity');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -2608,9 +1571,7 @@ app.get('/api/threat-intel/entity/:address', validateApiKey, async (req: Request
  * GET /api/threat-intel/domain/:domain
  */
 app.get('/api/threat-intel/domain/:domain', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `domain-check-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { domain } = req.params;
-  console.log(`[${requestId}] Checking domain: ${domain}`);
 
   try {
     if (!domain || domain.length < 3) {
@@ -2620,10 +1581,10 @@ app.get('/api/threat-intel/domain/:domain', validateApiKey, async (req: Request,
 
     const result = await threatIntelligenceService.checkDomain(domain);
 
-    console.log(`[${requestId}] Domain check: ${result.isScam ? 'SCAM' : 'clean'}`);
+    req.log.info({ domain, isScam: result.isScam }, 'Domain check complete');
     res.json(result);
   } catch (error: any) {
-    console.error(`[${requestId}] Error checking domain:`, error);
+    req.log.error({ err: error }, 'Error checking domain');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -2633,9 +1594,7 @@ app.get('/api/threat-intel/domain/:domain', validateApiKey, async (req: Request,
  * GET /api/threat-intel/address/:address
  */
 app.get('/api/threat-intel/address/:address', validateApiKey, async (req: Request, res: Response): Promise<void> => {
-  const requestId = `addr-check-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const { address } = req.params;
-  console.log(`[${requestId}] Address risk check: ${address}`);
 
   try {
     // Validate base58 format (32-44 alphanumeric, no 0/O/I/l)
@@ -2657,7 +1616,7 @@ app.get('/api/threat-intel/address/:address', validateApiKey, async (req: Reques
     // Query GoPlus for real-time risk data
     const goPlusResult = await threatIntelligenceService.checkAddressGoPlus(address);
 
-    console.log(`[${requestId}] local=${isMalicious}, goplus_risky=${goPlusResult.isRisky}`);
+    req.log.info({ isMalicious, goPlusRisky: goPlusResult.isRisky }, 'Address risk check complete');
     res.json({
       address,
       isMalicious: isMalicious || goPlusResult.isRisky,
@@ -2667,22 +1626,230 @@ app.get('/api/threat-intel/address/:address', validateApiKey, async (req: Reques
         : null,
     });
   } catch (error: any) {
-    console.error(`[${requestId}] Error checking address:`, error);
+    req.log.error({ err: error }, 'Error checking address');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// Start the server
-app.listen(PORT, () => {
-  console.log(`🚀 Lavinth Recovery API running on port ${PORT}`);
-  console.log(`📊 Debug logging enabled for all endpoints`);
-  console.log(`🔍 Request IDs will be generated for tracking`);
-  console.log(`🆕 Phase 1: /api/approvals/*, /api/revocation/*, /api/recovery/*, /api/security-profile/*`);
-  console.log(`🆕 Phase 2: /api/compromise/*, /api/funds/*, /api/alerts/*, /api/data/*`);
-  console.log(`🆕 Phase 3: /api/exchanges/*, /api/freeze-requests/*, /api/evidence/*`);
-  console.log(`🆕 Phase 5: /api/simulation/*, /api/programs/*`);
-  console.log(`🆕 Phase 6: /api/threat-intel/*`);
+// ============================================
+// User & API Key Management (wallet-based auth)
+// ============================================
+import crypto from 'crypto';
+
+// POST /api/users/ensure - Upsert user by wallet_address
+app.post('/api/users/ensure', validateToken, async (req: Request, res: Response) => {
+  try {
+    const { walletAddress } = req.body;
+    if (!walletAddress) {
+      res.status(400).json({ error: 'walletAddress is required' });
+      return;
+    }
+
+    const result = await db.pool.executeQuery(
+      `INSERT INTO users (wallet_address, last_login_at)
+       VALUES ($1, NOW())
+       ON CONFLICT (wallet_address) DO UPDATE SET last_login_at = NOW()
+       RETURNING id, wallet_address, created_at, last_login_at`,
+      [walletAddress]
+    );
+
+    res.json(result.rows[0]);
+  } catch (error: any) {
+    req.log.error({ err: error }, 'Error ensuring user');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/user-api-keys/:walletAddress - List API keys for a wallet
+app.get('/api/user-api-keys/:walletAddress', validateToken, async (req: Request, res: Response) => {
+  try {
+    const { walletAddress } = req.params;
+
+    const result = await db.pool.executeQuery(
+      `SELECT id, name,
+              CONCAT(LEFT(key, 8), '...', RIGHT(key, 4)) as key,
+              wallet_address as "walletAddress",
+              created_at as "createdAt",
+              last_used as "lastUsed",
+              is_active as "isActive",
+              expires_at as "expiresAt",
+              permissions,
+              usage_limit as "usageLimit",
+              current_usage as "currentUsage",
+              ip_restrictions as "ipRestrictions",
+              description
+       FROM user_api_keys
+       WHERE wallet_address = $1
+       ORDER BY created_at DESC
+       LIMIT 100`,
+      [walletAddress]
+    );
+
+    res.json(result.rows);
+  } catch (error: any) {
+    req.log.error({ err: error }, 'Error listing API keys');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/user-api-keys/:walletAddress - Create API key
+app.post('/api/user-api-keys/:walletAddress', validateToken, async (req: Request, res: Response) => {
+  try {
+    const { walletAddress } = req.params;
+    const { name, expiresAt, permissions, usageLimit, ipRestrictions, description } = req.body;
+
+    if (!name) {
+      res.status(400).json({ error: 'name is required' });
+      return;
+    }
+
+    // Ensure user exists
+    await db.pool.executeQuery(
+      `INSERT INTO users (wallet_address) VALUES ($1) ON CONFLICT (wallet_address) DO NOTHING`,
+      [walletAddress]
+    );
+
+    // Generate API key
+    const randomBytes = crypto.randomBytes(32);
+    const apiKey = `lav_live_${randomBytes.toString('base64').replace(/[+/=]/g, '')}`;
+    const hashedKey = crypto.createHash('sha256').update(apiKey).digest('hex');
+
+    const result = await db.pool.executeQuery(
+      `INSERT INTO user_api_keys (name, key, wallet_address, expires_at, permissions, usage_limit, ip_restrictions, description)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, name,
+                 CONCAT(LEFT(key, 8), '...', RIGHT(key, 4)) as key,
+                 wallet_address as "walletAddress",
+                 created_at as "createdAt",
+                 is_active as "isActive",
+                 expires_at as "expiresAt",
+                 permissions,
+                 usage_limit as "usageLimit",
+                 current_usage as "currentUsage",
+                 ip_restrictions as "ipRestrictions",
+                 description`,
+      [
+        name,
+        hashedKey,
+        walletAddress,
+        expiresAt || null,
+        permissions || ['wallet-check:read'],
+        usageLimit || null,
+        ipRestrictions || [],
+        description || null,
+      ]
+    );
+
+    res.status(201).json({
+      message: 'API key created successfully',
+      apiKey,
+      apiKeyDoc: result.rows[0],
+    });
+  } catch (error: any) {
+    req.log.error({ err: error }, 'Error creating API key');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/user-api-keys/:walletAddress/:keyId - Get specific API key
+app.get('/api/user-api-keys/:walletAddress/:keyId', validateToken, async (req: Request, res: Response) => {
+  try {
+    const { walletAddress, keyId } = req.params;
+
+    const result = await db.pool.executeQuery(
+      `SELECT id, name,
+              CONCAT(LEFT(key, 8), '...', RIGHT(key, 4)) as key,
+              wallet_address as "walletAddress",
+              created_at as "createdAt",
+              last_used as "lastUsed",
+              is_active as "isActive",
+              expires_at as "expiresAt",
+              permissions,
+              usage_limit as "usageLimit",
+              current_usage as "currentUsage",
+              ip_restrictions as "ipRestrictions",
+              description
+       FROM user_api_keys
+       WHERE id = $1 AND wallet_address = $2`,
+      [keyId, walletAddress]
+    );
+
+    if (result.rowCount === 0) {
+      res.status(404).json({ error: 'API key not found' });
+      return;
+    }
+
+    res.json(result.rows[0]);
+  } catch (error: any) {
+    req.log.error({ err: error }, 'Error getting API key');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /api/user-api-keys/:walletAddress/:keyId - Revoke API key
+app.delete('/api/user-api-keys/:walletAddress/:keyId', validateToken, async (req: Request, res: Response) => {
+  try {
+    const { walletAddress, keyId } = req.params;
+
+    const result = await db.pool.executeQuery(
+      `UPDATE user_api_keys SET is_active = false
+       WHERE id = $1 AND wallet_address = $2
+       RETURNING id`,
+      [keyId, walletAddress]
+    );
+
+    if (result.rowCount === 0) {
+      res.status(404).json({ error: 'API key not found or not owned by user' });
+      return;
+    }
+
+    res.json({ message: 'API key revoked successfully' });
+  } catch (error: any) {
+    req.log.error({ err: error }, 'Error revoking API key');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// SSE endpoint for real-time alerts
+import { AlertManager } from './services/alert-manager';
+
+const MAX_SSE_CONNECTIONS = 100;
+let sseConnectionCount = 0;
+
+app.get('/api/alerts/stream', validateApiKey, (req: Request, res: Response): any => {
+  if (sseConnectionCount >= MAX_SSE_CONNECTIONS) {
+    return res.status(503).json({ error: 'Too many concurrent connections' });
+  }
+
+  sseConnectionCount++;
+
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+  });
+
+  // Send heartbeat every 30s to keep connection alive
+  const heartbeat = setInterval(() => res.write(': heartbeat\n\n'), 30_000);
+
+  const onAlert = (data: any) => {
+    res.write(`event: alert\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
+  AlertManager.events.on('alert', onAlert);
+
+  req.on('close', () => {
+    sseConnectionCount--;
+    clearInterval(heartbeat);
+    AlertManager.events.off('alert', onAlert);
+  });
 });
 
 // Export the Express app
+export { app };
 export default app;
+
+// Start the server
+app.listen(PORT, () => {
+  logger.info({ port: PORT }, 'Server running');
+});

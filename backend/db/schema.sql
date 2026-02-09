@@ -1,84 +1,3 @@
--- Table: dust_transactions
-CREATE TABLE dust_transactions (
-  id SERIAL PRIMARY KEY,
-  signature TEXT,
-  timestamp TIMESTAMPTZ,
-  slot BIGINT,
-  success BOOLEAN,
-  sender TEXT,
-  recipient TEXT,
-  amount NUMERIC,
-  fee NUMERIC,
-  token_type TEXT,
-  token_address TEXT,
-  is_potential_dust BOOLEAN,
-  is_potential_poisoning BOOLEAN,
-  risk_score NUMERIC,
-  created_at TIMESTAMPTZ
-);
-
--- Table: dusting_attackers
-CREATE TABLE dusting_attackers (
-  id SERIAL PRIMARY KEY,
-  address TEXT UNIQUE,
-  small_transfers_count INTEGER,
-  unique_victims_count INTEGER,
-  unique_victims TEXT,
-  timestamps TEXT,
-  risk_score NUMERIC,
-  wallet_age_days INTEGER,
-  total_transaction_volume NUMERIC,
-  known_labels TEXT,
-  related_addresses TEXT,
-  previous_attack_patterns TEXT,
-  time_patterns TEXT,
-  temporal_pattern TEXT,
-  network_pattern TEXT,
-  behavioral_indicators TEXT,
-  ml_features TEXT,
-  ml_prediction TEXT,
-  last_updated TIMESTAMPTZ
-);
-
--- Table: dusting_candidates
-CREATE TABLE dusting_candidates (
-  id SERIAL PRIMARY KEY,
-  address TEXT UNIQUE,
-  risk_score NUMERIC,
-  first_detected_at TIMESTAMPTZ,
-  last_updated TIMESTAMPTZ
-);
-
--- Table: dusting_victims (extended)
-CREATE TABLE dusting_victims (
-  id SERIAL PRIMARY KEY,
-  address TEXT UNIQUE,
-  dust_transactions_count INTEGER,
-  unique_attackers_count INTEGER,
-  unique_attackers TEXT,
-  timestamps TEXT,
-  risk_score NUMERIC,
-  wallet_age_days INTEGER,
-  wallet_value_estimate NUMERIC,
-  time_patterns TEXT,
-  vulnerability_assessment TEXT,
-  ml_features TEXT,
-  ml_prediction TEXT,
-  last_updated TIMESTAMPTZ
-);
-
--- Table: risk_analysis
-CREATE TABLE risk_analysis (
-  id SERIAL PRIMARY KEY,
-  address TEXT UNIQUE,
-  risk_score NUMERIC,
-  chain_analysis_data JSONB,
-  trm_labs_data JSONB,
-  temporal_pattern TEXT,
-  network_pattern TEXT,
-  last_updated TIMESTAMPTZ
-);
-
 -- ============================================
 -- WalletShield Recovery Tables (Phase 1)
 -- ============================================
@@ -541,3 +460,33 @@ INSERT INTO exchange_contacts (exchange_id, exchange_name, exchange_type, compli
 ('raydium', 'Raydium AMM', 'dex', NULL, NULL, 72, false, false, 1.0, false),
 ('orca', 'Orca Whirlpool', 'dex', NULL, NULL, 72, false, false, 1.0, false)
 ON CONFLICT (exchange_id) DO NOTHING;
+
+-- ============================================
+-- Users & API Keys (wallet-based auth)
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS users (
+  id SERIAL PRIMARY KEY,
+  wallet_address TEXT UNIQUE NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  last_login_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_users_wallet ON users(wallet_address);
+
+CREATE TABLE IF NOT EXISTS user_api_keys (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+  name TEXT NOT NULL,
+  key TEXT UNIQUE NOT NULL,
+  wallet_address TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  last_used TIMESTAMPTZ,
+  is_active BOOLEAN DEFAULT TRUE,
+  expires_at TIMESTAMPTZ,
+  permissions TEXT[] DEFAULT ARRAY['wallet-check:read'],
+  usage_limit INTEGER,
+  current_usage INTEGER DEFAULT 0,
+  ip_restrictions TEXT[] DEFAULT ARRAY[]::TEXT[],
+  description TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_user_api_keys_wallet ON user_api_keys(wallet_address);
+CREATE INDEX IF NOT EXISTS idx_user_api_keys_key ON user_api_keys(key);

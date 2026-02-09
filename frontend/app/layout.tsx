@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import AuthProvider from "@/context/AuthProvider";
+import { WalletProvider } from "@/context/WalletProvider";
+import { QueryProvider } from "@/context/QueryProvider";
+import { WalletAuthSync } from "@/components/wallet-auth-sync";
+import { RootErrorBoundary } from "@/components/root-error-boundary";
 
 export const metadata: Metadata = {
   title: "Lavinth - Advanced Security for Solana Blockchain",
   description:
-    "Protect your Solana applications from account dusting and address poisoning attacks with Lavinth's comprehensive security platform.",
+    "Solana post-compromise wallet recovery platform — approval scanning, emergency revocation, fund tracing, and exchange freeze requests.",
 };
 
 export default function RootLayout({
@@ -16,7 +19,13 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className="dark">
-        <AuthProvider>{children}</AuthProvider>
+        <RootErrorBoundary>
+          <QueryProvider>
+            <WalletProvider>
+              <WalletAuthSync>{children}</WalletAuthSync>
+            </WalletProvider>
+          </QueryProvider>
+        </RootErrorBoundary>
       </body>
     </html>
   );

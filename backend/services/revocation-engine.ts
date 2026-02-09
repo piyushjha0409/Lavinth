@@ -20,6 +20,7 @@ import {
 import * as dotenv from "dotenv";
 import { v4 as uuidv4 } from "uuid";
 import pool from "../db/config";
+import logger from "../logger";
 import { TokenApproval, approvalScanner } from "./approval-scanner";
 
 dotenv.config();
@@ -97,7 +98,7 @@ export class RevocationEngine {
 
   constructor() {
     if (RPC_ENDPOINTS.length === 0) {
-      console.warn("Warning: No Helius API keys configured. Revocation engine will use public RPC.");
+      logger.warn({ source: 'RevocationEngine' }, 'No Helius API keys configured. Revocation engine will use public RPC.');
       // Use public Solana RPC as fallback for development
       this.connections = [new Connection("https://api.mainnet-beta.solana.com", "confirmed")];
     } else {
@@ -171,7 +172,7 @@ export class RevocationEngine {
           estimatedFee: 5000, // ~0.000005 SOL per instruction
         });
       } catch (error: any) {
-        console.error(`Error creating revoke instruction for ${approval.tokenAccount}:`, error.message);
+        logger.error({ err: error, source: 'RevocationEngine', tokenAccount: approval.tokenAccount }, 'Error creating revoke instruction');
       }
     }
 
@@ -333,7 +334,7 @@ export class RevocationEngine {
         [sessionId, walletAddress, totalApprovals]
       );
     } catch (error) {
-      console.error("Error creating recovery session:", error);
+      logger.error({ err: error, source: 'RevocationEngine' }, 'Error creating recovery session');
     }
   }
 
@@ -350,7 +351,7 @@ export class RevocationEngine {
         [sessionId, status]
       );
     } catch (error) {
-      console.error("Error updating recovery session:", error);
+      logger.error({ err: error, source: 'RevocationEngine' }, 'Error updating recovery session');
     }
   }
 
@@ -382,7 +383,7 @@ export class RevocationEngine {
         ]
       );
     } catch (error) {
-      console.error("Error completing recovery session:", error);
+      logger.error({ err: error, source: 'RevocationEngine' }, 'Error completing recovery session');
     }
   }
 
@@ -415,7 +416,7 @@ export class RevocationEngine {
         completedAt: row.completed_at ? new Date(row.completed_at) : undefined,
       };
     } catch (error) {
-      console.error("Error fetching recovery session:", error);
+      logger.error({ err: error, source: 'RevocationEngine' }, 'Error fetching recovery session');
       return null;
     }
   }
@@ -446,7 +447,7 @@ export class RevocationEngine {
         completedAt: row.completed_at ? new Date(row.completed_at) : undefined,
       }));
     } catch (error) {
-      console.error("Error fetching recovery sessions:", error);
+      logger.error({ err: error, source: 'RevocationEngine' }, 'Error fetching recovery sessions');
       return [];
     }
   }
@@ -494,7 +495,7 @@ export class RevocationEngine {
         serialized: serialized.toString("base64"),
       };
     } catch (error: any) {
-      console.error("Error creating single revoke instruction:", error.message);
+      logger.error({ err: error, source: 'RevocationEngine' }, 'Error creating single revoke instruction');
       return null;
     }
   }

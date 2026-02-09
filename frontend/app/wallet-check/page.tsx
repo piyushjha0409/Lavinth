@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { AlertCircle, CheckCircle, Search } from "lucide-react";
+import { AlertCircle, AlertTriangle, CheckCircle, Search } from "lucide-react";
 import { Suspense } from "react";
+import { ErrorBoundary } from "react-error-boundary";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -16,37 +17,22 @@ import {
 import { Input } from "@/components/ui/input";
 import { BackgroundBeams } from "@/components/ui/background-beams";
 import { Spotlight } from "@/components/ui/spotlight";
-import { useSession } from "next-auth/react";
-import { SignOut } from "@/components/sign-out";
-
-interface AttackerDetails {
-  smallTransfersCount: number;
-  uniqueVictimsCount: number;
-  temporalPattern: {
-    burstCount: number;
-    regularityScore: number;
-    averageTimeBetweenTransfers: number;
-  };
-  networkPattern: {
-    clusterSize: number;
-    centralityScore: number;
-    recipientOverlap: number;
-  };
-  behavioralIndicators: {
-    usesNewAccounts: boolean;
-    targetsPremiumWallets: boolean;
-    usesScriptedTransactions: boolean;
-    hasAbnormalFundingPattern: boolean;
-  };
-  lastUpdated: string;
-}
+import { useWallet } from "@solana/wallet-adapter-react";
 
 interface WalletCheckResult {
   status: string;
-  isDusted: boolean;
+  isFlagged: boolean;
   riskScore: number;
   message: string;
-  attackerDetails?: AttackerDetails;
+  details?: {
+    label: string;
+    category: string;
+    sources: string[];
+  };
+  goPlusRisk?: {
+    isRisky: boolean;
+    riskFlags: string[];
+  };
   error?: string;
 }
 
@@ -86,6 +72,14 @@ const WalletCheckWithParams = () => {
 
     try {
       const response = await fetch(`/api/wallet-check/${address}`);
+
+      if (response.status === 429) {
+        const retryAfter = response.headers.get("Retry-After");
+        const wait = retryAfter ? ` Please try again in ${retryAfter} seconds.` : " Please try again shortly.";
+        setError(`Too many requests.${wait}`);
+        return;
+      }
+
       const data = await response.json();
 
       if (data.status === "error") {
@@ -114,8 +108,7 @@ const WalletCheckWithParams = () => {
           Wallet Address Security Check
         </CardTitle>
         <CardDescription className="text-center text-gray-300">
-          Check if a Solana wallet address is flagged as a potential dusting
-          source
+          Check if a Solana wallet address is flagged as potentially malicious
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -159,13 +152,13 @@ const WalletCheckWithParams = () => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               className={`p-4 ${
-                result.isDusted
+                result.isFlagged
                   ? "bg-red-900/30 border-red-500/50 text-red-200"
                   : "bg-green-900/30 border-green-500/50 text-green-200"
               } border rounded-md`}
             >
               <div className="flex items-start gap-3">
-                {result.isDusted ? (
+                {result.isFlagged ? (
                   <AlertCircle className="h-6 w-6 text-red-400 flex-shrink-0 mt-1" />
                 ) : (
                   <CheckCircle className="h-6 w-6 text-green-400 flex-shrink-0 mt-1" />
@@ -173,15 +166,15 @@ const WalletCheckWithParams = () => {
                 <div className="space-y-2">
                   <h3
                     className={`font-bold ${
-                      result.isDusted ? "text-red-300" : "text-green-300"
+                      result.isFlagged ? "text-red-300" : "text-green-300"
                     }`}
                   >
-                    {result.isDusted
-                      ? "Warning: Potential Dusting Source Detected"
+                    {result.isFlagged
+                      ? "Warning: Potentially Malicious Address"
                       : "Wallet Address is Safe"}
                   </h3>
                   <p>{result.message}</p>
-                  {result.isDusted && (
+                  {result.isFlagged && (
                     <div className="mt-2 space-y-4">
                       <div>
                         <div className="text-sm text-red-300">Risk Score</div>
@@ -196,153 +189,46 @@ const WalletCheckWithParams = () => {
                         </div>
                       </div>
 
-                      {result.attackerDetails && (
+                      {result.details && (
                         <div className="space-y-3 border-t border-red-500/30 pt-3 mt-3">
                           <h4 className="font-medium text-red-300">
-                            Attacker Details
+                            Threat Details
                           </h4>
-
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <div className="bg-black/40 p-3 rounded border border-red-500/20">
-                              <h5 className="text-sm font-medium text-red-200 mb-2">
-                                Transfer Patterns
-                              </h5>
-                              <div className="space-y-1 text-sm">
+                          <div className="bg-black/40 p-3 rounded border border-red-500/20">
+                            <div className="space-y-1 text-sm">
+                              {result.details.label && (
                                 <p>
-                                  <span className="text-gray-400">
-                                    Small Transfers:
-                                  </span>{" "}
-                                  {result.attackerDetails.smallTransfersCount}
+                                  <span className="text-gray-400">Label:</span>{" "}
+                                  {result.details.label}
                                 </p>
+                              )}
+                              {result.details.category && (
                                 <p>
-                                  <span className="text-gray-400">
-                                    Unique Victims:
-                                  </span>{" "}
-                                  {result.attackerDetails.uniqueVictimsCount}
+                                  <span className="text-gray-400">Category:</span>{" "}
+                                  {result.details.category}
                                 </p>
+                              )}
+                              {result.details.sources.length > 0 && (
                                 <p>
-                                  <span className="text-gray-400">
-                                    Last Updated:
-                                  </span>{" "}
-                                  {new Date(
-                                    result.attackerDetails.lastUpdated
-                                  ).toLocaleString()}
+                                  <span className="text-gray-400">Sources:</span>{" "}
+                                  {result.details.sources.join(", ")}
                                 </p>
-                              </div>
+                              )}
                             </div>
+                          </div>
+                        </div>
+                      )}
 
-                            <div className="bg-black/40 p-3 rounded border border-red-500/20">
-                              <h5 className="text-sm font-medium text-red-200 mb-2">
-                                Temporal Pattern
-                              </h5>
-                              <div className="space-y-1 text-sm">
-                                <p>
-                                  <span className="text-gray-400">
-                                    Burst Count:
-                                  </span>{" "}
-                                  {
-                                    result.attackerDetails.temporalPattern
-                                      .burstCount
-                                  }
-                                </p>
-                                <p>
-                                  <span className="text-gray-400">
-                                    Regularity Score:
-                                  </span>{" "}
-                                  {
-                                    result.attackerDetails.temporalPattern
-                                      .regularityScore
-                                  }
-                                </p>
-                                <p>
-                                  <span className="text-gray-400">
-                                    Avg Time Between Transfers:
-                                  </span>{" "}
-                                  {
-                                    result.attackerDetails.temporalPattern
-                                      .averageTimeBetweenTransfers
-                                  }
-                                </p>
-                              </div>
-                            </div>
-
-                            <div className="bg-black/40 p-3 rounded border border-red-500/20">
-                              <h5 className="text-sm font-medium text-red-200 mb-2">
-                                Network Pattern
-                              </h5>
-                              <div className="space-y-1 text-sm">
-                                <p>
-                                  <span className="text-gray-400">
-                                    Cluster Size:
-                                  </span>{" "}
-                                  {
-                                    result.attackerDetails.networkPattern
-                                      .clusterSize
-                                  }
-                                </p>
-                                <p>
-                                  <span className="text-gray-400">
-                                    Centrality Score:
-                                  </span>{" "}
-                                  {
-                                    result.attackerDetails.networkPattern
-                                      .centralityScore
-                                  }
-                                </p>
-                                <p>
-                                  <span className="text-gray-400">
-                                    Recipient Overlap:
-                                  </span>{" "}
-                                  {
-                                    result.attackerDetails.networkPattern
-                                      .recipientOverlap
-                                  }
-                                </p>
-                              </div>
-                            </div>
-
-                            <div className="bg-black/40 p-3 rounded border border-red-500/20">
-                              <h5 className="text-sm font-medium text-red-200 mb-2">
-                                Behavioral Indicators
-                              </h5>
-                              <div className="space-y-1 text-sm">
-                                <p>
-                                  <span className="text-gray-400">
-                                    Uses New Accounts:
-                                  </span>{" "}
-                                  {result.attackerDetails.behavioralIndicators
-                                    .usesNewAccounts
-                                    ? "Yes"
-                                    : "No"}
-                                </p>
-                                <p>
-                                  <span className="text-gray-400">
-                                    Targets Premium Wallets:
-                                  </span>{" "}
-                                  {result.attackerDetails.behavioralIndicators
-                                    .targetsPremiumWallets
-                                    ? "Yes"
-                                    : "No"}
-                                </p>
-                                <p>
-                                  <span className="text-gray-400">
-                                    Uses Scripted Transactions:
-                                  </span>{" "}
-                                  {result.attackerDetails.behavioralIndicators
-                                    .usesScriptedTransactions
-                                    ? "Yes"
-                                    : "No"}
-                                </p>
-                                <p>
-                                  <span className="text-gray-400">
-                                    Abnormal Funding Pattern:
-                                  </span>{" "}
-                                  {result.attackerDetails.behavioralIndicators
-                                    .hasAbnormalFundingPattern
-                                    ? "Yes"
-                                    : "No"}
-                                </p>
-                              </div>
+                      {result.goPlusRisk && (
+                        <div className="space-y-3 border-t border-red-500/30 pt-3 mt-3">
+                          <h4 className="font-medium text-red-300">
+                            GoPlus Risk Flags
+                          </h4>
+                          <div className="bg-black/40 p-3 rounded border border-red-500/20">
+                            <div className="space-y-1 text-sm">
+                              {result.goPlusRisk.riskFlags.map((flag, i) => (
+                                <p key={i} className="text-red-200">{flag}</p>
+                              ))}
                             </div>
                           </div>
                         </div>
@@ -357,9 +243,8 @@ const WalletCheckWithParams = () => {
           <div className="text-sm text-gray-400 mt-4">
             <p className="text-center">
               This tool checks if a Solana wallet address has been identified as
-              a potential source of dusting attacks. Dusting attacks involve
-              sending small amounts of tokens to many wallets to track them or
-              for phishing purposes.
+              potentially malicious using threat intelligence from multiple
+              sources including GoPlus and Phantom Blocklist.
             </p>
           </div>
         </div>
@@ -368,8 +253,30 @@ const WalletCheckWithParams = () => {
   );
 };
 
+function WalletCheckErrorFallback({
+  error,
+  resetErrorBoundary,
+}: {
+  error: Error;
+  resetErrorBoundary: () => void;
+}) {
+  return (
+    <Card className="bg-black/50 border border-red-500/30 backdrop-blur-sm">
+      <CardContent className="p-8 text-center">
+        <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+        <h2 className="text-xl font-semibold text-white mb-2">Something went wrong</h2>
+        <p className="text-gray-400 mb-4">{error.message}</p>
+        <Button onClick={resetErrorBoundary}>Try again</Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function WalletCheckPage() {
-  const { data: session } = useSession();
+  const { publicKey, disconnect } = useWallet();
+  const displayAddress = publicKey
+    ? `${publicKey.toBase58().slice(0, 4)}...${publicKey.toBase58().slice(-4)}`
+    : null;
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-b from-black via-purple-950 to-black text-white font-retro crt relative overflow-hidden">
       <div className="absolute inset-0 w-full h-full bg-gradient-to-br from-black via-indigo-950 to-black opacity-90" />
@@ -382,8 +289,19 @@ export default function WalletCheckPage() {
       <header className="absolute top-0 left-0 right-0 p-4 z-20 flex justify-between items-center">
         <h1 className="text-lg font-bold text-white">Lavinth</h1>
         <div className="flex items-center gap-4">
-          <span className="text-sm text-gray-300">{session?.user?.name}</span>
-          <SignOut />
+          {displayAddress && <span className="text-sm text-gray-300">{displayAddress}</span>}
+          {publicKey && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                document.cookie = "wallet_address=; path=/; max-age=0";
+                disconnect();
+              }}
+            >
+              Disconnect
+            </Button>
+          )}
         </div>
       </header>
       <main className="flex-1 flex flex-col items-center justify-center p-4 relative z-10">
@@ -393,19 +311,21 @@ export default function WalletCheckPage() {
           transition={{ duration: 0.5 }}
           className="w-full max-w-3xl"
         >
-          <Suspense
-            fallback={
-              <Card className="bg-black/50 border border-cyan-500/30 backdrop-blur-sm shadow-[0_0_15px_rgba(0,255,255,0.3)]">
-                <CardContent className="p-8">
-                  <div className="flex justify-center">
-                    <div className="animate-spin h-8 w-8 border-t-2 border-b-2 border-cyan-500 rounded-full"></div>
-                  </div>
-                </CardContent>
-              </Card>
-            }
-          >
-            <WalletCheckWithParams />
-          </Suspense>
+          <ErrorBoundary FallbackComponent={WalletCheckErrorFallback}>
+            <Suspense
+              fallback={
+                <Card className="bg-black/50 border border-cyan-500/30 backdrop-blur-sm shadow-[0_0_15px_rgba(0,255,255,0.3)]">
+                  <CardContent className="p-8">
+                    <div className="flex justify-center">
+                      <div className="animate-spin h-8 w-8 border-t-2 border-b-2 border-cyan-500 rounded-full"></div>
+                    </div>
+                  </CardContent>
+                </Card>
+              }
+            >
+              <WalletCheckWithParams />
+            </Suspense>
+          </ErrorBoundary>
         </motion.div>
       </main>
     </div>

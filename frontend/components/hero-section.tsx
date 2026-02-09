@@ -329,8 +329,8 @@ export default function HeroSection() {
       text: "> Scanning Solana blockchain for suspicious activities...",
       delay: 1000,
     },
-    { text: "> Detecting address poisoning attempts...", delay: 2000 },
-    { text: "> Analyzing dusting attacks...", delay: 3000 },
+    { text: "> Scanning token approvals for threats...", delay: 2000 },
+    { text: "> Monitoring compromise indicators...", delay: 3000 },
     {
       text: "> Security layer activated. Your assets are protected.",
       delay: 4000,
@@ -365,11 +365,11 @@ export default function HeroSection() {
               <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-600">
                 Secure Your Assets
               </span>{" "}
-              from Poisoning & Dusting Attacks
+              with Post-Compromise Recovery
             </h1>
             <p className="text-gray-300 text-lg md:text-xl mb-8 max-w-xl">
-              Lavinth provides real-time detection and protection against
-              address poisoning and dusting attacks on the Solana blockchain.
+              Lavinth provides post-compromise wallet recovery — approval scanning,
+              emergency revocation, fund tracing, and exchange freeze requests.
             </p>
 
             {/* Terminal-like animation */}

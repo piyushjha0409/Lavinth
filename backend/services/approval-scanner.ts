@@ -13,6 +13,7 @@ import {
 } from "@solana/web3.js";
 import * as dotenv from "dotenv";
 import pool from "../db/config";
+import logger from "../logger";
 
 dotenv.config();
 
@@ -82,7 +83,7 @@ export class ApprovalScanner {
 
   constructor() {
     if (RPC_ENDPOINTS.length === 0) {
-      console.warn("Warning: No Helius API keys configured. Approval scanning will use public RPC.");
+      logger.warn({ source: 'ApprovalScanner' }, 'No Helius API keys configured. Approval scanning will use public RPC.');
       // Use public Solana RPC as fallback for development
       this.connections = [new Connection("https://api.mainnet-beta.solana.com", "confirmed")];
     } else {
@@ -137,7 +138,7 @@ export class ApprovalScanner {
         profile,
       };
     } catch (error: any) {
-      console.error(`Error scanning wallet ${walletAddress}:`, error.message);
+      logger.error({ err: error, source: 'ApprovalScanner', walletAddress }, 'Error scanning wallet');
       return {
         success: false,
         walletAddress,
@@ -184,7 +185,7 @@ export class ApprovalScanner {
           }
         }
       } catch (error: any) {
-        console.error(`Error fetching token accounts for program ${programId.toBase58()}:`, error.message);
+        logger.error({ err: error, source: 'ApprovalScanner', programId: programId.toBase58() }, 'Error fetching token accounts for program');
       }
     }
 
@@ -233,14 +234,64 @@ export class ApprovalScanner {
     const isUnlimited = account.delegatedAmount >= account.tokenAmount ||
                         account.delegatedAmount > 1000000000;
 
+    // Check delegate age via transaction history
+    const isNewDelegate = await this.checkIsNewDelegate(delegateAddress);
+
+    // Check transaction volume across wallets
+    const hasHighVolume = await this.checkHasHighVolume(delegateAddress);
+
     return {
       isKnownMalicious: maliciousInfo.isKnown,
       isUnlimited,
-      isNewDelegate: true, // TODO: Check delegate age
-      hasHighVolume: false, // TODO: Check transaction volume
+      isNewDelegate,
+      hasHighVolume,
       victimCount: maliciousInfo.victimCount,
       reportedLosses: maliciousInfo.reportedLosses,
     };
+  }
+
+  /**
+   * Check if delegate is new (few transactions and not a known exchange)
+   */
+  private async checkIsNewDelegate(delegateAddress: string): Promise<boolean> {
+    try {
+      const connection = this.getConnection();
+      const signatures = await connection.getSignaturesForAddress(
+        new PublicKey(delegateAddress),
+        { limit: 5 }
+      );
+
+      // Check if delegate is a known exchange
+      const exchangeResult = await pool.executeQuery(
+        `SELECT exchange_name FROM known_exchanges WHERE address = $1`,
+        [delegateAddress]
+      );
+      const isKnownExchange = exchangeResult.rows.length > 0;
+
+      // A delegate is "new" if it has very few transactions and is not a known exchange
+      return signatures.length < 5 && !isKnownExchange;
+    } catch {
+      // Default to true (conservative) on error
+      return true;
+    }
+  }
+
+  /**
+   * Check if delegate has high volume (approvals from many distinct wallets)
+   */
+  private async checkHasHighVolume(delegateAddress: string): Promise<boolean> {
+    try {
+      const volumeResult = await pool.executeQuery(
+        `SELECT COUNT(DISTINCT wallet_address) as unique_wallets
+         FROM token_approvals
+         WHERE delegate_address = $1 AND status = 'active'`,
+        [delegateAddress]
+      );
+      const uniqueWallets = parseInt(volumeResult.rows[0]?.unique_wallets || "0", 10);
+      return uniqueWallets > 10;
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -301,7 +352,7 @@ export class ApprovalScanner {
         };
       }
     } catch (error) {
-      console.error("Error checking malicious delegate:", error);
+      logger.error({ err: error, source: 'ApprovalScanner' }, 'Error checking malicious delegate');
     }
 
     return { isKnown: false };
@@ -321,7 +372,15 @@ export class ApprovalScanner {
         return malicious.rows[0].label;
       }
 
-      // TODO: Check against known protocol addresses (Raydium, Jupiter, etc.)
+      // Check known exchanges
+      const exchange = await pool.executeQuery(
+        `SELECT exchange_name FROM known_exchanges WHERE address = $1`,
+        [delegateAddress]
+      );
+      if (exchange.rows.length > 0) {
+        return exchange.rows[0].exchange_name;
+      }
+
       return undefined;
     } catch (error) {
       return undefined;
@@ -410,7 +469,7 @@ export class ApprovalScanner {
         ]
       );
     } catch (error) {
-      console.error("Error storing approval:", error);
+      logger.error({ err: error, source: 'ApprovalScanner' }, 'Error storing approval');
     }
   }
 
@@ -443,7 +502,7 @@ export class ApprovalScanner {
         ]
       );
     } catch (error) {
-      console.error("Error storing security profile:", error);
+      logger.error({ err: error, source: 'ApprovalScanner' }, 'Error storing security profile');
     }
   }
 
@@ -472,7 +531,7 @@ export class ApprovalScanner {
         status: row.status,
       }));
     } catch (error) {
-      console.error("Error fetching approvals:", error);
+      logger.error({ err: error, source: 'ApprovalScanner' }, 'Error fetching approvals');
       return [];
     }
   }
@@ -504,7 +563,7 @@ export class ApprovalScanner {
         approvals,
       };
     } catch (error) {
-      console.error("Error fetching security profile:", error);
+      logger.error({ err: error, source: 'ApprovalScanner' }, 'Error fetching security profile');
       return null;
     }
   }
@@ -530,7 +589,7 @@ export class ApprovalScanner {
         [address, label, category, reportedLosses]
       );
     } catch (error) {
-      console.error("Error reporting malicious delegate:", error);
+      logger.error({ err: error, source: 'ApprovalScanner' }, 'Error reporting malicious delegate');
     }
   }
 
@@ -555,7 +614,7 @@ export class ApprovalScanner {
         [walletAddress, tokenAccount, delegateAddress, revokeSignature]
       );
     } catch (error) {
-      console.error("Error marking approval as revoked:", error);
+      logger.error({ err: error, source: 'ApprovalScanner' }, 'Error marking approval as revoked');
     }
   }
 }

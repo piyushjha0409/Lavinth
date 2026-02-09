@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { getWalletAddress } from "@/lib/wallet-auth";
 
 const apiKey = process.env.API_KEY;
 const apiBaseURL = process.env.API_BASE_URL;
@@ -8,9 +8,9 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ packageId: string }> }
 ) {
-  const session = await auth();
+  const walletAddress = await getWalletAddress();
 
-  if (!session || !session.user) {
+  if (!walletAddress) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -21,7 +21,7 @@ export async function GET(
       method: "GET",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": apiKey as string,
+        "x-access-token": apiKey as string,
       },
     });
 

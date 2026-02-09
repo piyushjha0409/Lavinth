@@ -8,6 +8,7 @@
 
 import * as dotenv from "dotenv";
 import pool from "../db/config";
+import logger from "../logger";
 
 dotenv.config();
 
@@ -20,6 +21,57 @@ const HELIUS_API_KEYS = (process.env.HELIUS_API_KEYS || "")
 const ARKHAM_API_KEY = process.env.ARKHAM_API_KEY || "";
 const SYNC_INTERVAL_MS = parseInt(process.env.THREAT_INTEL_SYNC_INTERVAL || "21600000"); // 6 hours
 const AUTO_SYNC_ENABLED = process.env.THREAT_INTEL_AUTO_SYNC !== "false";
+
+// ============================================
+// Timeout helper
+// ============================================
+
+const DEFAULT_TIMEOUT_MS = 15_000; // 15s for API calls
+const SYNC_FETCH_TIMEOUT_MS = 30_000; // 30s for community list syncs (larger payloads)
+
+function fetchWithTimeout(
+  url: string,
+  options: RequestInit & { timeoutMs?: number } = {}
+): Promise<Response> {
+  const { timeoutMs = DEFAULT_TIMEOUT_MS, ...fetchOptions } = options;
+  return fetch(url, { ...fetchOptions, signal: AbortSignal.timeout(timeoutMs) });
+}
+
+// ============================================
+// Circuit Breaker
+// ============================================
+
+class CircuitBreaker {
+  private failures = 0;
+  private lastFailure = 0;
+  private readonly threshold: number;
+  private readonly resetMs: number;
+
+  constructor(threshold = 5, resetMs = 60_000) {
+    this.threshold = threshold;
+    this.resetMs = resetMs;
+  }
+
+  /** Returns true if the circuit is open (calls should be skipped). */
+  isOpen(): boolean {
+    if (this.failures < this.threshold) return false;
+    // Auto-reset after resetMs
+    if (Date.now() - this.lastFailure > this.resetMs) {
+      this.failures = 0;
+      return false;
+    }
+    return true;
+  }
+
+  recordSuccess(): void {
+    this.failures = 0;
+  }
+
+  recordFailure(): void {
+    this.failures++;
+    this.lastFailure = Date.now();
+  }
+}
 
 // ============================================
 // Rate Limiter
@@ -138,20 +190,26 @@ export class ThreatIntelligenceService {
   private syncTimer: NodeJS.Timeout | null = null;
   private currentHeliusKeyIndex = 0;
 
+  // In-memory TTL cache for GoPlus lookups (5-minute TTL)
+  private static readonly GOPLUS_CACHE_TTL_MS = 5 * 60 * 1000;
+  private static readonly GOPLUS_CACHE_MAX_SIZE = 500;
+  private goplusCacheMap = new Map<string, { result: GoPlusAddressResult; expiresAt: number }>();
+
+  // Circuit breakers for external APIs (5 consecutive failures → open for 60s)
+  private goplusCircuit = new CircuitBreaker(5, 60_000);
+  private arkhamCircuit = new CircuitBreaker(5, 60_000);
+  private heliusCircuit = new CircuitBreaker(5, 60_000);
+
   constructor() {
     if (AUTO_SYNC_ENABLED && SYNC_INTERVAL_MS > 0) {
       this.syncTimer = setInterval(() => {
         this.syncAll().catch((err) =>
-          console.error("Auto-sync failed:", err.message)
+          logger.error({ err, source: 'ThreatIntel' }, 'Auto-sync failed')
         );
       }, SYNC_INTERVAL_MS);
-      console.log(
-        `ThreatIntel: Auto-sync enabled, interval ${SYNC_INTERVAL_MS / 1000}s`
-      );
+      logger.info({ source: 'ThreatIntel', intervalSeconds: SYNC_INTERVAL_MS / 1000 }, 'Auto-sync enabled');
     }
-    console.log(
-      `ThreatIntel: Helius keys=${HELIUS_API_KEYS.length}, Arkham=${ARKHAM_API_KEY ? "configured" : "not configured"}`
-    );
+    logger.info({ source: 'ThreatIntel', heliusKeys: HELIUS_API_KEYS.length, arkham: ARKHAM_API_KEY ? 'configured' : 'not configured' }, 'Service initialized');
   }
 
   // ============================================
@@ -175,7 +233,7 @@ export class ThreatIntelligenceService {
    */
   async syncAll(): Promise<SyncResult[]> {
     if (this.isSyncing) {
-      console.log("ThreatIntel: Sync already in progress, skipping");
+      logger.info({ source: 'ThreatIntel' }, 'Sync already in progress, skipping');
       return [];
     }
 
@@ -183,7 +241,7 @@ export class ThreatIntelligenceService {
     const results: SyncResult[] = [];
 
     try {
-      console.log("ThreatIntel: Starting full sync...");
+      logger.info({ source: 'ThreatIntel' }, 'Starting full sync');
 
       const sources = await this.getSources();
       for (const source of sources) {
@@ -204,9 +262,7 @@ export class ThreatIntelligenceService {
         }
       }
 
-      console.log(
-        `ThreatIntel: Full sync complete. ${results.length} sources processed.`
-      );
+      logger.info({ source: 'ThreatIntel', sourcesProcessed: results.length }, 'Full sync complete');
       return results;
     } finally {
       this.isSyncing = false;
@@ -318,10 +374,10 @@ export class ThreatIntelligenceService {
    */
   private async syncAllenHark(): Promise<SyncResult> {
     const sourceId = "allenhark";
-    console.log("ThreatIntel: Syncing AllenHark scammer database...");
+    logger.info({ source: 'ThreatIntel' }, 'Syncing AllenHark scammer database');
 
     const url = "https://allenhark.com/blacklist.jsonl";
-    const response = await fetch(url);
+    const response = await fetchWithTimeout(url, { timeoutMs: SYNC_FETCH_TIMEOUT_MS });
 
     if (!response.ok) {
       throw new Error(`AllenHark fetch failed: ${response.status}`);
@@ -352,10 +408,10 @@ export class ThreatIntelligenceService {
    */
   private async syncPhantomBlocklist(): Promise<SyncResult> {
     const sourceId = "phantom-blocklist";
-    console.log("ThreatIntel: Syncing Phantom NFT Blocklist...");
+    logger.info({ source: 'ThreatIntel' }, 'Syncing Phantom NFT Blocklist');
 
     const url = "https://raw.githubusercontent.com/phantom/blocklist/master/nft-blocklist.yaml";
-    const response = await fetch(url);
+    const response = await fetchWithTimeout(url, { timeoutMs: SYNC_FETCH_TIMEOUT_MS });
 
     if (!response.ok) {
       throw new Error(`Phantom blocklist fetch failed: ${response.status}`);
@@ -383,11 +439,11 @@ export class ThreatIntelligenceService {
    */
   private async syncSolanaSafety101Domains(): Promise<SyncResult> {
     const sourceId = "solana-safety-101-domains";
-    console.log("ThreatIntel: Syncing Solana Safety 101 domains...");
+    logger.info({ source: 'ThreatIntel' }, 'Syncing Solana Safety 101 domains');
 
     const url =
       "https://raw.githubusercontent.com/The-Great-Ape/solana-safety-101/main/src/pages/api/data.json";
-    const response = await fetch(url);
+    const response = await fetchWithTimeout(url, { timeoutMs: SYNC_FETCH_TIMEOUT_MS });
 
     if (!response.ok) {
       throw new Error(`SolanaSafety101 domains fetch failed: ${response.status}`);
@@ -412,11 +468,11 @@ export class ThreatIntelligenceService {
    */
   private async syncPhishDestroy(): Promise<SyncResult> {
     const sourceId = "phishdestroy";
-    console.log("ThreatIntel: Syncing PhishDestroy destroylist...");
+    logger.info({ source: 'ThreatIntel' }, 'Syncing PhishDestroy destroylist');
 
     const url =
       "https://raw.githubusercontent.com/phishdestroy/destroylist/main/list.json";
-    const response = await fetch(url);
+    const response = await fetchWithTimeout(url, { timeoutMs: SYNC_FETCH_TIMEOUT_MS });
 
     if (!response.ok) {
       throw new Error(`PhishDestroy fetch failed: ${response.status}`);
@@ -475,13 +531,11 @@ export class ThreatIntelligenceService {
         }
       } catch (err) {
         // Skip batch errors
-        console.error(`ThreatIntel [${sourceId}]: Batch insert error:`, (err as Error).message);
+        logger.error({ err, source: 'ThreatIntel', sourceId }, 'Batch insert error');
       }
     }
 
-    console.log(
-      `ThreatIntel [${sourceId}]: ${unique.length} found, ${newCount} new, ${updatedCount} updated`
-    );
+    logger.info({ source: 'ThreatIntel', sourceId, found: unique.length, new: newCount, updated: updatedCount }, 'Address sync complete');
 
     return {
       sourceId,
@@ -528,13 +582,11 @@ export class ThreatIntelligenceService {
           else updatedCount++;
         }
       } catch (err) {
-        console.error(`ThreatIntel [${sourceId}]: Batch domain insert error:`, (err as Error).message);
+        logger.error({ err, source: 'ThreatIntel', sourceId }, 'Batch domain insert error');
       }
     }
 
-    console.log(
-      `ThreatIntel [${sourceId}]: ${unique.length} domains found, ${newCount} new, ${updatedCount} updated`
-    );
+    logger.info({ source: 'ThreatIntel', sourceId, found: unique.length, new: newCount, updated: updatedCount }, 'Domain sync complete');
 
     return {
       sourceId,
@@ -577,7 +629,7 @@ export class ThreatIntelligenceService {
         };
       }
     } catch (err: any) {
-      console.error("Domain check error:", err.message);
+      logger.error({ err, source: 'ThreatIntel' }, 'Domain check error');
     }
 
     return {
@@ -596,6 +648,18 @@ export class ThreatIntelligenceService {
    * Real-time address risk check via GoPlus Security API
    */
   async checkAddressGoPlus(address: string): Promise<GoPlusAddressResult> {
+    // Check in-memory cache
+    const cached = this.goplusCacheMap.get(address);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.result;
+    }
+
+    // Circuit breaker check
+    if (this.goplusCircuit.isOpen()) {
+      logger.warn({ source: 'ThreatIntel' }, 'GoPlus circuit breaker open, skipping');
+      return { address, isRisky: false, riskFlags: [], dataSource: "goplus" };
+    }
+
     const RISK_FIELDS = [
       "cybercrime",
       "money_laundering",
@@ -610,13 +674,15 @@ export class ThreatIntelligenceService {
       await this.goplusRateLimiter.acquire();
 
       const url = `https://api.gopluslabs.io/api/v1/address_security/${address}?chain_id=solana`;
-      const response = await fetch(url);
+      const response = await fetchWithTimeout(url);
 
       if (!response.ok) {
-        console.error(`GoPlus lookup failed: ${response.status}`);
+        this.goplusCircuit.recordFailure();
+        logger.error({ source: 'ThreatIntel', status: response.status }, 'GoPlus lookup failed');
         return { address, isRisky: false, riskFlags: [], dataSource: "goplus" };
       }
 
+      this.goplusCircuit.recordSuccess();
       const data = await response.json();
       const result = data?.result;
 
@@ -631,14 +697,27 @@ export class ThreatIntelligenceService {
         }
       }
 
-      return {
+      const goPlusResult: GoPlusAddressResult = {
         address,
         isRisky: riskFlags.length > 0,
         riskFlags,
         dataSource: "goplus",
       };
+
+      // Store in cache; evict oldest entries if over max size
+      if (this.goplusCacheMap.size >= ThreatIntelligenceService.GOPLUS_CACHE_MAX_SIZE) {
+        const firstKey = this.goplusCacheMap.keys().next().value;
+        if (firstKey) this.goplusCacheMap.delete(firstKey);
+      }
+      this.goplusCacheMap.set(address, {
+        result: goPlusResult,
+        expiresAt: Date.now() + ThreatIntelligenceService.GOPLUS_CACHE_TTL_MS,
+      });
+
+      return goPlusResult;
     } catch (err: any) {
-      console.error("GoPlus lookup error:", err.message);
+      this.goplusCircuit.recordFailure();
+      logger.error({ err, source: 'ThreatIntel' }, 'GoPlus lookup error');
       return { address, isRisky: false, riskFlags: [], dataSource: "goplus" };
     }
   }
@@ -657,20 +736,28 @@ export class ThreatIntelligenceService {
     const apiKey = this.getHeliusApiKey();
     if (!apiKey) return [];
 
+    if (this.heliusCircuit.isOpen()) {
+      logger.warn({ source: 'ThreatIntel' }, 'Helius circuit breaker open, skipping');
+      return [];
+    }
+
     try {
       await this.heliusRateLimiter.acquire();
 
       const url = `https://api.helius.xyz/v0/addresses/${address}/transactions?api-key=${apiKey}&limit=${limit}`;
-      const response = await fetch(url);
+      const response = await fetchWithTimeout(url);
 
       if (!response.ok) {
-        console.error(`Helius enhanced tx fetch failed: ${response.status}`);
+        this.heliusCircuit.recordFailure();
+        logger.error({ source: 'ThreatIntel', status: response.status }, 'Helius enhanced tx fetch failed');
         return [];
       }
 
+      this.heliusCircuit.recordSuccess();
       return (await response.json()) as EnhancedTransaction[];
     } catch (err: any) {
-      console.error("Helius enhanced transactions error:", err.message);
+      this.heliusCircuit.recordFailure();
+      logger.error({ err, source: 'ThreatIntel' }, 'Helius enhanced transactions error');
       return [];
     }
   }
@@ -684,6 +771,11 @@ export class ThreatIntelligenceService {
     const apiKey = this.getHeliusApiKey();
     if (!apiKey || signatures.length === 0) return [];
 
+    if (this.heliusCircuit.isOpen()) {
+      logger.warn({ source: 'ThreatIntel' }, 'Helius circuit breaker open, skipping parse');
+      return [];
+    }
+
     const results: EnhancedTransaction[] = [];
 
     // Batch in groups of 100
@@ -693,21 +785,24 @@ export class ThreatIntelligenceService {
         await this.heliusRateLimiter.acquire();
 
         const url = `https://api.helius.xyz/v0/transactions?api-key=${apiKey}`;
-        const response = await fetch(url, {
+        const response = await fetchWithTimeout(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ transactions: batch }),
         });
 
         if (!response.ok) {
-          console.error(`Helius parse batch failed: ${response.status}`);
+          this.heliusCircuit.recordFailure();
+          logger.error({ source: 'ThreatIntel', status: response.status }, 'Helius parse batch failed');
           continue;
         }
 
+        this.heliusCircuit.recordSuccess();
         const parsed = (await response.json()) as EnhancedTransaction[];
         results.push(...parsed);
       } catch (err: any) {
-        console.error("Helius parse batch error:", err.message);
+        this.heliusCircuit.recordFailure();
+        logger.error({ err, source: 'ThreatIntel' }, 'Helius parse batch error');
       }
     }
 
@@ -776,11 +871,16 @@ export class ThreatIntelligenceService {
   async lookupEntity(address: string): Promise<ArkhamEntity | null> {
     if (!ARKHAM_API_KEY) return null;
 
+    if (this.arkhamCircuit.isOpen()) {
+      logger.warn({ source: 'ThreatIntel' }, 'Arkham circuit breaker open, skipping');
+      return null;
+    }
+
     try {
       await this.arkhamRateLimiter.acquire();
 
       const url = `https://api.arkhamintelligence.com/intelligence/address/${address}?chain=solana`;
-      const response = await fetch(url, {
+      const response = await fetchWithTimeout(url, {
         headers: {
           "API-Key": ARKHAM_API_KEY,
           Accept: "application/json",
@@ -789,10 +889,12 @@ export class ThreatIntelligenceService {
 
       if (!response.ok) {
         if (response.status === 404) return null;
-        console.error(`Arkham lookup failed: ${response.status}`);
+        this.arkhamCircuit.recordFailure();
+        logger.error({ source: 'ThreatIntel', status: response.status }, 'Arkham lookup failed');
         return null;
       }
 
+      this.arkhamCircuit.recordSuccess();
       const data = await response.json();
 
       return {
@@ -804,7 +906,8 @@ export class ThreatIntelligenceService {
         cachedAt: new Date(),
       };
     } catch (err: any) {
-      console.error("Arkham lookup error:", err.message);
+      this.arkhamCircuit.recordFailure();
+      logger.error({ err, source: 'ThreatIntel' }, 'Arkham lookup error');
       return null;
     }
   }
@@ -834,7 +937,7 @@ export class ThreatIntelligenceService {
         syncCount: row.sync_count || 0,
       }));
     } catch (err) {
-      console.error("Error getting sources:", err);
+      logger.error({ err, source: 'ThreatIntel' }, 'Error getting sources');
       return [];
     }
   }

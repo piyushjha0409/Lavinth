@@ -13,9 +13,9 @@ export default function FeaturesSection() {
   const features = [
     {
       icon: <AlertTriangle className="h-6 w-6" />,
-      title: "Attack Detection",
+      title: "Compromise Detection",
       description:
-        "Our algorithms detect sophisticated address poisoning and dusting attacks by analyzing on-chain transaction patterns.",
+        "Real-time monitoring detects wallet compromises by analyzing outflow patterns, unauthorized approvals, and anomalous activity.",
       color: "from-red-500/20 to-orange-500/20",
       borderColor: "border-red-500/30",
       iconBg: "bg-gradient-to-br from-red-500 to-orange-500",

@@ -8,6 +8,7 @@
 import * as dotenv from "dotenv";
 import { v4 as uuidv4 } from "uuid";
 import pool from "../db/config";
+import logger from "../logger";
 import type { ThreatIntelligenceService } from "./threat-intelligence";
 
 dotenv.config();
@@ -190,9 +191,9 @@ export class ExchangeCoordinator {
         this.exchangeContacts.set(row.exchange_id, contact);
       });
 
-      console.log(`ExchangeCoordinator loaded ${this.exchangeContacts.size} exchange contacts`);
+      logger.info({ source: 'ExchangeCoordinator', count: this.exchangeContacts.size }, 'Loaded exchange contacts');
     } catch (error) {
-      console.error("Error loading exchange contacts:", error);
+      logger.error({ err: error, source: 'ExchangeCoordinator' }, 'Error loading exchange contacts');
     }
   }
 
@@ -233,7 +234,7 @@ export class ExchangeCoordinator {
         successRate: row.success_rate,
       };
     } catch (error) {
-      console.error("Error getting exchange contact:", error);
+      logger.error({ err: error, source: 'ExchangeCoordinator' }, 'Error getting exchange contact');
       return null;
     }
   }
@@ -313,7 +314,7 @@ export class ExchangeCoordinator {
 
       return null;
     } catch (error) {
-      console.error("Error getting exchange by address:", error);
+      logger.error({ err: error, source: 'ExchangeCoordinator' }, 'Error getting exchange by address');
       return null;
     }
   }
@@ -347,7 +348,7 @@ export class ExchangeCoordinator {
         successRate: row.success_rate,
       }));
     } catch (error) {
-      console.error("Error listing exchange contacts:", error);
+      logger.error({ err: error, source: 'ExchangeCoordinator' }, 'Error listing exchange contacts');
       return [];
     }
   }
@@ -757,7 +758,7 @@ Valid Until: ${evidencePackage.expiresAt.toISOString().split("T")[0]}
         );
       }
     } catch (error) {
-      console.error("Error updating exchange stats:", error);
+      logger.error({ err: error, source: 'ExchangeCoordinator' }, 'Error updating exchange stats');
     }
   }
 
@@ -776,7 +777,7 @@ Valid Until: ${evidencePackage.expiresAt.toISOString().split("T")[0]}
       const row = result.rows[0];
       return this.mapRowToFreezeRequest(row);
     } catch (error) {
-      console.error("Error getting freeze request:", error);
+      logger.error({ err: error, source: 'ExchangeCoordinator' }, 'Error getting freeze request');
       return null;
     }
   }
@@ -793,7 +794,7 @@ Valid Until: ${evidencePackage.expiresAt.toISOString().split("T")[0]}
 
       return result.rows.map((row) => this.mapRowToFreezeRequest(row));
     } catch (error) {
-      console.error("Error listing freeze requests:", error);
+      logger.error({ err: error, source: 'ExchangeCoordinator' }, 'Error listing freeze requests');
       return [];
     }
   }
@@ -818,7 +819,7 @@ Valid Until: ${evidencePackage.expiresAt.toISOString().split("T")[0]}
 
       return result.rows.map((row) => this.mapRowToFreezeRequest(row));
     } catch (error) {
-      console.error("Error listing pending requests:", error);
+      logger.error({ err: error, source: 'ExchangeCoordinator' }, 'Error listing pending requests');
       return [];
     }
   }
@@ -837,7 +838,7 @@ Valid Until: ${evidencePackage.expiresAt.toISOString().split("T")[0]}
 
       return result.rows.map((row) => this.mapRowToFreezeRequest(row));
     } catch (error) {
-      console.error("Error getting follow-up requests:", error);
+      logger.error({ err: error, source: 'ExchangeCoordinator' }, 'Error getting follow-up requests');
       return [];
     }
   }
@@ -889,7 +890,7 @@ Valid Until: ${evidencePackage.expiresAt.toISOString().split("T")[0]}
         hashSignature: row.hash_signature,
       };
     } catch (error) {
-      console.error("Error getting evidence package:", error);
+      logger.error({ err: error, source: 'ExchangeCoordinator' }, 'Error getting evidence package');
       return null;
     }
   }
@@ -952,7 +953,7 @@ Valid Until: ${evidencePackage.expiresAt.toISOString().split("T")[0]}
         avgResponseTime: parseFloat(responseResult.rows[0].avg_hours || 0),
       };
     } catch (error) {
-      console.error("Error getting statistics:", error);
+      logger.error({ err: error, source: 'ExchangeCoordinator' }, 'Error getting statistics');
       return {
         total: 0,
         byStatus: {},

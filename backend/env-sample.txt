@@ -1,37 +1,69 @@
-# Solana Dusting Detection Configuration
+# Lavinth Backend Configuration
 
-# API Configuration
-PORT=3000
-SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
+# ============================================
+# REQUIRED - Server will not start without these
+# ============================================
 
-# Database Configuration
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=solana_dust
-DB_USER=postgres
-DB_PASSWORD=your_password
+# Neon PostgreSQL connection string
+DATABASE_URL=postgresql://user:password@host/dbname?sslmode=require
 
-# Dust Detection Thresholds
-DUST_AMOUNT_THRESHOLD=0.001
-DUST_TRANSACTION_COUNT_THRESHOLD=5
-ENABLE_ADAPTIVE_THRESHOLDS=true
+# Comma-separated Helius RPC API keys (round-robin load distribution)
+HELIUS_API_KEYS=your_helius_key_1,your_helius_key_2
 
-# Alert System Configuration
+# Static token for internal dashboard auth (x-access-token header)
+API_KEY=your_secret_token
+
+# ============================================
+# SERVER
+# ============================================
+
+PORT=3001
+LOG_LEVEL=info
+
+# ============================================
+# THREAT INTELLIGENCE
+# ============================================
+
+# Arkham Intelligence API key (entity resolution)
+ARKHAM_API_KEY=your_arkham_key
+
+# Threat intel auto-sync interval in ms (default 6 hours)
+THREAT_INTEL_SYNC_INTERVAL=21600000
+
+# Set to "false" to disable auto-sync (default: enabled)
+THREAT_INTEL_AUTO_SYNC=true
+
+# ============================================
+# ALERTS & NOTIFICATIONS (optional)
+# ============================================
+
 ENABLE_ALERTS=true
 DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/your_webhook_url
+WEBHOOK_SECRET=your_webhook_hmac_secret
 
-# Email Alerts
-EMAIL_RECIPIENTS=admin@example.com,security@example.com
-SMTP_HOST=smtp.example.com
-SMTP_PORT=587
-SMTP_SECURE=false
-SMTP_USER=your_email@example.com
-SMTP_PASS=your_password
+# Notification tuning
+NOTIFICATION_RETRY_ATTEMPTS=3
+NOTIFICATION_RETRY_DELAY=1000
+NOTIFICATION_BATCH_SIZE=10
+NOTIFICATION_RATE_LIMIT=60
 
-# Machine Learning Configuration
-ENABLE_ML_DETECTION=true
-ML_TRAINING_INTERVAL_HOURS=24
+# ============================================
+# COMPROMISE DETECTOR THRESHOLDS
+# ============================================
 
-# Network Analysis
-NETWORK_ANALYSIS_DEPTH=3
-MAX_RELATED_ADDRESSES=50
+LARGE_OUTFLOW_THRESHOLD=10
+LARGE_OUTFLOW_PERCENT=50
+RAPID_DRAIN_WINDOW=5
+RAPID_DRAIN_TX_COUNT=3
+MONITORING_INTERVAL=30000
+TX_LOOKBACK_COUNT=20
+
+# ============================================
+# FUND TRACKER
+# ============================================
+
+TRACKING_MAX_DEPTH=10
+MAX_TX_PER_HOP=50
+MIN_TRACKABLE_SOL=0.01
+EXCHANGE_FREEZE_WINDOW=24
+

@@ -14,7 +14,7 @@ const steps = [
     icon: <Server className="h-6 w-6" />,
     title: "Analysis",
     description:
-      "Our custom algorithms analyze transactions to identify patterns consistent with address poisoning and dusting attacks.",
+      "Our algorithms analyze token approvals and transaction patterns to identify compromises and high-risk delegates.",
   },
   {
     icon: <AlertTriangle className="h-6 w-6" />,
@@ -104,7 +104,7 @@ export default function HowItWorksSection() {
               <span className="text-gray-400 text-sm ml-2">Lavinth API Example</span>
             </div>
             <div className="p-4 font-mono text-sm">
-              <div className="text-blue-400">// Check if a wallet address is poisoned</div>
+              <div className="text-blue-400">// Check wallet address security</div>
               <div className="text-gray-300 mt-2">const response = await fetch(</div>
               <div className="text-green-400 ml-4">'https://api.lavinth.com/api/check-wallet/8xrt67qLVBw4MFN6a9WnQgcj2fZvCQXMQMg9YQ9Yif3J',</div>
               <div className="text-gray-300 ml-4">{"{"}</div>
@@ -127,31 +127,28 @@ export default function HowItWorksSection() {
                 wallet_address: <span className="text-yellow-400">'8xrt67qLVBw4MFN6a9WnQgcj2fZvCQXMQMg9YQ9Yif3J'</span>,
                 </div>
                 <div className="text-gray-300 ml-8">
-                risk_score: <span className="text-yellow-400">85</span>,
+                isFlagged: <span className="text-red-400">true</span>,
                 </div>
                 <div className="text-gray-300 ml-8">
-                risk_level: <span className="text-red-400">'high'</span>,
+                riskScore: <span className="text-yellow-400">0.85</span>,
                 </div>
                 <div className="text-gray-300 ml-8">
-                is_dust_victim: <span className="text-red-400">true</span>,
+                message: <span className="text-yellow-400">'Address found in threat database'</span>,
                 </div>
                 <div className="text-gray-300 ml-8">
-                is_dust_attacker: <span className="text-red-400">false</span>,
-                </div>
-                <div className="text-gray-300 ml-8">
-                findings: <span className="text-gray-300">[{"{"}</span>
+                details: <span className="text-gray-300">{"{"}</span>
                 </div>
                 <div className="text-gray-300 ml-12">
-                type: <span className="text-yellow-400">'dust_attack'</span>,
+                label: <span className="text-yellow-400">'Known scammer'</span>,
                 </div>
                 <div className="text-gray-300 ml-12">
-                severity: <span className="text-red-400">'high'</span>,
+                category: <span className="text-yellow-400">'malicious_delegate'</span>,
                 </div>
                 <div className="text-gray-300 ml-12">
-                description: <span className="text-yellow-400">'Wallet has received dust from known attacker addresses'</span>
+                sources: <span className="text-gray-300">[<span className="text-yellow-400">'phantom_blocklist'</span>, <span className="text-yellow-400">'goplus'</span>]</span>
                 </div>
                 <div className="text-gray-300 ml-8">
-                <span className="text-gray-300">{"}"}]</span>
+                <span className="text-gray-300">{"}"}</span>
                 </div>
                 <div className="text-gray-300 ml-4">
                 <span className="text-gray-300">{"}"}</span>

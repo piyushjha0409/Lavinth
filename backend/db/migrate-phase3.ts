@@ -5,6 +5,7 @@
 
 import { Pool } from "pg";
 import * as dotenv from "dotenv";
+import logger from '../logger';
 
 dotenv.config();
 
@@ -113,7 +114,7 @@ ON CONFLICT (exchange_id) DO NOTHING;
 `;
 
 async function runMigration() {
-  console.log("Starting Phase 3 migration...\n");
+  logger.info("Starting Phase 3 migration...");
 
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
@@ -122,12 +123,12 @@ async function runMigration() {
 
   try {
     const client = await pool.connect();
-    console.log("Connected to Neon PostgreSQL\n");
+    logger.info("Connected to Neon PostgreSQL");
 
-    console.log("Creating Phase 3 tables...\n");
+    logger.info("Creating Phase 3 tables...");
     await client.query(phase3Schema);
 
-    console.log("Phase 3 tables created successfully!\n");
+    logger.info("Phase 3 tables created successfully!");
 
     // Verify
     const tablesResult = await client.query(`
@@ -137,19 +138,19 @@ async function runMigration() {
       ORDER BY table_name
     `);
 
-    console.log("Phase 3 tables:");
+    logger.info("Phase 3 tables:");
     tablesResult.rows.forEach((row) => {
-      console.log(`  ✓ ${row.table_name}`);
+      logger.info({ table: row.table_name }, 'Phase 3 table created');
     });
 
     // Check exchange contacts
     const contactsResult = await client.query(`SELECT COUNT(*) FROM exchange_contacts`);
-    console.log(`\nExchange contacts seeded: ${contactsResult.rows[0].count}`);
+    logger.info({ count: contactsResult.rows[0].count }, 'Exchange contacts seeded');
 
     client.release();
-    console.log("\n✓ Phase 3 migration complete!");
+    logger.info("Phase 3 migration complete!");
   } catch (error: any) {
-    console.error("Migration failed:", error.message);
+    logger.error({ err: error }, 'Migration failed');
     process.exit(1);
   } finally {
     await pool.end();

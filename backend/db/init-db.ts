@@ -3,33 +3,35 @@ import path from 'path';
 import { QueryResult } from 'pg';
 import pool from './config';
 import dotenv from 'dotenv';
+import logger from '../logger';
 
 dotenv.config();
 
 async function initializeDatabase() {
   const client = await pool.connect();
-  console.log("Connected to database, starting initialization...");
+  logger.info("Connected to database, starting initialization...");
 
   try {
     await client.query('BEGIN');
 
-    console.log("Dropping existing tables if they exist...");
-    await client.query(`
-      DROP TABLE IF EXISTS dust_transactions CASCADE;
-      DROP TABLE IF EXISTS dusting_attackers CASCADE;
-      DROP TABLE IF EXISTS dusting_candidates CASCADE;
-      DROP TABLE IF EXISTS dusting_victims CASCADE;
-      DROP TABLE IF EXISTS risk_analysis CASCADE;
+    logger.info("Dropping existing tables if they exist...");
+    // Get all tables and drop them
+    const tablesRes = await client.query(`
+      SELECT table_name FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
     `);
+    for (const row of tablesRes.rows) {
+      await client.query(`DROP TABLE IF EXISTS ${row.table_name} CASCADE`);
+    }
 
     const schemaPath = path.join(__dirname, 'schema.sql');
     const schemaSql = fs.readFileSync(schemaPath, 'utf8');
 
-    console.log("Executing schema...");
+    logger.info("Executing schema...");
     await client.query(schemaSql);
 
     await client.query('COMMIT');
-    console.log("✅ Database schema created successfully!");
+    logger.info("Database schema created successfully!");
 
     const tablesResult: QueryResult = await client.query(`
       SELECT table_name 
@@ -38,14 +40,14 @@ async function initializeDatabase() {
       ORDER BY table_name;
     `);
 
-    console.log("Tables created:");
+    logger.info("Tables created:");
     tablesResult.rows.forEach((row, index) => {
-      console.log(`  ${index + 1}. ${row.table_name}`);
+      logger.info({ index: index + 1, table: row.table_name }, 'Table created');
     });
 
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error("❌ Error initializing database:", error);
+    logger.error({ err: error }, 'Error initializing database');
     throw error;
   } finally {
     client.release();
@@ -58,11 +60,11 @@ async function initializeDatabase() {
 if (require.main === module) {
   initializeDatabase()
     .then(() => {
-      console.log("🎉 Database initialization complete.");
+      logger.info("Database initialization complete.");
       process.exit(0);
     })
     .catch((error) => {
-      console.error("Initialization failed:", error);
+      logger.error({ err: error }, 'Initialization failed');
       process.exit(1);
     });
 }

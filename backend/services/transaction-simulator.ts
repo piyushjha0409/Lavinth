@@ -14,6 +14,7 @@ import {
 } from '@solana/web3.js';
 import { Pool } from 'pg';
 import pool from '../db/config';
+import logger from '../logger';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -121,11 +122,11 @@ export class TransactionSimulator {
     // Load malicious addresses from database
     try {
       const result = await this.pool.query(
-        'SELECT address FROM malicious_delegates WHERE is_confirmed = true'
+        'SELECT address FROM known_malicious_delegates'
       );
       result.rows.forEach(row => this.maliciousAddresses.add(row.address));
     } catch (error) {
-      console.error('Failed to load malicious addresses:', error);
+      logger.error({ err: error, source: 'TransactionSimulator' }, 'Failed to load malicious addresses');
     }
 
     // Initialize verified programs
@@ -259,7 +260,7 @@ export class TransactionSimulator {
         rawLogs: simulationResponse?.logs || undefined,
       };
     } catch (error: any) {
-      console.error('Simulation failed:', error);
+      logger.error({ err: error, source: 'TransactionSimulator' }, 'Simulation failed');
 
       warnings.push({
         type: 'simulation_error',
@@ -597,7 +598,7 @@ export class TransactionSimulator {
 
       return result.value;
     } catch (error) {
-      console.error('On-chain simulation failed:', error);
+      logger.error({ err: error, source: 'TransactionSimulator' }, 'On-chain simulation failed');
       return null;
     }
   }
@@ -748,7 +749,7 @@ export class TransactionSimulator {
         ]
       );
     } catch (error) {
-      console.error('Failed to store simulation result:', error);
+      logger.error({ err: error, source: 'TransactionSimulator' }, 'Failed to store simulation result');
     }
   }
 
@@ -783,7 +784,7 @@ export class TransactionSimulator {
         simulatedAt: row.simulated_at,
       }));
     } catch (error) {
-      console.error('Failed to get simulation history:', error);
+      logger.error({ err: error, source: 'TransactionSimulator' }, 'Failed to get simulation history');
       return [];
     }
   }

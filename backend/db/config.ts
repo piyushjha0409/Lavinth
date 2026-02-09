@@ -1,5 +1,6 @@
 import * as dotenv from 'dotenv';
 import { Pool, PoolClient, QueryResult } from 'pg';
+import logger from '../logger';
 
 dotenv.config();
 
@@ -17,12 +18,12 @@ export class CustomPool extends Pool {
 
     // On successful connection
     this.on('connect', () => {
-      console.log('Connected to Neon PostgreSQL');
+      logger.info('Connected to Neon PostgreSQL');
     });
 
     // Log idle client errors
     this.on('error', (err) => {
-      console.error('Unexpected error on idle PostgreSQL client:', err);
+      logger.error({ err }, 'Unexpected error on idle PostgreSQL client');
     });
   }
 
@@ -44,11 +45,11 @@ export class CustomPool extends Pool {
       } catch (error: any) {
         lastError = error;
         retries++;
-        console.error(`Query error (attempt ${retries}/${maxRetries}):`, error.message);
+        logger.error({ err: error, attempt: retries, maxRetries }, 'Query error');
 
         if (retries < maxRetries) {
           const delay = 1000 * 2 ** (retries - 1);
-          console.log(`Retrying in ${delay}ms...`);
+          logger.info({ delay }, 'Retrying database query');
           await new Promise((res) => setTimeout(res, delay));
         }
       } finally {
@@ -56,7 +57,7 @@ export class CustomPool extends Pool {
       }
     }
 
-    console.error(`All ${maxRetries} database query attempts failed.`);
+    logger.error({ maxRetries }, 'All database query attempts failed');
     throw lastError;
   }
 }

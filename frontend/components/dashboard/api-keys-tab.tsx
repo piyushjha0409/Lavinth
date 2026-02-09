@@ -573,27 +573,23 @@ export default function ApiKeysTab() {
                             {JSON.stringify(
                               {
                                 status: "success",
-                                data: {
-                                  wallet_address:
-                                    "Ghdd6xxZzwEizgLn9nmSgDFwmH3twqKoAzNem17prrhL",
-                                  risk_score: 85,
-                                  risk_level: "high",
-                                  is_dust_victim: true,
-                                  is_dust_attacker: false,
-                                  findings: [
-                                    {
-                                      type: "dust_attack",
-                                      severity: "high",
-                                      description:
-                                        "Wallet has received dust from known attacker addresses",
-                                      count: 12,
-                                    },
+                                isFlagged: true,
+                                riskScore: 0.85,
+                                message:
+                                  "Address found in threat database",
+                                details: {
+                                  label: "Known scammer",
+                                  category: "malicious_delegate",
+                                  sources: [
+                                    "phantom_blocklist",
+                                    "goplus",
                                   ],
-                                  network_analysis: {
-                                    connected_attackers: 3,
-                                    suspicious_transactions: 15,
-                                  },
-                                  last_updated: "2025-10-09T17:45:00+05:30",
+                                },
+                                goPlusRisk: {
+                                  isRisky: true,
+                                  riskFlags: [
+                                    "Blacklisted address",
+                                  ],
                                 },
                               },
                               null,

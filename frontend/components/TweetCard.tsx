@@ -15,8 +15,6 @@ interface ApiTransaction {
   fee: string;
   token_type: string;
   token_address: string | null;
-  is_potential_dust: boolean;
-  is_potential_poisoning: boolean;
   risk_score: string;
   created_at: string;
 }
@@ -62,11 +60,8 @@ export function TweetCard({ transaction }: TweetCardProps) {
             <span className="text-cyan-200">Recipient:</span>
             <span className="text-cyan-300 font-medium">{transaction.recipient.slice(0, 6)}...{transaction.recipient.slice(-6)}</span>
           </div>
-          {transaction.is_potential_dust && (
-            <div className="mt-2 text-yellow-400 text-xs font-medium">⚠️ Potential dust attack</div>
-          )}
-          {transaction.is_potential_poisoning && (
-            <div className="mt-2 text-red-400 text-xs font-medium">⚠️ Potential address poisoning</div>
+          {riskScore >= 0.7 && (
+            <div className="mt-2 text-red-400 text-xs font-medium">⚠️ High risk transaction</div>
           )}
         </div>
       </CardContent>

@@ -15,6 +15,7 @@ import {
 import * as dotenv from "dotenv";
 import { v4 as uuidv4 } from "uuid";
 import pool from "../db/config";
+import logger from "../logger";
 import type { ThreatIntelligenceService } from "./threat-intelligence";
 
 dotenv.config();
@@ -287,9 +288,9 @@ export class FundTracker {
       );
       drainers.rows.forEach((row) => this.knownDrainers.add(row.address));
 
-      console.log(`FundTracker loaded: ${this.knownExchanges.size} exchanges, ${this.knownBridges.size} bridges`);
+      logger.info({ source: 'FundTracker', exchanges: this.knownExchanges.size, bridges: this.knownBridges.size }, 'Loaded known addresses');
     } catch (error) {
-      console.error("Error loading known addresses:", error);
+      logger.error({ err: error, source: 'FundTracker' }, 'Error loading known addresses');
     }
   }
 
@@ -326,7 +327,7 @@ export class FundTracker {
 
     // Start async tracing
     this.performTrace(trace).catch((err) => {
-      console.error(`Trace ${traceId} failed:`, err);
+      logger.error({ err, source: 'FundTracker', traceId }, 'Trace failed');
       this.updateTraceStatus(traceId, "partial");
     });
 
@@ -556,7 +557,7 @@ export class FundTracker {
         }
       }
     } catch (error) {
-      console.error(`Error getting transactions for ${address}:`, error);
+      logger.error({ err: error, source: 'FundTracker', address }, 'Error getting transactions');
     }
 
     return results;
@@ -715,7 +716,7 @@ export class FundTracker {
         );
       }
     } catch (error) {
-      console.error("Error storing graph:", error);
+      logger.error({ err: error, source: 'FundTracker' }, 'Error storing graph');
     }
   }
 
@@ -933,7 +934,7 @@ WalletShield Recovery Team
 
       return report;
     } catch (error) {
-      console.error("Error generating recovery report:", error);
+      logger.error({ err: error, source: 'FundTracker' }, 'Error generating recovery report');
       return null;
     }
   }
@@ -989,7 +990,7 @@ WalletShield Recovery Team
         totalRecoverable: parseFloat(row.total_recoverable || 0),
       };
     } catch (error) {
-      console.error("Error getting trace:", error);
+      logger.error({ err: error, source: 'FundTracker' }, 'Error getting trace');
       return null;
     }
   }
@@ -1018,7 +1019,7 @@ WalletShield Recovery Team
         totalRecoverable: parseFloat(row.total_recoverable || 0),
       }));
     } catch (error) {
-      console.error("Error getting traces:", error);
+      logger.error({ err: error, source: 'FundTracker' }, 'Error getting traces');
       return [];
     }
   }

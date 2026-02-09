@@ -15,8 +15,8 @@ const securityMetrics = [
   {
     icon: <AlertTriangle className="h-8 w-8" />,
     value: "1000+",
-    label: "Attacks Prevented",
-    description: "Poisoning and dusting attacks stopped",
+    label: "Threats Detected",
+    description: "Compromises and malicious approvals caught",
     color: "from-purple-500 to-purple-700",
   },
   {
@@ -37,39 +37,39 @@ const securityMetrics = [
 
 const securityFeatures = [
   {
-    id: "address-poisoning",
+    id: "approval-scanning",
     icon: <Shield className="h-10 w-10" />,
-    title: "Address Poisoning Detection",
-    description: "Identifies malicious addresses designed to trick users into sending funds to the wrong destination.",
+    title: "Approval Scanning & Revocation",
+    description: "Scans all SPL token delegate approvals and identifies high-risk permissions that could drain your wallet.",
     details: [
-      "Pattern recognition algorithms",
-      "Historical transaction analysis",
-      "Similarity scoring with legitimate addresses",
-      "Real-time alerts for suspicious activity",
+      "Automated token approval discovery",
+      "Risk scoring of delegate addresses",
+      "One-click emergency revocation",
+      "Real-time alerts for new approvals",
     ],
   },
   {
-    id: "dusting-attacks",
+    id: "compromise-detection",
     icon: <AlertTriangle className="h-10 w-10" />,
-    title: "Dusting Attack Prevention",
-    description: "Detects and flags small amounts of crypto sent to break privacy or prepare for phishing attacks.",
+    title: "Compromise Detection",
+    description: "Monitors your wallet for signs of compromise including large outflows, rapid drains, and unauthorized activity.",
     details: [
-      "Dust transaction identification",
-      "Source address reputation checking",
-      "Behavioral analysis of sending patterns",
-      "Risk scoring of incoming transactions",
+      "Real-time wallet monitoring",
+      "Behavioral anomaly detection",
+      "Multi-indicator risk scoring",
+      "Instant compromise alerts",
     ],
   },
   {
-    id: "risk-assessment",
+    id: "fund-tracing",
     icon: <Search className="h-10 w-10" />,
-    title: "Advanced Risk Assessment",
-    description: "Comprehensive scoring system to evaluate the security risk of any Solana address or transaction.",
+    title: "Fund Tracing & Recovery",
+    description: "Traces stolen funds across the blockchain, identifies exchange deposits, and facilitates freeze requests.",
     details: [
-      "Multi-factor risk evaluation",
-      "Machine learning classification",
-      "Continuous model improvement",
-      "Customizable risk thresholds",
+      "Multi-hop transaction tracing",
+      "Exchange deposit detection",
+      "Evidence package generation",
+      "Automated freeze request filing",
     ],
   },
   {
@@ -88,52 +88,37 @@ const securityFeatures = [
 
 // Code snippets for API integration feature
 const codeSnippets = [
-  { className: "text-green-400 mb-2", content: "// Check wallet security" },
-  { className: "text-blue-400", content: "async function checkWallet(address) {" },
+  { className: "text-green-400 mb-2", content: "// Scan wallet approvals" },
+  { className: "text-blue-400", content: "async function scanApprovals(address) {" },
   { className: "text-gray-300 ml-4", content: "const response = await fetch(" },
-  { className: "text-green-400 ml-8", content: "'https://api.lavinth.com/check'," },
+  { className: "text-green-400 ml-8", content: "`https://api.lavinth.io/api/approvals/scan/${address}`," },
   { className: "text-gray-300 ml-8", content: "{" },
   { className: "text-gray-300 ml-12", content: "method: 'POST'," },
-  { className: "text-gray-300 ml-12", content: "headers: { 'Content-Type': 'application/json' }," },
-  { className: "text-gray-300 ml-12", content: "body: JSON.stringify({" },
-  { className: "text-gray-300 ml-16", content: "address: ", spanContent: "address", spanClass: "text-yellow-400" },
-  { className: "text-gray-300 ml-12", content: "})" },
+  { className: "text-gray-300 ml-12", content: "headers: { 'x-api-key': apiKey }," },
   { className: "text-gray-300 ml-8", content: "})" },
   { className: "text-gray-300 ml-4", content: "return await response.json()" },
   { className: "text-blue-400", content: "}" },
-  { className: "text-green-400 mt-4", content: "// Real-time monitoring" },
-  { className: "text-blue-400", content: "function connectWebSocket() {" },
+  { className: "text-green-400 mt-4", content: "// Emergency revocation" },
+  { className: "text-blue-400", content: "async function emergencyRevoke(address) {" },
+  { className: "text-gray-300 ml-4", content: "const response = await fetch(" },
+  { className: "text-green-400 ml-8", content: "`https://api.lavinth.io/api/revocation/emergency/${address}`," },
+  { className: "text-gray-300 ml-8", content: "{" },
+  { className: "text-gray-300 ml-12", content: "method: 'POST'," },
+  { className: "text-gray-300 ml-12", content: "headers: { 'x-api-key': apiKey }," },
+  { className: "text-gray-300 ml-8", content: "})" },
   {
     className: "text-gray-300 ml-4",
-    content: "const ws = new WebSocket(",
-    spanContent: "'wss://api.lavinth.com/live'",
-    spanClass: "text-green-400",
-    endContent: ");",
-  },
-  { className: "text-gray-300 ml-4", content: "ws.onmessage = (event) => {" },
-  {
-    className: "text-gray-300 ml-8",
-    content: "const data = ",
-    spanContent: "JSON.parse",
+    content: "const data = await ",
+    spanContent: "response.json",
     spanClass: "text-yellow-400",
-    endContent: "(event.data);",
+    endContent: "()",
   },
   {
-    className: "text-gray-300 ml-8",
-    content: "if (data.alertType === ",
-    spanContent: "'poisoning'",
-    spanClass: "text-green-400",
-    endContent: ") {",
-  },
-  {
-    className: "text-gray-300 ml-12",
-    content: "",
-    spanContent: "showAlert",
+    className: "text-gray-300 ml-4",
+    content: "return ",
+    spanContent: "data.transactions",
     spanClass: "text-yellow-400",
-    endContent: "(data)",
   },
-  { className: "text-gray-300 ml-8", content: "}" },
-  { className: "text-gray-300 ml-4", content: "}" },
   { className: "text-blue-400", content: "}" },
 ]
 
@@ -289,7 +274,7 @@ export default function SecurityMetricsSection() {
                           {/* Feature visualization */}
                           <div className="aspect-square max-w-md mx-auto relative">
                             {/* Animated visualization based on feature type */}
-                            {feature.id === "address-poisoning" && (
+                            {feature.id === "approval-scanning" && (
                               <div className="w-full h-full flex items-center justify-center">
                                 <div className="relative w-64 h-64">
                                   {/* Shield animation */}
@@ -313,7 +298,7 @@ export default function SecurityMetricsSection() {
                               </div>
                             )}
 
-                            {feature.id === "dusting-attacks" && (
+                            {feature.id === "compromise-detection" && (
                               <div className="w-full h-full flex items-center justify-center">
                                 <div className="relative w-full h-full">
                                   {/* Dust particles animation */}
@@ -346,7 +331,7 @@ export default function SecurityMetricsSection() {
                               </div>
                             )}
 
-                            {feature.id === "risk-assessment" && (
+                            {feature.id === "fund-tracing" && (
                               <div className="w-full h-full flex items-center justify-center">
                                 <div className="relative w-full h-full">
                                   {/* Risk meter */}

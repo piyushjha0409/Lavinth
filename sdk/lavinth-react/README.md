@@ -34,9 +34,9 @@ function App() {
 
 // Use hooks in your components
 function SecurityDashboard() {
-  const { profile, riskLevel } = useSecurityProfile({
+  const { profile, isLoading, error, scan, refresh } = useSecurityProfile({
     walletAddress: 'YOUR_WALLET',
-    autoFetch: true,
+    autoScan: true,
   });
 
   const { approvals, highRiskApprovals, emergencyRevoke } = useApprovals({
@@ -46,7 +46,7 @@ function SecurityDashboard() {
 
   return (
     <div>
-      <h1>Risk Level: {riskLevel}</h1>
+      <h1>Security Score: {profile?.overallRiskScore}</h1>
       <p>{highRiskApprovals.length} high-risk approvals</p>
     </div>
   );
@@ -64,8 +64,8 @@ function App() {
   return (
     <LavinthProvider
       config={{
-        apiKey: process.env.REACT_APP_WALLETSHIELD_API_KEY,
-        baseUrl: 'https://api.lavinth.io',
+        apiKey: process.env.REACT_APP_LAVINTH_API_KEY,
+        apiUrl: 'https://api.lavinth.io',
       }}
     >
       {children}
@@ -83,15 +83,13 @@ Monitor wallet security status.
 ```tsx
 const {
   profile,           // SecurityProfile | null
-  threatMetrics,     // ThreatMetrics | null
-  riskLevel,         // 'low' | 'medium' | 'high' | 'critical'
   isLoading,         // boolean
   error,             // LavinthError | null
+  scan,              // (address?) => Promise<SecurityProfile | null>
   refresh,           // () => Promise<void>
 } = useSecurityProfile({
   walletAddress: '...',
-  autoFetch: true,
-  refreshInterval: 30000, // optional auto-refresh
+  autoScan: true,
 });
 ```
 

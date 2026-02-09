@@ -8,6 +8,7 @@
 
 import { Pool } from "pg";
 import * as dotenv from "dotenv";
+import logger from '../logger';
 
 dotenv.config();
 
@@ -127,15 +128,15 @@ async function migrate() {
   });
 
   try {
-    console.log("Running Phase 6 migration: Threat Intelligence...");
+    logger.info("Running Phase 6 migration: Threat Intelligence...");
 
     // Create tables and alter existing
     await pool.query(phase6Schema);
-    console.log("Phase 6 tables created / altered successfully");
+    logger.info("Phase 6 tables created / altered successfully");
 
     // Seed sources
     await pool.query(seedSources);
-    console.log("Threat intel sources seeded");
+    logger.info("Threat intel sources seeded");
 
     // Clean up stale sources and ensure new ones exist
     // Delete sync logs first (FK constraint), then stale sources
@@ -151,13 +152,13 @@ async function migrate() {
         ('phishdestroy', 'PhishDestroy Destroylist', 'domain_list', 'https://github.com/phishdestroy/destroylist', true)
       ON CONFLICT (source_id) DO NOTHING
     `);
-    console.log("Stale sources removed, new sources ensured");
+    logger.info("Stale sources removed, new sources ensured");
 
     // Verify
     const sources = await pool.query("SELECT source_id, source_name, source_type FROM threat_intel_sources");
-    console.log(`Verified: ${sources.rows.length} threat intel sources`);
+    logger.info({ count: sources.rows.length }, 'Verified threat intel sources');
     sources.rows.forEach((row) => {
-      console.log(`  - ${row.source_id}: ${row.source_name} (${row.source_type})`);
+      logger.info({ sourceId: row.source_id, sourceName: row.source_name, sourceType: row.source_type }, 'Threat intel source');
     });
 
     const cols = await pool.query(`
@@ -165,11 +166,11 @@ async function migrate() {
       WHERE table_name = 'known_malicious_delegates'
       AND column_name IN ('external_sources', 'last_verified_at', 'confidence_score')
     `);
-    console.log(`Verified: ${cols.rows.length}/3 new columns on known_malicious_delegates`);
+    logger.info({ count: cols.rows.length, expected: 3 }, 'Verified new columns on known_malicious_delegates');
 
-    console.log("Phase 6 migration completed successfully!");
+    logger.info("Phase 6 migration completed successfully!");
   } catch (error) {
-    console.error("Phase 6 migration failed:", error);
+    logger.error({ err: error }, 'Phase 6 migration failed');
     throw error;
   } finally {
     await pool.end();
@@ -177,6 +178,6 @@ async function migrate() {
 }
 
 migrate().catch((err) => {
-  console.error(err);
+  logger.error({ err }, 'Migration error');
   process.exit(1);
 });

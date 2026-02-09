@@ -1,95 +1,87 @@
-# Enhanced Solana Dusting Attack Detection System
+# Lavinth Backend
 
-## Overview
+Express API server for the Lavinth Solana post-compromise wallet recovery platform.
 
-This system provides advanced detection capabilities for identifying dusting attacks on the Solana blockchain. It uses a combination of pattern recognition, machine learning, adaptive thresholds, and network analysis to identify both potential attackers and victims.
+## Setup
 
-## Key Features
+```bash
+npm install
+cp env-sample.txt .env
+# Edit .env with your credentials
+```
 
-### 1. Advanced Pattern Recognition
-- Temporal pattern analysis to detect time-based attack patterns
-- Multi-hop relationship analysis to identify sophisticated attack networks
-- Address similarity detection to identify address poisoning attempts
+### Database
 
-### 2. Machine Learning Integration
-- Risk score prediction for both attackers and victims
-- Feature extraction from transaction patterns
-- Adaptive model training based on confirmed attack patterns
+Lavinth uses a single Neon PostgreSQL database configured via `DATABASE_URL`.
 
-### 3. Adaptive Thresholds
-- Dynamic adjustment of detection thresholds based on network conditions
-- Congestion-aware dust amount thresholds
-- Automatic calibration based on historical data
+```bash
+# Run schema migration
+npx ts-node db/migrate.ts
 
-### 4. Real-time Monitoring and Alerting
-- Discord webhook integration for real-time alerts
-- Email notifications for high-risk attacks
-- Configurable alert thresholds and notification channels
+# Run phase-specific migrations (in order)
+npx ts-node db/migrate-phase3.ts
+npx ts-node db/migrate-phase5.ts
+npx ts-node db/migrate-phase6.ts
+npx ts-node db/migrate-wallet-auth.ts
+```
+
+### Running
+
+```bash
+npm run dev          # Development (ts-node)
+npm run build        # Compile TypeScript
+npm start            # Production (node dist/)
+```
+
+### Testing
+
+```bash
+npm test             # Run tests
+npm run test:watch   # Watch mode
+```
 
 ## Architecture
 
-The system consists of several key components:
+The backend has two main components:
 
-1. **Core Dust Detector** (`solana-dust-detector.ts`): Main processing engine that analyzes transactions and identifies potential dusting attacks.
+### API Server (`fetchEndpoint.ts`)
 
-2. **Database Layer** (`db/db-utils.ts`, `db/schema.sql`): Stores transaction data, attacker/victim profiles, and detection patterns.
+Express 5 server with 55+ REST endpoints covering:
 
-3. **Machine Learning Module** (`ml-detection.ts`): Provides ML-based classification of potential attackers and victims.
+- **Wallet security** - Approval scanning, risk scoring, batch revocation
+- **Compromise detection** - Real-time monitoring, alert management
+- **Fund tracing** - BFS graph traversal, recovery reports
+- **Exchange coordination** - Freeze requests, evidence packages, email templates
+- **Transaction simulation** - Pre-execution risk analysis
+- **Threat intelligence** - 7 data sources, auto-sync, address/domain lookups
 
-4. **Adaptive Thresholds** (`adaptive-thresholds.ts`): Dynamically adjusts detection thresholds based on network conditions.
+Auth: `x-access-token` header (static token) for dashboard routes, `x-api-key` header (SHA-256 hashed per-user keys) for public API routes.
 
-5. **Alert System** (`dust-alert-system.ts`): Provides real-time monitoring and notifications for detected attacks.
+### Dust Detector (`solana-dust-detector.ts`)
 
-## Setup and Configuration
-
-### Prerequisites
-- Node.js (v16+)
-- PostgreSQL database
-- Solana RPC endpoint
-
-### Installation
-
-1. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-2. Configure environment variables (copy from env-sample.txt to .env):
-   ```bash
-   cp env-sample.txt .env
-   # Edit .env with your specific configuration
-   ```
-
-3. Initialize the database:
-   ```bash
-   psql -U your_username -d your_database -f db/schema.sql
-   ```
-
-### Running the System
+Standalone cron job that scans Solana blocks via Helius RPC for dusting attacks and address poisoning. Runs independently from the API server.
 
 ```bash
-npm run dev  # Development mode
-# or
-npm run build && npm start  # Production mode
+bash cron/dust-detector-cron.sh
 ```
 
-## Configuration Options
+## Services
 
-The system is highly configurable through environment variables. Key configuration options include:
+| Service | File | Purpose |
+|---------|------|---------|
+| Approval Scanner | `services/approval-scanner.ts` | SPL token delegate approval scanning |
+| Revocation Engine | `services/revocation-engine.ts` | Batch revocation transaction building |
+| Compromise Detector | `services/compromise-detector.ts` | Wallet monitoring for compromise signs |
+| Fund Tracker | `services/fund-tracker.ts` | Stolen fund BFS tracing |
+| Alert Manager | `services/alert-manager.ts` | Multi-channel notifications (webhook, Discord, email) |
+| Exchange Coordinator | `services/exchange-coordinator.ts` | Exchange communication and freeze workflows |
+| Transaction Simulator | `services/transaction-simulator.ts` | Pre-execution transaction analysis |
+| Threat Intelligence | `services/threat-intelligence.ts` | External threat data aggregation |
 
-- `DUST_AMOUNT_THRESHOLD`: Base threshold for considering a transaction as dust
-- `ENABLE_ADAPTIVE_THRESHOLDS`: Enable/disable dynamic threshold adjustment
-- `ENABLE_ALERTS`: Enable/disable the alert system
-- `DISCORD_WEBHOOK_URL`: Webhook URL for Discord notifications
-- `ENABLE_ML_DETECTION`: Enable/disable machine learning-based detection
-- `NETWORK_ANALYSIS_DEPTH`: Depth of network relationship analysis
+## Environment Variables
 
-See the env-sample.txt file for a complete list of configuration options.
+See `env-sample.txt` for the full list. Required variables:
 
-## Future Enhancements
-
-- Integration with more blockchain explorers for enhanced data collection
-- Improved visualization of attack patterns and networks
-- Expanded ML model with more sophisticated features
-- Support for additional notification channels
-- Integration with decentralized identity systems for reputation tracking
+- `DATABASE_URL` - Neon PostgreSQL connection string
+- `HELIUS_API_KEYS` - Comma-separated Helius RPC API keys
+- `API_KEY` - Static token for internal dashboard auth

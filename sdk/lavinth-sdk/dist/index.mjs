@@ -694,6 +694,13 @@ var Lavinth = class {
     return response.data.simulation;
   }
   /**
+   * Check a transaction for security risks (alias for simulateTransaction)
+   * As documented in LAVINTH.md for simple usage
+   */
+  async checkTransaction(serializedTransaction, walletAddress, storeResult = true) {
+    return this.simulateTransaction(serializedTransaction, walletAddress, storeResult);
+  }
+  /**
    * Quick risk check for a transaction (lightweight)
    * Use for pre-screening before full simulation
    */

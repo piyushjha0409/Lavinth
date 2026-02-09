@@ -139,8 +139,8 @@ export default function Footer() {
             </Link>
 
             <p className="text-gray-300 mb-6 leading-relaxed">
-              Securing the Solana ecosystem with advanced detection and
-              protection against address poisoning and dusting attacks.
+              Solana post-compromise wallet recovery — approval scanning,
+              emergency revocation, fund tracing, and exchange freeze requests.
             </p>
 
             <div className="flex gap-4 mb-6">
@@ -246,7 +246,7 @@ export default function Footer() {
               </li>
               <li>
                 <Link
-                  href="https://medium.com/@amann.jha1107/introduction-to-dusting-and-address-poisoning-on-solana-bfe6fef82f59"
+                  href="#"
                   target="_blank"
                   className="text-gray-400 hover:text-blue-400 transition-colors flex items-center group"
                 >

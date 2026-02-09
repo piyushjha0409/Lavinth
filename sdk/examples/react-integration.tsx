@@ -66,13 +66,11 @@ function WalletSecurityDashboard() {
   // Monitor wallet security profile
   const {
     profile,
-    threatMetrics,
-    riskLevel,
     isLoading: profileLoading,
     refresh: refreshProfile,
   } = useSecurityProfile({
     walletAddress,
-    autoFetch: true,
+    autoScan: true,
     refreshInterval: 30000, // Refresh every 30 seconds
   });
 
@@ -186,8 +184,6 @@ function WalletSecurityDashboard() {
       {activeTab === 'overview' && (
         <SecurityOverview
           profile={profile}
-          threatMetrics={threatMetrics}
-          riskLevel={riskLevel}
           riskScore={riskScore}
           isCompromised={isCompromised}
           highRiskCount={highRiskApprovals.length}
@@ -309,8 +305,6 @@ function WalletSecurityDashboard() {
 
 interface SecurityOverviewProps {
   profile: any;
-  threatMetrics: any;
-  riskLevel: string;
   riskScore: number;
   isCompromised: boolean;
   highRiskCount: number;
@@ -321,8 +315,6 @@ interface SecurityOverviewProps {
 
 function SecurityOverview({
   profile,
-  threatMetrics,
-  riskLevel,
   riskScore,
   isCompromised,
   highRiskCount,
@@ -338,6 +330,7 @@ function SecurityOverview({
     );
   }
 
+  const riskLevel = riskScore >= 80 ? 'critical' : riskScore >= 60 ? 'high' : riskScore >= 30 ? 'medium' : 'low';
   const riskColors: Record<string, string> = {
     low: '#10b981',
     medium: '#f59e0b',
@@ -418,7 +411,7 @@ function SecurityOverview({
               width: '120px',
               height: '120px',
               borderRadius: '50%',
-              border: `8px solid ${riskColors[riskLevel] || riskColors.medium}`,
+              border: `8px solid ${riskColors[riskLevel]}`,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -435,7 +428,7 @@ function SecurityOverview({
               style={{
                 fontSize: '24px',
                 fontWeight: 600,
-                color: riskColors[riskLevel] || riskColors.medium,
+                color: riskColors[riskLevel],
                 textTransform: 'capitalize',
               }}
             >
@@ -451,8 +444,8 @@ function SecurityOverview({
         </div>
       </div>
 
-      {/* Threat Metrics Grid */}
-      {threatMetrics && (
+      {/* Profile Metrics Grid */}
+      {profile && (
         <div
           style={{
             display: 'grid',
@@ -461,10 +454,8 @@ function SecurityOverview({
           }}
         >
           {[
-            { label: 'Dust Attacks', value: threatMetrics.dustAttacks, icon: '🌫️' },
-            { label: 'Poisoning Attempts', value: threatMetrics.poisoningAttempts, icon: '☠️' },
-            { label: 'Risky Approvals', value: threatMetrics.riskyApprovals, icon: '⚠️' },
-            { label: 'Suspicious Transactions', value: threatMetrics.suspiciousTransactions, icon: '🔍' },
+            { label: 'High Risk Approvals', value: profile.highRiskApprovals, icon: '⚠️' },
+            { label: 'Active Approvals', value: profile.activeApprovals, icon: '🔍' },
           ].map((metric) => (
             <div
               key={metric.label}

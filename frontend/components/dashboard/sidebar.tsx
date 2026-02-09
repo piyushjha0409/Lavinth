@@ -15,16 +15,12 @@ import {
   Shield,
   ShieldCheck,
   Users,
-  AlertTriangle,
-  Activity,
   Target,
   Menu,
   Key,
-  Network,
   Eye,
   Zap,
   Settings,
-  Brain,
   Radar,
   Snowflake,
   PlayCircle,
@@ -35,6 +31,15 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense } from "react";
 import Image from "next/image";
 import logo from "@/public/lavinth-logo.png";
+import dynamic from "next/dynamic";
+
+const WalletMultiButton = dynamic(
+  () =>
+    import("@solana/wallet-adapter-react-ui").then(
+      (mod) => mod.WalletMultiButton
+    ),
+  { ssr: false }
+);
 
 const navigation = [
   {
@@ -66,30 +71,6 @@ const navigation = [
     href: "/dashboard?tab=freeze-requests",
     tab: "freeze-requests",
     icon: Snowflake,
-  },
-  {
-    name: "Threat Intelligence",
-    href: "/dashboard?tab=threat-intelligence",
-    tab: "threat-intelligence",
-    icon: AlertTriangle,
-  },
-  {
-    name: "Network Analysis",
-    href: "/dashboard?tab=network-analysis",
-    tab: "network-analysis",
-    icon: Network,
-  },
-  {
-    name: "ML Analytics",
-    href: "/dashboard?tab=ml-analytics",
-    tab: "ml-analytics",
-    icon: Brain,
-  },
-  {
-    name: "Transaction Monitor",
-    href: "/dashboard?tab=transactions",
-    tab: "transactions",
-    icon: Activity,
   },
   {
     name: "Settings & API",
@@ -210,6 +191,16 @@ function SidebarContent({ className }: SidebarProps) {
             </nav>
           </div>
         </div>
+      </div>
+      <div className={cn("px-3 pb-2", collapsed && "flex justify-center")}>
+        <WalletMultiButton
+          style={{
+            width: collapsed ? "40px" : "100%",
+            height: "36px",
+            fontSize: "13px",
+            justifyContent: "center",
+          }}
+        />
       </div>
       <SidebarUser />
     </div>

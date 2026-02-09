@@ -42,8 +42,6 @@ interface RecoveryRecommendation {
     estimatedRecovery?: number;
 }
 interface ThreatMetrics {
-    dustAttacks: number;
-    poisoningAttempts: number;
     riskyApprovals: number;
     suspiciousTransactions: number;
     totalThreats: number;
@@ -588,6 +586,11 @@ declare class Lavinth {
      * Returns detailed risk analysis and predicted effects
      */
     simulateTransaction(serializedTransaction: string, walletAddress: string, storeResult?: boolean): Promise<SimulationResult>;
+    /**
+     * Check a transaction for security risks (alias for simulateTransaction)
+     * As documented in LAVINTH.md for simple usage
+     */
+    checkTransaction(serializedTransaction: string, walletAddress: string, storeResult?: boolean): Promise<SimulationResult>;
     /**
      * Quick risk check for a transaction (lightweight)
      * Use for pre-screening before full simulation

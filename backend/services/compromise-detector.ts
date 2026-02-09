@@ -14,6 +14,7 @@ import {
 import * as dotenv from "dotenv";
 import { v4 as uuidv4 } from "uuid";
 import pool from "../db/config";
+import logger from "../logger";
 import type { ThreatIntelligenceService } from "./threat-intelligence";
 
 dotenv.config();
@@ -59,7 +60,6 @@ export interface MonitoredWallet {
 }
 
 export interface AlertChannels {
-  email?: string;
   discord?: string;
   webhook?: string;
 }
@@ -174,9 +174,9 @@ export class CompromiseDetector {
         this.knownBridges.set(row.address, row.bridge_name)
       );
 
-      console.log(`Loaded ${this.knownDrainers.size} drainers, ${this.knownExchanges.size} exchanges, ${this.knownBridges.size} bridges`);
+      logger.info({ source: 'CompromiseDetector', drainers: this.knownDrainers.size, exchanges: this.knownExchanges.size, bridges: this.knownBridges.size }, 'Loaded known addresses');
     } catch (error) {
-      console.error("Error loading known addresses:", error);
+      logger.error({ err: error, source: 'CompromiseDetector' }, 'Error loading known addresses');
     }
   }
 
@@ -318,7 +318,7 @@ export class CompromiseDetector {
         riskScore: Math.min(riskScore, 100),
       };
     } catch (error: any) {
-      console.error(`Error analyzing wallet ${walletAddress}:`, error.message);
+      logger.error({ err: error, source: 'CompromiseDetector', walletAddress }, 'Error analyzing wallet');
       return {
         isCompromised: false,
         alerts: [],
@@ -463,7 +463,7 @@ export class CompromiseDetector {
 
       return walletTx;
     } catch (error) {
-      console.error("Error analyzing transaction:", error);
+      logger.error({ err: error, source: 'CompromiseDetector' }, 'Error analyzing transaction');
       return null;
     }
   }
@@ -680,7 +680,7 @@ export class CompromiseDetector {
         ]
       );
     } catch (error) {
-      console.error("Error storing transaction:", error);
+      logger.error({ err: error, source: 'CompromiseDetector' }, 'Error storing transaction');
     }
   }
 
@@ -705,7 +705,7 @@ export class CompromiseDetector {
         ]
       );
     } catch (error) {
-      console.error("Error storing alert:", error);
+      logger.error({ err: error, source: 'CompromiseDetector' }, 'Error storing alert');
     }
   }
 
@@ -736,7 +736,7 @@ export class CompromiseDetector {
           : undefined,
       };
     } catch (error) {
-      console.error("Error getting monitored wallet:", error);
+      logger.error({ err: error, source: 'CompromiseDetector' }, 'Error getting monitored wallet');
       return null;
     }
   }
@@ -755,7 +755,7 @@ export class CompromiseDetector {
         [walletAddress]
       );
     } catch (error) {
-      console.error("Error marking wallet compromised:", error);
+      logger.error({ err: error, source: 'CompromiseDetector' }, 'Error marking wallet compromised');
     }
   }
 
@@ -773,7 +773,7 @@ export class CompromiseDetector {
         [walletAddress, balance]
       );
     } catch (error) {
-      console.error("Error updating wallet balance:", error);
+      logger.error({ err: error, source: 'CompromiseDetector' }, 'Error updating wallet balance');
     }
   }
 
@@ -801,7 +801,7 @@ export class CompromiseDetector {
         createdAt: new Date(row.created_at),
       }));
     } catch (error) {
-      console.error("Error getting alerts:", error);
+      logger.error({ err: error, source: 'CompromiseDetector' }, 'Error getting alerts');
       return [];
     }
   }
@@ -832,7 +832,7 @@ export class CompromiseDetector {
         timestamp: new Date(row.timestamp),
       }));
     } catch (error) {
-      console.error("Error getting transactions:", error);
+      logger.error({ err: error, source: 'CompromiseDetector' }, 'Error getting transactions');
       return [];
     }
   }
@@ -850,7 +850,7 @@ export class CompromiseDetector {
         [alertId]
       );
     } catch (error) {
-      console.error("Error acknowledging alert:", error);
+      logger.error({ err: error, source: 'CompromiseDetector' }, 'Error acknowledging alert');
     }
   }
 }

@@ -19,7 +19,7 @@ import { Lavinth } from '@lavinth/sdk';
 
 const lavinth = new Lavinth({
   apiKey: 'your-api-key',
-  baseUrl: 'https://api.lavinth.io',
+  apiUrl: 'https://api.lavinth.io',
 });
 
 // Get security profile
@@ -123,7 +123,7 @@ const email = await lavinth.generateFreezeRequestEmail(requestId);
 ```typescript
 interface LavinthConfig {
   apiKey: string;           // Your API key
-  baseUrl?: string;         // API base URL (default: https://api.lavinth.io)
+  apiUrl?: string;         // API base URL (default: https://api.lavinth.io)
   timeout?: number;         // Request timeout in ms (default: 30000)
   retries?: number;         // Number of retries (default: 3)
 }

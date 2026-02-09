@@ -22,8 +22,12 @@ import {
   Loader2,
   ExternalLink,
   Copy,
+  Wallet,
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+import { Transaction } from "@solana/web3.js";
 
 interface TokenApproval {
   walletAddress: string;
@@ -69,6 +73,8 @@ export function EmergencyRecoveryModal({
   const [signatures, setSignatures] = useState<string[]>([]);
   const { toast } = useToast();
 
+  const { publicKey, connected, signAllTransactions } = useWallet();
+
   // Filter high-risk approvals
   const highRiskApprovals = approvals.filter(
     (a) => a.riskScore >= 50 || a.isUnlimited
@@ -110,23 +116,41 @@ export function EmergencyRecoveryModal({
     }
   };
 
-  // Handle wallet signing (placeholder - would integrate with wallet adapter)
+  // Handle wallet signing with real wallet adapter
   const handleSign = async () => {
+    if (!connected || !signAllTransactions) {
+      toast({
+        title: "Wallet Not Connected",
+        description: "Please connect your wallet first to sign transactions.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setProgress(50);
 
-    // In a real implementation, this would:
-    // 1. Connect to wallet (Phantom, Solflare, etc.)
-    // 2. Sign each transaction
-    // 3. Return signed transactions
+    try {
+      // Deserialize transactions from base64
+      const txObjects = transactions.map((txBase64) => {
+        const buffer = Buffer.from(txBase64, "base64");
+        return Transaction.from(buffer);
+      });
 
-    toast({
-      title: "Wallet Connection Required",
-      description: "Please connect your wallet to sign the revocation transactions. This feature requires wallet adapter integration.",
-      variant: "default",
-    });
+      // Sign all transactions using wallet adapter
+      const signedTxs = await signAllTransactions(txObjects);
 
-    // For now, show that signing would happen here
-    setStep("signing");
+      // Serialize signed transactions back to base64
+      const signedBase64 = signedTxs.map((tx) =>
+        tx.serialize().toString("base64")
+      );
+
+      // Submit signed transactions
+      await handleSubmit(signedBase64);
+    } catch (err: any) {
+      console.error("Error signing transactions:", err);
+      setError(err.message || "Failed to sign transactions");
+      setStep("error");
+    }
   };
 
   // Submit signed transactions
@@ -278,15 +302,36 @@ export function EmergencyRecoveryModal({
                 </p>
               </div>
 
-              <Alert>
-                <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>Wallet Connection Required</AlertTitle>
-                <AlertDescription>
-                  To complete the revocation, you need to connect your wallet and
-                  sign the transactions. This ensures only you can revoke your
-                  approvals.
-                </AlertDescription>
-              </Alert>
+              {/* Wallet Connection Status */}
+              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                <div className="flex items-center gap-2">
+                  <Wallet className="h-4 w-4" />
+                  <span className="text-sm font-medium">Wallet</span>
+                </div>
+                {connected && publicKey ? (
+                  <span className="text-sm font-mono text-green-500">
+                    {publicKey.toBase58().slice(0, 4)}...{publicKey.toBase58().slice(-4)}
+                  </span>
+                ) : (
+                  <WalletMultiButton
+                    style={{
+                      height: "32px",
+                      fontSize: "13px",
+                      padding: "0 12px",
+                    }}
+                  />
+                )}
+              </div>
+
+              {!connected && (
+                <Alert>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>Wallet Connection Required</AlertTitle>
+                  <AlertDescription>
+                    Connect your wallet above to sign the revocation transactions.
+                  </AlertDescription>
+                </Alert>
+              )}
 
               <div className="bg-muted p-4 rounded-lg">
                 <h4 className="font-medium mb-2">Transaction Summary:</h4>
@@ -411,8 +456,8 @@ export function EmergencyRecoveryModal({
               <Button variant="outline" onClick={handleClose}>
                 Cancel
               </Button>
-              <Button onClick={handleSign}>
-                Connect Wallet & Sign
+              <Button onClick={handleSign} disabled={!connected}>
+                {connected ? "Sign & Submit" : "Connect Wallet First"}
               </Button>
             </>
           )}

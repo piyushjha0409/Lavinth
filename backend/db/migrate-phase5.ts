@@ -5,6 +5,7 @@
 
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
+import logger from '../logger';
 
 dotenv.config();
 
@@ -14,11 +15,11 @@ const pool = new Pool({
 });
 
 async function migrate() {
-  console.log('Starting Phase 5 migration: Transaction Simulation...\n');
+  logger.info('Starting Phase 5 migration: Transaction Simulation...');
 
   try {
     // Create transaction_simulations table
-    console.log('Creating transaction_simulations table...');
+    logger.info('Creating transaction_simulations table...');
     await pool.query(`
       CREATE TABLE IF NOT EXISTS transaction_simulations (
         id SERIAL PRIMARY KEY,
@@ -43,10 +44,10 @@ async function migrate() {
       CREATE INDEX IF NOT EXISTS idx_simulations_risk ON transaction_simulations(risk_level);
       CREATE INDEX IF NOT EXISTS idx_simulations_date ON transaction_simulations(simulated_at DESC);
     `);
-    console.log('✓ transaction_simulations table created\n');
+    logger.info('transaction_simulations table created');
 
     // Create verified_programs table
-    console.log('Creating verified_programs table...');
+    logger.info('Creating verified_programs table...');
     await pool.query(`
       CREATE TABLE IF NOT EXISTS verified_programs (
         id SERIAL PRIMARY KEY,
@@ -65,10 +66,10 @@ async function migrate() {
 
       CREATE INDEX IF NOT EXISTS idx_verified_programs_id ON verified_programs(program_id);
     `);
-    console.log('✓ verified_programs table created\n');
+    logger.info('verified_programs table created');
 
     // Create simulation_alerts table
-    console.log('Creating simulation_alerts table...');
+    logger.info('Creating simulation_alerts table...');
     await pool.query(`
       CREATE TABLE IF NOT EXISTS simulation_alerts (
         id SERIAL PRIMARY KEY,
@@ -87,10 +88,10 @@ async function migrate() {
       CREATE INDEX IF NOT EXISTS idx_simulation_alerts_wallet ON simulation_alerts(wallet_address);
       CREATE INDEX IF NOT EXISTS idx_simulation_alerts_simulation ON simulation_alerts(simulation_id);
     `);
-    console.log('✓ simulation_alerts table created\n');
+    logger.info('simulation_alerts table created');
 
     // Seed verified programs
-    console.log('Seeding verified programs...');
+    logger.info('Seeding verified programs...');
     const verifiedPrograms = [
       {
         program_id: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
@@ -224,15 +225,17 @@ async function migrate() {
         ]
       );
     }
-    console.log(`✓ ${verifiedPrograms.length} verified programs seeded\n`);
+    logger.info({ count: verifiedPrograms.length }, 'Verified programs seeded');
 
-    console.log('Phase 5 migration completed successfully!');
+    logger.info('Phase 5 migration completed successfully!');
   } catch (error) {
-    console.error('Migration failed:', error);
+    logger.error({ err: error }, 'Migration failed');
     throw error;
   } finally {
     await pool.end();
   }
 }
 
-migrate().catch(console.error);
+migrate().catch((err) => {
+  logger.error({ err }, 'Migration error');
+});

@@ -60,8 +60,6 @@ export interface RecoveryRecommendation {
 
 // Threat Metrics for security profile
 export interface ThreatMetrics {
-  dustAttacks: number;
-  poisoningAttempts: number;
   riskyApprovals: number;
   suspiciousTransactions: number;
   totalThreats: number;

@@ -14,9 +14,9 @@ async function main() {
 
   const lavinth = new Lavinth({
     apiKey: 'your-api-key-here',
-    baseUrl: 'https://api.lavinth.io', // or your self-hosted backend
+    apiUrl: 'https://api.lavinth.io', // or your self-hosted backend
     timeout: 30000,
-    retries: 3,
+    retryAttempts: 3,
   });
 
   const walletAddress = 'YOUR_WALLET_ADDRESS';
@@ -27,12 +27,12 @@ async function main() {
     // =============================================================================
 
     console.log('Fetching security profile...');
-    const profile = await shield.getSecurityProfile(walletAddress);
+    const profile = await lavinth.getSecurityProfile(walletAddress);
 
     console.log('Security Profile:', {
-      riskLevel: profile.riskLevel,
-      riskScore: profile.riskScore,
-      threats: profile.threatMetrics,
+      overallRiskScore: profile.overallRiskScore,
+      activeApprovals: profile.activeApprovals,
+      highRiskApprovals: profile.highRiskApprovals,
     });
 
     // =============================================================================
@@ -40,7 +40,7 @@ async function main() {
     // =============================================================================
 
     console.log('\nAnalyzing for compromise...');
-    const analysis = await shield.analyzeCompromise(walletAddress);
+    const analysis = await lavinth.analyzeCompromise(walletAddress);
 
     if (analysis.isCompromised) {
       console.log('⚠️ WALLET MAY BE COMPROMISED!');
@@ -61,7 +61,7 @@ async function main() {
     // =============================================================================
 
     console.log('\nScanning token approvals...');
-    const approvals = await shield.getApprovals(walletAddress);
+    const approvals = await lavinth.getApprovals(walletAddress);
 
     console.log(`Found ${approvals.length} approvals`);
 
@@ -84,7 +84,7 @@ async function main() {
       if (analysis.isCompromised) {
         console.log('\n🚨 Initiating emergency revocation...');
 
-        const revocationResult = await shield.emergencyRevoke(walletAddress);
+        const revocationResult = await lavinth.emergencyRevoke(walletAddress);
 
         console.log('Session ID:', revocationResult.sessionId);
         console.log('Transactions to sign:', revocationResult.transactions.length);
@@ -105,7 +105,7 @@ async function main() {
     const stolenAmount = 10.5; // Example: 10.5 SOL stolen
 
     console.log('\nStarting fund trace...');
-    const trace = await shield.startFundTrace(walletAddress, stolenAmount);
+    const trace = await lavinth.startFundTrace(walletAddress, stolenAmount);
 
     console.log('Trace ID:', trace.traceId);
     console.log('Status:', trace.status);
@@ -126,7 +126,7 @@ async function main() {
 
         console.log(`\nCreating freeze request for ${hop.entityLabel}...`);
 
-        const freezeRequest = await shield.createFreezeRequest({
+        const freezeRequest = await lavinth.createFreezeRequest({
           traceId: trace.traceId,
           exchangeName: hop.entityLabel || 'Unknown',
           depositAddress: hop.address,
@@ -140,7 +140,7 @@ async function main() {
         console.log('Priority:', freezeRequest.priority);
 
         // Generate evidence package
-        const evidence = await shield.generateEvidencePackage(
+        const evidence = await lavinth.generateEvidencePackage(
           freezeRequest.requestId,
           trace.traceId,
           walletAddress,
@@ -154,7 +154,7 @@ async function main() {
         console.log('  - Verifiable hash:', evidence.verificationHash);
 
         // Generate email template
-        const email = await shield.generateFreezeRequestEmail(freezeRequest.requestId);
+        const email = await lavinth.generateFreezeRequestEmail(freezeRequest.requestId);
 
         console.log('\nEmail template ready:');
         console.log('  To:', email.recipientEmail);
@@ -167,7 +167,7 @@ async function main() {
     // =============================================================================
 
     console.log('\nGenerating recovery report...');
-    const report = await shield.generateRecoveryReport(trace.traceId);
+    const report = await lavinth.generateRecoveryReport(trace.traceId);
 
     console.log('Recovery Probability:', report.recoveryProbability + '%');
     console.log('Recommendations:');
@@ -183,7 +183,7 @@ async function main() {
     console.log('SECURITY SUMMARY');
     console.log('========================================');
     console.log(`Wallet: ${walletAddress.slice(0, 8)}...${walletAddress.slice(-6)}`);
-    console.log(`Risk Level: ${profile.riskLevel}`);
+    console.log(`Risk Score: ${profile.overallRiskScore}`);
     console.log(`Compromised: ${analysis.isCompromised ? 'YES' : 'No'}`);
     console.log(`High-Risk Approvals: ${highRisk.length}`);
     console.log(`Funds Traced: ${trace.totalAmount} ${trace.tokenSymbol || 'SOL'}`);

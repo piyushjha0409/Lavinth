@@ -377,7 +377,7 @@ function WalletSecurity({ address }) {
               +------------+------------+
               |                         |
         Dashboard (Next.js)        SDK (@lavinth/*)
-        - Google OAuth             - TypeScript client
+        - Wallet auth (Solana)     - TypeScript client
         - 10-tab interface         - React hooks
         - Real-time updates        - CJS + ESM
               |                         |
@@ -415,8 +415,8 @@ PostgreSQL     Solana    Helius   Arkham       GoPlus
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | Next.js 13+, React, TypeScript, TailwindCSS, Radix UI |
-| Auth | NextAuth (Google OAuth), JWT sessions |
+| Frontend | Next.js 15, React 19, TypeScript, TailwindCSS, Radix UI |
+| Auth | Wallet-based (Phantom, Solflare), cookie sessions |
 | Backend | Express, TypeScript, Node.js |
 | Database | PostgreSQL (Neon), connection pooling |
 | Blockchain | Solana Web3.js, SPL Token, Helius Enhanced API |

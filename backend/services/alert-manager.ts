@@ -6,11 +6,24 @@
  */
 
 import * as dotenv from "dotenv";
+import { EventEmitter } from "events";
+import logger from "../logger";
 import { v4 as uuidv4 } from "uuid";
 import pool from "../db/config";
 import { CompromiseAlert, AlertChannels } from "./compromise-detector";
 
 dotenv.config();
+
+// Timeout helper for outbound requests
+const WEBHOOK_TIMEOUT_MS = 10_000; // 10s for webhook/discord deliveries
+
+function fetchWithTimeout(
+  url: string,
+  options: RequestInit & { timeoutMs?: number } = {}
+): Promise<Response> {
+  const { timeoutMs = WEBHOOK_TIMEOUT_MS, ...fetchOptions } = options;
+  return fetch(url, { ...fetchOptions, signal: AbortSignal.timeout(timeoutMs) });
+}
 
 // Notification configuration
 const NOTIFICATION_CONFIG = {
@@ -39,7 +52,7 @@ export interface NotificationPayload {
   createdAt: Date;
 }
 
-export type NotificationChannel = "webhook" | "discord" | "email" | "telegram";
+export type NotificationChannel = "webhook" | "discord" | "telegram";
 export type NotificationStatus = "pending" | "sending" | "delivered" | "failed" | "retrying";
 
 export interface WebhookPayload {
@@ -85,13 +98,13 @@ export interface AlertSubscription {
  * Handles sending notifications across multiple channels
  */
 export class AlertManager {
+  static events = new EventEmitter();
   private notificationQueue: NotificationPayload[] = [];
   private processing: boolean = false;
   private rateLimitCounter: number = 0;
   private rateLimitResetTime: number = Date.now();
 
   constructor() {
-    // Start queue processor
     this.startQueueProcessor();
   }
 
@@ -114,16 +127,18 @@ export class AlertManager {
       );
     }
 
-    if (channels.email) {
-      notifications.push(
-        this.createNotification(alert, "email", channels.email)
-      );
-    }
-
     // Add to queue
     for (const notification of notifications) {
       await this.queueNotification(notification);
     }
+
+    // Emit event for SSE subscribers
+    AlertManager.events.emit('alert', {
+      alertId: alert.alertId,
+      walletAddress: alert.walletAddress,
+      severity: alert.severity,
+      title: alert.title,
+    });
   }
 
   /**
@@ -204,7 +219,7 @@ export class AlertManager {
         await this.sendNotification(notification);
       }
     } catch (error) {
-      console.error("Error processing notification queue:", error);
+      logger.error({ err: error, source: 'AlertManager' }, 'Error processing notification queue');
     } finally {
       this.processing = false;
     }
@@ -245,9 +260,6 @@ export class AlertManager {
           break;
         case "discord":
           await this.sendDiscord(notification);
-          break;
-        case "email":
-          await this.sendEmail(notification);
           break;
         default:
           throw new Error(`Unknown channel: ${notification.channel}`);
@@ -295,7 +307,7 @@ export class AlertManager {
       },
     };
 
-    const response = await fetch(notification.destination, {
+    const response = await fetchWithTimeout(notification.destination, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -353,7 +365,7 @@ export class AlertManager {
       }
     }
 
-    const response = await fetch(notification.destination, {
+    const response = await fetchWithTimeout(notification.destination, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ embeds: [embed] }),
@@ -362,20 +374,6 @@ export class AlertManager {
     if (!response.ok) {
       throw new Error(`Discord webhook failed: ${response.status}`);
     }
-  }
-
-  /**
-   * Send email notification (placeholder - requires email service integration)
-   */
-  private async sendEmail(notification: NotificationPayload): Promise<void> {
-    // In production, integrate with email service (SendGrid, AWS SES, etc.)
-    console.log(`[EMAIL] Would send to ${notification.destination}:`, {
-      subject: `[${notification.severity.toUpperCase()}] ${notification.title}`,
-      body: notification.message,
-    });
-
-    // For now, just log and mark as delivered
-    // TODO: Integrate with actual email service
   }
 
   /**
@@ -432,7 +430,7 @@ export class AlertManager {
         ]
       );
     } catch (error) {
-      console.error("Error updating notification status:", error);
+      logger.error({ err: error, source: 'AlertManager' }, 'Error updating notification status');
     }
   }
 
@@ -510,7 +508,7 @@ export class AlertManager {
         createdAt: new Date(row.created_at),
       };
     } catch (error) {
-      console.error("Error getting subscription:", error);
+      logger.error({ err: error, source: 'AlertManager' }, 'Error getting subscription');
       return null;
     }
   }
@@ -588,7 +586,7 @@ export class AlertManager {
         createdAt: new Date(row.created_at),
       }));
     } catch (error) {
-      console.error("Error getting notification history:", error);
+      logger.error({ err: error, source: 'AlertManager' }, 'Error getting notification history');
       return [];
     }
   }
@@ -603,7 +601,7 @@ export class AlertManager {
       );
       return parseInt(result.rows[0].count);
     } catch (error) {
-      console.error("Error getting pending count:", error);
+      logger.error({ err: error, source: 'AlertManager' }, 'Error getting pending count');
       return 0;
     }
   }
@@ -646,7 +644,7 @@ export class AlertManager {
 
       return retriedCount;
     } catch (error) {
-      console.error("Error retrying failed notifications:", error);
+      logger.error({ err: error, source: 'AlertManager' }, 'Error retrying failed notifications');
       return 0;
     }
   }

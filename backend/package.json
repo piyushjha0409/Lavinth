@@ -1,9 +1,11 @@
 {
-  "name": "solana-dusting-detector",
+  "name": "lavinth-backend",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "dist/fetchEndpoint.js",
+  "description": "Lavinth - Solana post-compromise wallet recovery platform backend",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "start": "node dist/fetchEndpoint.js",
     "dev": "ts-node fetchEndpoint.ts",
     "build": "tsc"
@@ -11,32 +13,31 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
   "devDependencies": {
     "@types/express": "^5.0.1",
+    "@types/pino-http": "^5.8.4",
+    "@types/supertest": "^6.0.3",
     "@types/uuid": "^10.0.0",
+    "supertest": "^7.2.2",
     "ts-node": "^10.9.2",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^4.0.18"
   },
   "dependencies": {
     "@solana/spl-token": "^0.4.9",
     "@solana/web3.js": "^1.98.0",
-    "uuid": "^10.0.0",
     "@types/cors": "^2.8.17",
-    "@types/dotenv": "^6.1.1",
-    "@types/nodemailer": "^6.4.17",
     "@types/pg": "^8.11.14",
     "axios": "^1.9.0",
     "cors": "^2.8.5",
     "discord.js": "^14.19.3",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
-    "fs": "^0.0.1-security",
-    "nodemailer": "^6.10.1",
+    "express-rate-limit": "^8.2.1",
     "p-limit": "^6.2.0",
     "pg": "^8.15.6",
-    "pg-hstore": "^2.3.4",
-    "sequelize": "^6.37.7",
-    "sequelize-cli": "^6.6.2"
+    "pino": "^10.3.0",
+    "pino-http": "^11.0.0",
+    "uuid": "^10.0.0"
   }
 }
