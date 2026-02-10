@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -27,12 +27,10 @@ import {
   ShieldAlert,
   Search,
   RefreshCw,
-  Trash2,
   Copy,
   ExternalLink,
   AlertCircle,
   CheckCircle2,
-  XCircle,
   Loader2,
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
@@ -43,7 +41,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { EmergencyRecoveryModal } from "./emergency-recovery-modal";
 
 // Types
 interface TokenApproval {
@@ -76,16 +73,31 @@ interface SecurityProfile {
   approvals: TokenApproval[];
 }
 
+interface ThreatIntelResult {
+  status: string;
+  isFlagged: boolean;
+  riskScore: number;
+  message: string;
+  details: {
+    label: string;
+    category: string;
+    sources: string[];
+  } | null;
+  goPlusRisk: {
+    isRisky: boolean;
+    riskFlags: string[];
+  } | null;
+}
+
 export default function WalletSecurityTab() {
   const [walletAddress, setWalletAddress] = useState("");
   const [isScanning, setIsScanning] = useState(false);
   const [profile, setProfile] = useState<SecurityProfile | null>(null);
-  const [approvals, setApprovals] = useState<TokenApproval[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [showEmergencyModal, setShowEmergencyModal] = useState(false);
+  const [threatIntel, setThreatIntel] = useState<ThreatIntelResult | null>(null);
   const { toast } = useToast();
 
-  // Scan wallet for approvals
+  // Scan wallet for approvals and threat intelligence
   const handleScanWallet = async () => {
     if (!walletAddress.trim()) {
       toast({
@@ -98,21 +110,42 @@ export default function WalletSecurityTab() {
 
     setIsScanning(true);
     setError(null);
+    setThreatIntel(null);
 
     try {
-      const response = await fetch(`/api/approvals/scan/${walletAddress}`);
-      const data = await response.json();
+      const [approvalResult, threatResult] = await Promise.allSettled([
+        fetch(`/api/approvals/scan/${walletAddress}`),
+        fetch(`/api/wallet-check/${walletAddress}`),
+      ]);
 
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to scan wallet");
+      // Process approval result
+      if (approvalResult.status === "fulfilled") {
+        if (!approvalResult.value.ok) {
+          const text = await approvalResult.value.text();
+          let errorMsg = "Failed to scan wallet";
+          try { errorMsg = JSON.parse(text).error || errorMsg; } catch {}
+          throw new Error(errorMsg);
+        }
+        const approvalData = await approvalResult.value.json();
+        setProfile(approvalData.profile);
+      } else {
+        throw new Error(approvalResult.reason?.message || "Failed to scan wallet");
       }
 
-      setProfile(data.profile);
-      setApprovals(data.profile?.approvals || []);
+      // Process threat intel result (non-blocking — approval scan still shows if this fails)
+      try {
+        if (threatResult.status === "fulfilled" && threatResult.value.ok) {
+          const text = await threatResult.value.text();
+          const threatData = JSON.parse(text);
+          setThreatIntel(threatData);
+        }
+      } catch (e) {
+        console.warn("Threat intel response was not valid JSON, skipping");
+      }
 
       toast({
         title: "Scan Complete",
-        description: `Found ${data.profile?.totalApprovals || 0} token approvals`,
+        description: `Scan finished for ${walletAddress.slice(0, 8)}...`,
       });
     } catch (err: any) {
       console.error("Scan error:", err);
@@ -165,14 +198,16 @@ export default function WalletSecurityTab() {
     return "outline";
   };
 
+  const scannedApprovals = profile?.approvals || [];
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Wallet Security</h2>
+          <h2 className="text-2xl font-heading font-bold tracking-tight">Wallet Security</h2>
           <p className="text-muted-foreground">
-            Scan your wallet for risky token approvals and revoke them
+            Scan any address for threat intelligence flags and risky token approvals
           </p>
         </div>
       </div>
@@ -185,7 +220,7 @@ export default function WalletSecurityTab() {
             Scan Wallet
           </CardTitle>
           <CardDescription>
-            Enter a Solana wallet address to scan for token approvals
+            Enter a Solana wallet address to check threat intelligence and scan for token approvals
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -223,10 +258,76 @@ export default function WalletSecurityTab() {
         </Alert>
       )}
 
+      {/* Threat Intelligence Alert */}
+      {threatIntel && (
+        threatIntel.isFlagged ? (
+          <Alert variant="destructive" className="border-red-500/50 bg-red-500/10">
+            <ShieldAlert className="h-5 w-5" />
+            <AlertTitle className="text-lg font-semibold">
+              Warning: Potentially Malicious Address
+            </AlertTitle>
+            <AlertDescription>
+              <div className="mt-3 space-y-3">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-medium">Threat Risk Score</span>
+                    <span className="text-sm font-bold text-red-400">
+                      {Math.round(threatIntel.riskScore * 100)}%
+                    </span>
+                  </div>
+                  <Progress
+                    value={threatIntel.riskScore * 100}
+                    className="h-2"
+                  />
+                </div>
+                {threatIntel.details && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-muted-foreground">Label:</span>
+                      <span className="font-medium">{threatIntel.details.label}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-muted-foreground">Category:</span>
+                      <span className="font-medium">{threatIntel.details.category}</span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap text-sm">
+                      <span className="text-muted-foreground">Sources:</span>
+                      {threatIntel.details.sources.map((source) => (
+                        <Badge key={source} variant="outline" className="text-xs border-red-500/50 text-red-400">
+                          {source}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {threatIntel.goPlusRisk && (
+                  <div className="flex items-center gap-2 flex-wrap text-sm">
+                    <span className="text-muted-foreground">GoPlus Flags:</span>
+                    {threatIntel.goPlusRisk.riskFlags.map((flag) => (
+                      <Badge key={flag} variant="destructive" className="text-xs">
+                        {flag}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </AlertDescription>
+          </Alert>
+        ) : (
+          <Alert className="border-green-500/50 bg-green-500/10">
+            <CheckCircle2 className="h-5 w-5 text-green-500" />
+            <AlertTitle className="text-green-400">Address Not Flagged</AlertTitle>
+            <AlertDescription className="text-green-300/80">
+              This address is not flagged in threat intelligence databases or GoPlus real-time checks.
+            </AlertDescription>
+          </Alert>
+        )
+      )}
+
       {/* Security Profile */}
       {profile && (
         <>
-          {/* Security Score Card */}
+          {/* Security Score Cards */}
           <div className="grid gap-4 md:grid-cols-4">
             <Card>
               <CardHeader className="pb-2">
@@ -239,11 +340,17 @@ export default function WalletSecurityTab() {
                   <div className="text-3xl font-bold">{profile.securityScore}</div>
                   <Progress value={profile.securityScore} className="flex-1" />
                 </div>
-                <Badge
-                  className={`mt-2 ${getRiskLevelColor(profile.riskLevel)}`}
-                >
-                  {profile.riskLevel.toUpperCase()} RISK
-                </Badge>
+                {threatIntel?.isFlagged ? (
+                  <Badge className="mt-2 bg-red-500">
+                    FLAGGED
+                  </Badge>
+                ) : (
+                  <Badge
+                    className={`mt-2 ${getRiskLevelColor(profile.riskLevel)}`}
+                  >
+                    {profile.riskLevel.toUpperCase()} RISK
+                  </Badge>
+                )}
               </CardContent>
             </Card>
 
@@ -296,29 +403,7 @@ export default function WalletSecurityTab() {
             </Card>
           </div>
 
-          {/* Emergency Action */}
-          {(profile.highRiskApprovals > 0 || profile.unlimitedApprovals > 0) && (
-            <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Action Required</AlertTitle>
-              <AlertDescription className="flex items-center justify-between">
-                <span>
-                  Your wallet has {profile.highRiskApprovals} high-risk and{" "}
-                  {profile.unlimitedApprovals} unlimited approvals that should be
-                  revoked.
-                </span>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => setShowEmergencyModal(true)}
-                >
-                  Emergency Revoke All
-                </Button>
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {/* Approvals Table */}
+          {/* Read-only Approvals Table for scanned address */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
@@ -336,15 +421,15 @@ export default function WalletSecurityTab() {
                 </Button>
               </CardTitle>
               <CardDescription>
-                All active token delegate approvals for this wallet
+                All active token delegate approvals for the scanned address
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {approvals.length === 0 ? (
+              {scannedApprovals.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <ShieldCheck className="h-12 w-12 mx-auto mb-4 text-green-500" />
                   <p>No active token approvals found</p>
-                  <p className="text-sm">Your wallet is secure</p>
+                  <p className="text-sm">This address has no outstanding delegations</p>
                 </div>
               ) : (
                 <Table>
@@ -355,11 +440,11 @@ export default function WalletSecurityTab() {
                       <TableHead>Amount</TableHead>
                       <TableHead>Risk Score</TableHead>
                       <TableHead>Flags</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead className="text-right">View</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {approvals.map((approval, index) => (
+                    {scannedApprovals.map((approval, index) => (
                       <TableRow key={index}>
                         <TableCell>
                           <TooltipProvider>
@@ -442,27 +527,25 @@ export default function WalletSecurityTab() {
                           </div>
                         </TableCell>
                         <TableCell className="text-right">
-                          <div className="flex gap-2 justify-end">
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() =>
-                                      window.open(
-                                        `https://solscan.io/account/${approval.delegateAddress}`,
-                                        "_blank"
-                                      )
-                                    }
-                                  >
-                                    <ExternalLink className="h-4 w-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>View on Solscan</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          </div>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() =>
+                                    window.open(
+                                      `https://solscan.io/account/${approval.delegateAddress}`,
+                                      "_blank"
+                                    )
+                                  }
+                                >
+                                  <ExternalLink className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>View on Solscan</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -483,24 +566,13 @@ export default function WalletSecurityTab() {
               Check Your Wallet Security
             </h3>
             <p className="text-muted-foreground text-center max-w-md">
-              Enter your Solana wallet address above to scan for token approvals.
-              We&apos;ll analyze each approval and identify any potential risks.
+              Enter a Solana wallet address above to check against threat intelligence
+              databases and scan for risky token approvals.
             </p>
           </CardContent>
         </Card>
       )}
 
-      {/* Emergency Recovery Modal */}
-      <EmergencyRecoveryModal
-        open={showEmergencyModal}
-        onOpenChange={setShowEmergencyModal}
-        walletAddress={walletAddress}
-        approvals={approvals}
-        onSuccess={() => {
-          handleScanWallet();
-          setShowEmergencyModal(false);
-        }}
-      />
     </div>
   );
 }

@@ -1,435 +1,315 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import { useRef } from "react";
+import { motion, useInView } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls, Environment, Float } from "@react-three/drei";
-import { ArrowRight } from "lucide-react";
-import type * as THREE from "three";
+import {
+  ArrowRight,
+  Shield,
+  Scan,
+  RefreshCw,
+  Activity,
+  AlertTriangle,
+  CheckCircle2,
+} from "lucide-react";
 import Link from "next/link";
 
-// Simplified blockchain security visualization
-function BlockchainSecurityModel() {
-  const group = useRef<THREE.Group>(null);
+const trustStats = [
+  { label: "API Endpoints", value: "55+" },
+  { label: "Security Services", value: "7" },
+  { label: "Real-time Monitoring", value: "24/7" },
+];
 
-  useFrame((state) => {
-    if (group.current) {
-      group.current.rotation.y = state.clock.getElapsedTime() * 0.2;
-    }
-  });
-
+function DashboardPreview() {
   return (
-    <group ref={group}>
-      {/* Shield base */}
-      <mesh position={[0, 0, 0]} scale={[1.2, 1.5, 0.2]}>
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial
-          color="#4361ee"
-          emissive="#3a0ca3"
-          emissiveIntensity={0.3}
-          metalness={0.8}
-          roughness={0.2}
-        />
-      </mesh>
+    <div className="relative w-full">
+      {/* Outer glow */}
+      <div className="absolute -inset-4 bg-gradient-to-br from-primary/20 via-transparent to-accent/10 rounded-3xl blur-2xl" />
 
-      {/* Shield border */}
-      <mesh position={[0, 0, 0.11]} scale={[1.3, 1.6, 0.05]}>
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial
-          color="#4cc9f0"
-          emissive="#4cc9f0"
-          emissiveIntensity={0.5}
-          metalness={0.9}
-          roughness={0.1}
-          transparent
-          opacity={0.7}
-        />
-      </mesh>
+      {/* Dashboard frame */}
+      <div className="relative bg-card/80 border border-border/60 rounded-2xl overflow-hidden shadow-2xl shadow-primary/10 backdrop-blur-sm">
+        {/* Window chrome */}
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-border/40 bg-card/60">
+          <div className="flex gap-1.5">
+            <div className="h-2.5 w-2.5 rounded-full bg-severity-critical/60" />
+            <div className="h-2.5 w-2.5 rounded-full bg-severity-medium/60" />
+            <div className="h-2.5 w-2.5 rounded-full bg-severity-low/60" />
+          </div>
+          <div className="flex-1 flex justify-center">
+            <div className="px-3 py-0.5 rounded-md bg-secondary/60 text-[10px] font-mono text-muted-foreground">
+              lavinth.com/dashboard
+            </div>
+          </div>
+        </div>
 
-      {/* Blockchain cubes - simplified to static positions */}
-      <mesh
-        position={[0.6, 0, 0.3]}
-        scale={0.15}
-        rotation={[Math.PI / 4, Math.PI / 4, 0]}
-      >
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial
-          color="#560bad"
-          emissive="#7209b7"
-          emissiveIntensity={0.3}
-          metalness={0.7}
-          roughness={0.2}
-        />
-      </mesh>
+        {/* Dashboard content */}
+        <div className="p-4 space-y-3">
+          {/* Top row — Score + Status */}
+          <div className="grid grid-cols-5 gap-3">
+            {/* Security Score */}
+            <div className="col-span-2 bg-secondary/40 border border-border/30 rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="p-1.5 rounded-md bg-severity-low/10">
+                  <Shield className="h-3.5 w-3.5 text-severity-low" />
+                </div>
+                <span className="text-xs font-heading font-medium">
+                  Security Score
+                </span>
+              </div>
+              <div className="flex items-end gap-3">
+                <span className="text-3xl font-heading font-bold text-severity-low leading-none">
+                  92
+                </span>
+                <div className="flex gap-0.5 mb-1">
+                  {[...Array(5)].map((_, i) => (
+                    <div
+                      key={i}
+                      className={`h-1 w-5 rounded-full ${
+                        i < 4 ? "bg-severity-low" : "bg-secondary"
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div className="text-[10px] text-muted-foreground mt-2">
+                Low risk — 2 approvals flagged
+              </div>
+            </div>
 
-      <mesh
-        position={[0.2, 0.5, 0.3]}
-        scale={0.15}
-        rotation={[Math.PI / 4, Math.PI / 4, 0]}
-      >
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial
-          color="#560bad"
-          emissive="#7209b7"
-          emissiveIntensity={0.3}
-          metalness={0.7}
-          roughness={0.2}
-        />
-      </mesh>
+            {/* Quick stats */}
+            <div className="col-span-3 grid grid-cols-3 gap-2">
+              {[
+                {
+                  label: "Approvals",
+                  value: "12",
+                  icon: Scan,
+                  color: "text-primary",
+                },
+                {
+                  label: "Alerts",
+                  value: "3",
+                  icon: AlertTriangle,
+                  color: "text-severity-high",
+                },
+                {
+                  label: "Traced",
+                  value: "4.3",
+                  unit: "SOL",
+                  icon: Activity,
+                  color: "text-accent",
+                },
+              ].map((stat) => {
+                const Icon = stat.icon;
+                return (
+                  <div
+                    key={stat.label}
+                    className="bg-secondary/40 border border-border/30 rounded-xl p-3 flex flex-col"
+                  >
+                    <Icon className={`h-3.5 w-3.5 ${stat.color} mb-2`} />
+                    <span className="text-lg font-heading font-bold leading-none">
+                      {stat.value}
+                      {stat.unit && (
+                        <span className="text-[10px] font-normal text-muted-foreground ml-0.5">
+                          {stat.unit}
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground mt-1">
+                      {stat.label}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
 
-      <mesh
-        position={[-0.4, 0.4, 0.3]}
-        scale={0.15}
-        rotation={[Math.PI / 4, Math.PI / 4, 0]}
-      >
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial
-          color="#560bad"
-          emissive="#7209b7"
-          emissiveIntensity={0.3}
-          metalness={0.7}
-          roughness={0.2}
-        />
-      </mesh>
+          {/* Approval scan row */}
+          <div className="bg-secondary/40 border border-border/30 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-md bg-primary/10">
+                  <Scan className="h-3.5 w-3.5 text-primary" />
+                </div>
+                <span className="text-xs font-heading font-medium">
+                  Approval Scan
+                </span>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-severity-critical/10 text-severity-critical font-medium">
+                2 High Risk
+              </span>
+            </div>
+            {/* Table rows */}
+            <div className="space-y-0 rounded-lg overflow-hidden border border-border/20">
+              {[
+                {
+                  delegate: "7xKt...3mPq",
+                  risk: "High",
+                  score: 85,
+                  color: "text-severity-critical",
+                  barColor: "bg-severity-critical",
+                  barWidth: "w-[85%]",
+                },
+                {
+                  delegate: "Phn2...9kWa",
+                  risk: "Medium",
+                  score: 52,
+                  color: "text-severity-medium",
+                  barColor: "bg-severity-medium",
+                  barWidth: "w-[52%]",
+                },
+                {
+                  delegate: "Bnce...4xTr",
+                  risk: "Low",
+                  score: 12,
+                  color: "text-severity-low",
+                  barColor: "bg-severity-low",
+                  barWidth: "w-[12%]",
+                },
+              ].map((row, i) => (
+                <div
+                  key={row.delegate}
+                  className={`flex items-center gap-3 px-3 py-2 text-xs ${
+                    i !== 2 ? "border-b border-border/20" : ""
+                  } ${i % 2 === 0 ? "bg-card/30" : "bg-transparent"}`}
+                >
+                  <span className="font-mono text-muted-foreground w-20 flex-shrink-0">
+                    {row.delegate}
+                  </span>
+                  <div className="flex-1 h-1.5 rounded-full bg-secondary overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${row.barColor} ${row.barWidth}`}
+                    />
+                  </div>
+                  <span className={`${row.color} font-medium w-8 text-right`}>
+                    {row.score}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
 
-      <mesh
-        position={[-0.5, -0.2, 0.3]}
-        scale={0.15}
-        rotation={[Math.PI / 4, Math.PI / 4, 0]}
-      >
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial
-          color="#560bad"
-          emissive="#7209b7"
-          emissiveIntensity={0.3}
-          metalness={0.7}
-          roughness={0.2}
-        />
-      </mesh>
-
-      <mesh
-        position={[0.2, -0.5, 0.3]}
-        scale={0.15}
-        rotation={[Math.PI / 4, Math.PI / 4, 0]}
-      >
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial
-          color="#560bad"
-          emissive="#7209b7"
-          emissiveIntensity={0.3}
-          metalness={0.7}
-          roughness={0.2}
-        />
-      </mesh>
-
-      {/* Connection lines - simplified to static positions */}
-      <mesh
-        position={[0.4, 0.25, 0.3]}
-        rotation={[0, 0, Math.PI / 4]}
-        scale={[0.03, 0.3, 0.03]}
-      >
-        <cylinderGeometry args={[1, 1, 1, 8]} />
-        <meshStandardMaterial
-          color="#4cc9f0"
-          emissive="#4cc9f0"
-          emissiveIntensity={0.5}
-          transparent
-          opacity={0.7}
-        />
-      </mesh>
-
-      <mesh
-        position={[-0.1, 0.45, 0.3]}
-        rotation={[0, 0, Math.PI / 2]}
-        scale={[0.03, 0.3, 0.03]}
-      >
-        <cylinderGeometry args={[1, 1, 1, 8]} />
-        <meshStandardMaterial
-          color="#4cc9f0"
-          emissive="#4cc9f0"
-          emissiveIntensity={0.5}
-          transparent
-          opacity={0.7}
-        />
-      </mesh>
-
-      <mesh
-        position={[-0.45, 0.1, 0.3]}
-        rotation={[0, 0, Math.PI / 4]}
-        scale={[0.03, 0.3, 0.03]}
-      >
-        <cylinderGeometry args={[1, 1, 1, 8]} />
-        <meshStandardMaterial
-          color="#4cc9f0"
-          emissive="#4cc9f0"
-          emissiveIntensity={0.5}
-          transparent
-          opacity={0.7}
-        />
-      </mesh>
-
-      <mesh
-        position={[-0.15, -0.35, 0.3]}
-        rotation={[0, 0, Math.PI / 2]}
-        scale={[0.03, 0.3, 0.03]}
-      >
-        <cylinderGeometry args={[1, 1, 1, 8]} />
-        <meshStandardMaterial
-          color="#4cc9f0"
-          emissive="#4cc9f0"
-          emissiveIntensity={0.5}
-          transparent
-          opacity={0.7}
-        />
-      </mesh>
-
-      <mesh
-        position={[0.4, -0.25, 0.3]}
-        rotation={[0, 0, Math.PI / 4]}
-        scale={[0.03, 0.3, 0.03]}
-      >
-        <cylinderGeometry args={[1, 1, 1, 8]} />
-        <meshStandardMaterial
-          color="#4cc9f0"
-          emissive="#4cc9f0"
-          emissiveIntensity={0.5}
-          transparent
-          opacity={0.7}
-        />
-      </mesh>
-
-      {/* Lock in center */}
-      <group position={[0, 0, 0.3]}>
-        {/* Lock body */}
-        <mesh position={[0, -0.2, 0]} scale={[0.4, 0.3, 0.2]}>
-          <boxGeometry args={[1, 1, 1]} />
-          <meshStandardMaterial
-            color="#4895ef"
-            emissive="#4361ee"
-            emissiveIntensity={0.3}
-            metalness={0.9}
-            roughness={0.1}
-          />
-        </mesh>
-
-        {/* Lock shackle */}
-        <mesh position={[0, 0.05, 0]} scale={[0.25, 0.25, 0.1]}>
-          <torusGeometry args={[1, 0.2, 16, 32, Math.PI]} />
-          <meshStandardMaterial
-            color="#4895ef"
-            emissive="#4361ee"
-            emissiveIntensity={0.3}
-            metalness={0.9}
-            roughness={0.1}
-          />
-        </mesh>
-      </group>
-
-      {/* Solana logo hint */}
-      <mesh position={[0, 0, 0.15]} rotation={[0, 0, Math.PI / 4]} scale={0.5}>
-        <ringGeometry args={[0.2, 0.25, 32]} />
-        <meshStandardMaterial
-          color="#4cc9f0"
-          emissive="#4cc9f0"
-          emissiveIntensity={0.5}
-          transparent
-          opacity={0.8}
-        />
-      </mesh>
-    </group>
-  );
-}
-
-// Simplified particles
-function SimpleParticles() {
-  const group = useRef<THREE.Group>(null);
-
-  useFrame((state) => {
-    if (group.current) {
-      group.current.rotation.y = state.clock.getElapsedTime() * 0.05;
-    }
-  });
-
-  return (
-    <group ref={group}>
-      {Array.from({ length: 50 }).map((_, i) => (
-        <mesh
-          key={i}
-          position={[
-            (Math.random() - 0.5) * 10,
-            (Math.random() - 0.5) * 10,
-            (Math.random() - 0.5) * 10,
-          ]}
-        >
-          <sphereGeometry args={[0.05, 8, 8]} />
-          <meshBasicMaterial color="#4cc9f0" transparent opacity={0.7} />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
-// Simplified data flow lines
-function SimpleDataFlowLines() {
-  const group = useRef<THREE.Group>(null);
-
-  useFrame((state) => {
-    if (group.current && group.current.children.length > 0) {
-      group.current.children.forEach((child, i) => {
-        // Simple up and down movement
-        child.position.y =
-          Math.sin(state.clock.getElapsedTime() * 0.5 + i * 0.2) * 2;
-      });
-    }
-  });
-
-  return (
-    <group ref={group}>
-      {Array.from({ length: 10 }).map((_, i) => (
-        <mesh
-          key={i}
-          position={[(Math.random() - 0.5) * 8, 0, (Math.random() - 0.5) * 8]}
-        >
-          <boxGeometry args={[0.05, 2, 0.05]} />
-          <meshBasicMaterial color="#4cc9f0" transparent opacity={0.3} />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
-function Scene() {
-  return (
-    <React.Suspense fallback={null}>
-      <ambientLight intensity={0.5} />
-      <directionalLight position={[10, 10, 5]} intensity={1} />
-      <directionalLight
-        position={[-10, -10, -5]}
-        intensity={0.5}
-        color="#4cc9f0"
-      />
-      <Float
-        speed={1.5}
-        rotationIntensity={0.4}
-        floatIntensity={0.8}
-      >
-        <BlockchainSecurityModel />
-      </Float>
-      <SimpleParticles />
-      <SimpleDataFlowLines />
-      <Environment preset="night" />
-    </React.Suspense>
+          {/* Fund trace row */}
+          <div className="bg-secondary/40 border border-border/30 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-md bg-accent/10">
+                  <RefreshCw className="h-3.5 w-3.5 text-accent" />
+                </div>
+                <span className="text-xs font-heading font-medium">
+                  Fund Trace
+                </span>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-accent/10 text-accent font-medium">
+                Exchange detected
+              </span>
+            </div>
+            {/* Trace flow */}
+            <div className="flex items-center gap-2 text-xs">
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-severity-critical/10 border border-severity-critical/20">
+                <div className="h-1.5 w-1.5 rounded-full bg-severity-critical" />
+                <span className="font-mono text-muted-foreground">
+                  4rPn...8xLq
+                </span>
+              </div>
+              <div className="flex-shrink-0 text-muted-foreground/40">→</div>
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-severity-high/10 border border-severity-high/20">
+                <span className="text-muted-foreground">2.5 SOL</span>
+              </div>
+              <div className="flex-shrink-0 text-muted-foreground/40">→</div>
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-severity-medium/10 border border-severity-medium/20">
+                <span className="text-muted-foreground">1.8 SOL</span>
+              </div>
+              <div className="flex-shrink-0 text-muted-foreground/40">→</div>
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-accent/10 border border-accent/20">
+                <CheckCircle2 className="h-3 w-3 text-accent" />
+                <span className="font-medium text-accent">Binance</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
 export default function HeroSection() {
-  const terminalLines = [
-    { text: "> Initializing Lavinth security protocol...", delay: 0 },
-    {
-      text: "> Scanning Solana blockchain for suspicious activities...",
-      delay: 1000,
-    },
-    { text: "> Scanning token approvals for threats...", delay: 2000 },
-    { text: "> Monitoring compromise indicators...", delay: 3000 },
-    {
-      text: "> Security layer activated. Your assets are protected.",
-      delay: 4000,
-    },
-  ];
-
-  const [visibleLines, setVisibleLines] = useState<number[]>([]);
-
-  useEffect(() => {
-    terminalLines.forEach((line, index) => {
-      setTimeout(() => {
-        setVisibleLines((prev) => [...prev, index]);
-      }, line.delay);
-    });
-  }, []);
+  const ref = useRef(null);
+  const isInView = useInView(ref, { once: true });
 
   return (
-    <section className="relative min-h-screen pt-20 overflow-hidden">
+    <section
+      ref={ref}
+      className="relative min-h-screen pt-28 pb-16 overflow-hidden"
+    >
       {/* Background gradient */}
-      <div className="absolute inset-0 bg-gradient-radial from-blue-900/20 via-black to-black z-0" />
+      <div className="absolute inset-0 bg-gradient-radial from-primary/8 via-background to-background z-0" />
 
-      {/* Grid pattern */}
-      {/* <div className="absolute inset-0 bg-[url('/grid.png')] bg-center opacity-20 z-0" /> */}
-
-      <div className="container mx-auto px-4 relative z-10 h-full flex flex-col">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center min-h-[calc(100vh-80px)]">
-          <div className="flex flex-col justify-center">
-            <div className="inline-block mb-4 px-4 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-sm font-medium">
-              DeFi Security Layer on Solana
+      <div className="container mx-auto px-4 relative z-10">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center min-h-[calc(100vh-160px)]">
+          {/* Left side - Text content */}
+          <motion.div
+            className="flex flex-col justify-center"
+            initial={{ opacity: 0, y: 30 }}
+            animate={isInView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.6 }}
+          >
+            <div className="inline-flex items-center gap-2 mb-6 px-4 py-1.5 rounded-full bg-primary/10 border border-primary/20 w-fit">
+              <Shield className="h-3.5 w-3.5 text-primary" />
+              <span className="text-xs font-medium text-primary">
+                Solana Security Protocol
+              </span>
             </div>
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 leading-tight">
-              <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-600">
-                Secure Your Assets
-              </span>{" "}
-              with Post-Compromise Recovery
+
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-heading font-bold mb-6 leading-[1.1] tracking-tight">
+              Post-Compromise{" "}
+              <span className="text-gradient-purple">Wallet Recovery</span>
             </h1>
-            <p className="text-gray-300 text-lg md:text-xl mb-8 max-w-xl">
-              Lavinth provides post-compromise wallet recovery — approval scanning,
-              emergency revocation, fund tracing, and exchange freeze requests.
+
+            <p className="text-muted-foreground text-lg md:text-xl mb-8 max-w-lg leading-relaxed">
+              Scan approvals, trace stolen funds, revoke malicious permissions,
+              and coordinate exchange freeze requests — all in one platform.
             </p>
 
-            {/* Terminal-like animation */}
-            <div className="mb-8 bg-black/60 border border-blue-500/30 rounded-lg p-4 font-mono text-sm text-green-400 max-w-xl">
-              {terminalLines.map((line, index) => (
-                <div
-                  key={index}
-                  className={`transition-opacity duration-500 ${
-                    visibleLines.includes(index) ? "opacity-100" : "opacity-0"
-                  }`}
-                >
-                  {line.text}
-                </div>
-              ))}
-              <div className="h-4 w-2 bg-green-400 inline-block ml-1 animate-pulse" />
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex flex-col sm:flex-row gap-3 mb-10">
               <Link href="/dashboard">
-                <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-lg px-8 py-6">
+                <Button className="btn-gradient text-white text-base px-7 py-6 rounded-lg">
                   Launch Dashboard
                 </Button>
               </Link>
               <Link href="/wallet-check">
                 <Button
                   variant="outline"
-                  className="border-blue-500 text-blue-400 hover:bg-blue-500/10 text-lg px-8 py-6"
+                  className="border-border text-foreground hover:bg-secondary text-base px-7 py-6 rounded-lg"
                 >
-                  Check Wallet <ArrowRight className="ml-2" size={18} />
+                  Check Wallet <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
             </div>
-          </div>
 
-          <div className="h-[500px] lg:h-[600px] w-full">
-            <Canvas
-              camera={{ position: [0, 0, 5], fov: 45 }}
-              fallback={
-                <div className="flex h-full w-full items-center justify-center bg-black/40 text-blue-400">
-                  Loading 3D scene...
+            {/* Trust stats */}
+            <div className="flex items-center gap-8">
+              {trustStats.map((stat) => (
+                <div key={stat.label}>
+                  <div className="text-2xl font-heading font-bold text-foreground">
+                    {stat.value}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {stat.label}
+                  </div>
                 </div>
-              }
-            >
-              <Scene />
-              <OrbitControls
-                enableZoom={false}
-                enablePan={false}
-                autoRotate
-                autoRotateSpeed={0.5}
-              />
-            </Canvas>
-          </div>
-        </div>
-      </div>
+              ))}
+            </div>
+          </motion.div>
 
-      {/* Animated scroll indicator */}
-      <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex flex-col items-center">
-        <span className="text-blue-400 text-sm mb-2">Scroll to explore</span>
-        <div className="w-6 h-10 border-2 border-blue-400 rounded-full flex justify-center">
-          <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce mt-2" />
+          {/* Right side - Dashboard preview */}
+          <motion.div
+            className="hidden lg:block"
+            initial={{ opacity: 0, y: 20 }}
+            animate={isInView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.7, delay: 0.3 }}
+          >
+            <DashboardPreview />
+          </motion.div>
         </div>
       </div>
     </section>

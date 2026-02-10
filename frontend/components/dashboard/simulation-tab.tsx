@@ -340,7 +340,7 @@ export default function SimulationTab() {
       {/* Header */}
       <div className="flex flex-col gap-4">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Transaction Simulation</h2>
+          <h2 className="text-2xl font-heading font-bold tracking-tight">Transaction Simulation</h2>
           <p className="text-muted-foreground">
             Simulate transactions before signing to detect risks and understand effects
           </p>

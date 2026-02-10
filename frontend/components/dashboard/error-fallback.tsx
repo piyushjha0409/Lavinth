@@ -15,11 +15,11 @@ export function DashboardErrorFallback({
   return (
     <div className="flex min-h-[40vh] flex-col items-center justify-center p-6 text-center">
       {isRateLimit ? (
-        <Clock className="h-12 w-12 text-yellow-500 mb-4" />
+        <Clock className="h-12 w-12 text-severity-medium mb-4" />
       ) : (
-        <AlertTriangle className="h-12 w-12 text-red-500 mb-4" />
+        <AlertTriangle className="h-12 w-12 text-severity-critical mb-4" />
       )}
-      <h2 className="text-xl font-semibold mb-2">
+      <h2 className="text-xl font-heading font-semibold mb-2">
         {isRateLimit ? "Rate limit reached" : "Something went wrong"}
       </h2>
       <p className="text-muted-foreground mb-4">
@@ -27,7 +27,9 @@ export function DashboardErrorFallback({
           ? "You're making too many requests. Please wait a moment before trying again."
           : error.message}
       </p>
-      <Button onClick={resetErrorBoundary}>Try again</Button>
+      <Button onClick={resetErrorBoundary} className="btn-gradient text-white">
+        Try again
+      </Button>
     </div>
   );
 }

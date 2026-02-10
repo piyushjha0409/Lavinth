@@ -47,10 +47,10 @@ export default function OverviewTab({
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-3xl font-bold tracking-tight">Dashboard Overview</h2>
+            <h2 className="text-3xl font-heading font-bold tracking-tight">Dashboard Overview</h2>
             <div className="flex items-center text-muted-foreground">
               <span>Post-compromise wallet recovery platform</span>
-              <Badge variant="secondary" className="ml-2 bg-green-100 text-green-800">
+              <Badge variant="secondary" className="ml-2 bg-severity-low/10 text-severity-low border-severity-low/20">
                 <Activity className="h-3 w-3 mr-1" />
                 Live
               </Badge>
@@ -142,9 +142,9 @@ export default function OverviewTab({
 
         {/* Platform Summary */}
         <div className="grid gap-6 md:grid-cols-2">
-          <Card className="border-destructive/20 bg-destructive/5">
+          <Card className="bg-card border-border/50 rounded-xl shadow-lg shadow-primary/5">
             <CardHeader>
-              <CardTitle className="flex items-center">
+              <CardTitle className="flex items-center font-heading">
                 <Shield className="h-5 w-5 mr-2 text-destructive" />
                 Security Overview
               </CardTitle>
@@ -171,9 +171,9 @@ export default function OverviewTab({
             </CardContent>
           </Card>
 
-          <Card className="border-primary/20 bg-primary/5">
+          <Card className="bg-card border-border/50 rounded-xl shadow-lg shadow-primary/5">
             <CardHeader>
-              <CardTitle className="flex items-center">
+              <CardTitle className="flex items-center font-heading">
                 <Activity className="h-5 w-5 mr-2 text-primary" />
                 Network Activity
               </CardTitle>
@@ -202,9 +202,9 @@ export default function OverviewTab({
         </div>
 
         {/* Quick Actions */}
-        <Card>
+        <Card className="bg-card border-border/50 rounded-xl shadow-lg shadow-primary/5">
           <CardHeader>
-            <CardTitle className="flex items-center">
+            <CardTitle className="flex items-center font-heading">
               <BarChart3 className="h-5 w-5 mr-2" />
               Quick Actions
             </CardTitle>
@@ -215,7 +215,7 @@ export default function OverviewTab({
           <CardContent>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <Card
-                className="group cursor-pointer border-destructive/20 bg-gradient-to-br from-destructive/5 to-destructive/10 hover:from-destructive/10 hover:to-destructive/20 transition-all duration-200 hover:shadow-md hover:scale-[1.02]"
+                className="group cursor-pointer bg-card border-border/50 hover:border-primary/30 transition-all duration-200 hover:shadow-md hover:scale-[1.02]"
                 onClick={() => router.push("/dashboard?tab=wallet-security")}
               >
                 <CardContent className="p-4">
@@ -232,7 +232,7 @@ export default function OverviewTab({
               </Card>
 
               <Card
-                className="group cursor-pointer border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10 hover:from-primary/10 hover:to-primary/20 transition-all duration-200 hover:shadow-md hover:scale-[1.02]"
+                className="group cursor-pointer bg-card border-border/50 hover:border-primary/30 transition-all duration-200 hover:shadow-md hover:scale-[1.02]"
                 onClick={() => router.push("/dashboard?tab=recovery")}
               >
                 <CardContent className="p-4">
@@ -249,7 +249,7 @@ export default function OverviewTab({
               </Card>
 
               <Card
-                className="group cursor-pointer border-chart-1/20 bg-gradient-to-br from-chart-1/5 to-chart-1/10 hover:from-chart-1/10 hover:to-chart-1/20 transition-all duration-200 hover:shadow-md hover:scale-[1.02]"
+                className="group cursor-pointer bg-card border-border/50 hover:border-primary/30 transition-all duration-200 hover:shadow-md hover:scale-[1.02]"
                 onClick={() => router.push("/dashboard?tab=simulation")}
               >
                 <CardContent className="p-4">
@@ -266,7 +266,7 @@ export default function OverviewTab({
               </Card>
 
               <Card
-                className="group cursor-pointer border-accent/20 bg-gradient-to-br from-accent/5 to-accent/10 hover:from-accent/10 hover:to-accent/20 transition-all duration-200 hover:shadow-md hover:scale-[1.02]"
+                className="group cursor-pointer bg-card border-border/50 hover:border-primary/30 transition-all duration-200 hover:shadow-md hover:scale-[1.02]"
                 onClick={() => router.push("/dashboard?tab=settings-api")}
               >
                 <CardContent className="p-4">

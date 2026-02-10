@@ -292,6 +292,42 @@ app.post('/api/revocation/build', validateApiKey, async (req: Request, res: Resp
 });
 
 /**
+ * Build unsigned transactions for selective revocation
+ * POST /api/revocation/build-selective
+ */
+app.post('/api/revocation/build-selective', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const { walletAddress, approvals } = req.body;
+
+  try {
+    if (!walletAddress) {
+      res.status(400).json({ error: 'walletAddress is required' });
+      return;
+    }
+
+    if (!approvals || !Array.isArray(approvals) || approvals.length === 0) {
+      res.status(400).json({ error: 'approvals must be a non-empty array' });
+      return;
+    }
+
+    const plan = await revocationEngine.createRevocationPlan(walletAddress, approvals);
+    const transactions = await revocationEngine.buildUnsignedTransactions(plan);
+
+    req.log.info({ count: transactions.length, selected: approvals.length }, 'Built selective revocation transactions');
+    res.json({
+      success: true,
+      sessionId: plan.sessionId,
+      walletAddress,
+      totalApprovals: plan.totalApprovals,
+      transactions: transactions,
+      estimatedTotalFee: plan.estimatedTotalFee
+    });
+  } catch (error: any) {
+    req.log.error({ err: error }, 'Error building selective revocation transactions');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
  * Submit signed revocation transactions
  * POST /api/revocation/submit
  */

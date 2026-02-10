@@ -12,34 +12,20 @@ import {
 } from "@/components/ui/tooltip";
 import {
   BarChart3,
-  Shield,
   ShieldCheck,
-  Users,
-  Target,
   Menu,
-  Key,
-  Eye,
-  Zap,
   Settings,
   Radar,
   Snowflake,
   PlayCircle,
+  KeyRound,
 } from "lucide-react";
 import { SidebarUser } from "./sidebar-user";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense } from "react";
 import Image from "next/image";
 import logo from "@/public/lavinth-logo.png";
-import dynamic from "next/dynamic";
-
-const WalletMultiButton = dynamic(
-  () =>
-    import("@solana/wallet-adapter-react-ui").then(
-      (mod) => mod.WalletMultiButton
-    ),
-  { ssr: false }
-);
 
 const navigation = [
   {
@@ -53,6 +39,12 @@ const navigation = [
     href: "/dashboard?tab=wallet-security",
     tab: "wallet-security",
     icon: ShieldCheck,
+  },
+  {
+    name: "Token Approvals",
+    href: "/dashboard?tab=token-approvals",
+    tab: "token-approvals",
+    icon: KeyRound,
   },
   {
     name: "Transaction Simulation",
@@ -85,7 +77,6 @@ interface SidebarProps {
 }
 
 function SidebarContent({ className }: SidebarProps) {
-  const pathname = usePathname();
   const searchParams = useSearchParams();
   const activeTab = searchParams.get("tab") || "overview";
   const [collapsed, setCollapsed] = useState(false);
@@ -141,7 +132,7 @@ function SidebarContent({ className }: SidebarProps) {
                 />
               </div>
               {!collapsed && (
-                <span className="text-xl md:text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-600 transition-opacity duration-300">
+                <span className="text-xl md:text-2xl font-heading font-bold text-gradient-purple transition-opacity duration-300">
                   Lavinth
                 </span>
               )}
@@ -151,20 +142,29 @@ function SidebarContent({ className }: SidebarProps) {
             <nav className="grid items-start text-sm font-medium overflow-hidden">
               {navigation.map((item) => {
                 const Icon = item.icon;
+                const isActive =
+                  item.tab === activeTab ||
+                  (item.tab === "overview" && !activeTab);
 
-                // Create the navigation link element
                 const navLink = (
                   <Link
                     href={item.href}
                     className={cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-4 text-muted-foreground transition-all hover:text-primary whitespace-nowrap overflow-hidden",
+                      "relative flex items-center gap-3 rounded-lg px-3 py-3 text-muted-foreground transition-all hover:text-foreground whitespace-nowrap overflow-hidden",
                       collapsed && "justify-center px-2",
-                      (item.tab === activeTab ||
-                        (item.tab === "overview" && !activeTab)) &&
-                        "bg-muted text-primary"
+                      isActive && "text-foreground bg-primary/5"
                     )}
                   >
-                    <Icon className="h-4 w-4 flex-shrink-0" />
+                    {/* Active accent bar */}
+                    {isActive && (
+                      <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-r-full bg-gradient-to-b from-primary to-accent" />
+                    )}
+                    <Icon
+                      className={cn(
+                        "h-5 w-5 flex-shrink-0 transition-colors",
+                        isActive ? "text-accent" : "text-muted-foreground"
+                      )}
+                    />
                     {!collapsed && (
                       <span className="truncate">{item.name}</span>
                     )}
@@ -192,16 +192,6 @@ function SidebarContent({ className }: SidebarProps) {
           </div>
         </div>
       </div>
-      <div className={cn("px-3 pb-2", collapsed && "flex justify-center")}>
-        <WalletMultiButton
-          style={{
-            width: collapsed ? "40px" : "100%",
-            height: "36px",
-            fontSize: "13px",
-            justifyContent: "center",
-          }}
-        />
-      </div>
       <SidebarUser />
     </div>
   );
@@ -210,15 +200,15 @@ function SidebarContent({ className }: SidebarProps) {
 export function Sidebar({ className }: SidebarProps) {
   return (
     <Suspense fallback={
-      <div className={cn("flex h-full w-full flex-col bg-muted/40", className)}>
-        <div className="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
+      <div className={cn("flex h-full w-full flex-col bg-card/50", className)}>
+        <div className="flex h-14 items-center border-b border-border/50 px-4 lg:h-[60px] lg:px-6">
           <div className="h-8 w-32 bg-muted rounded animate-pulse" />
         </div>
         <div className="flex-1">
           <div className="grid items-start px-2 text-sm font-medium lg:px-4">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-3 rounded-lg px-3 py-4">
-                <div className="h-4 w-4 bg-muted rounded animate-pulse" />
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-lg px-3 py-3">
+                <div className="h-5 w-5 bg-muted rounded animate-pulse" />
                 <div className="h-4 w-20 bg-muted rounded animate-pulse" />
               </div>
             ))}

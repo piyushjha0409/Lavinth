@@ -385,7 +385,7 @@ export default function FreezeRequestsTab() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Freeze Requests</h2>
+          <h2 className="text-2xl font-heading font-bold tracking-tight">Freeze Requests</h2>
           <p className="text-muted-foreground">
             Coordinate with exchanges to freeze stolen funds
           </p>
@@ -430,9 +430,9 @@ export default function FreezeRequestsTab() {
             <CardContent>
               <div className="flex items-center gap-4">
                 <div className="text-3xl font-bold text-green-500">
-                  {statistics.successRate.toFixed(0)}%
+                  {(statistics.successRate ?? 0).toFixed(0)}%
                 </div>
-                <Progress value={statistics.successRate} className="flex-1" />
+                <Progress value={statistics.successRate ?? 0} className="flex-1" />
               </div>
             </CardContent>
           </Card>
@@ -445,7 +445,7 @@ export default function FreezeRequestsTab() {
               <div className="flex items-center gap-2">
                 <BarChart3 className="h-8 w-8 text-blue-500" />
                 <span className="text-3xl font-bold">
-                  {statistics.avgResponseTime.toFixed(1)}h
+                  {(statistics.avgResponseTime ?? 0).toFixed(1)}h
                 </span>
               </div>
             </CardContent>
@@ -511,7 +511,7 @@ export default function FreezeRequestsTab() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          {request.amount.toFixed(4)} {request.tokenSymbol || "SOL"}
+                          {(request.amount ?? 0).toFixed(4)} {request.tokenSymbol || "SOL"}
                         </TableCell>
                         <TableCell>
                           <Badge className={getPriorityColor(request.priority)}>
@@ -557,7 +557,7 @@ export default function FreezeRequestsTab() {
                                     <div>
                                       <Label>Amount</Label>
                                       <p className="font-medium">
-                                        {request.amount.toFixed(4)} {request.tokenSymbol || "SOL"}
+                                        {(request.amount ?? 0).toFixed(4)} {request.tokenSymbol || "SOL"}
                                       </p>
                                     </div>
                                     <div>
@@ -666,7 +666,7 @@ export default function FreezeRequestsTab() {
                       <AlertTriangle className="h-4 w-4" />
                       <AlertTitle className="flex items-center justify-between">
                         <span>
-                          {request.exchangeName} - {request.amount.toFixed(4)}{" "}
+                          {request.exchangeName} - {(request.amount ?? 0).toFixed(4)}{" "}
                           {request.tokenSymbol || "SOL"}
                         </span>
                         <Badge className={getPriorityColor(request.priority)}>
@@ -786,11 +786,11 @@ export default function FreezeRequestsTab() {
                           {exchange.successRate !== undefined ? (
                             <div className="flex items-center gap-2">
                               <Progress
-                                value={exchange.successRate}
+                                value={exchange.successRate ?? 0}
                                 className="w-16"
                               />
                               <span className="text-sm">
-                                {exchange.successRate.toFixed(0)}%
+                                {(exchange.successRate ?? 0).toFixed(0)}%
                               </span>
                             </div>
                           ) : (

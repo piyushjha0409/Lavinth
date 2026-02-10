@@ -16,10 +16,10 @@ interface ErrorFallbackProps {
 
 function ErrorFallback({ error, resetErrorBoundary }: ErrorFallbackProps) {
   return (
-    <div className="flex min-h-[300px] w-full flex-col items-center justify-center bg-black/40 p-6 text-center">
-      <h2 className="mb-2 text-xl font-bold text-red-400">Something went wrong:</h2>
-      <p className="mb-4 text-gray-300">{error.message}</p>
-      <button onClick={resetErrorBoundary} className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700">
+    <div className="flex min-h-[300px] w-full flex-col items-center justify-center bg-card/40 p-6 text-center rounded-xl">
+      <h2 className="mb-2 text-xl font-heading font-bold text-destructive">Something went wrong</h2>
+      <p className="mb-4 text-muted-foreground">{error.message}</p>
+      <button onClick={resetErrorBoundary} className="rounded-lg btn-gradient px-4 py-2 text-white text-sm">
         Try again
       </button>
     </div>
@@ -28,7 +28,7 @@ function ErrorFallback({ error, resetErrorBoundary }: ErrorFallbackProps) {
 
 export default function Home() {
   return (
-    <main className="min-h-screen overflow-hidden bg-black text-white">
+    <main className="min-h-screen overflow-hidden bg-background text-foreground">
       <Navbar />
       <ErrorBoundary FallbackComponent={ErrorFallback}>
         <HeroSection />

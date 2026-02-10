@@ -7,7 +7,7 @@ export default function SettingsApiTab() {
     <div className="space-y-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">API Management</h2>
+          <h2 className="text-2xl font-heading font-bold tracking-tight">API Management</h2>
           <p className="text-muted-foreground">
             Manage API keys and access comprehensive wallet security
             documentation

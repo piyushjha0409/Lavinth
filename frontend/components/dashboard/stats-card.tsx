@@ -24,25 +24,25 @@ export function StatsCard({
     : value.toLocaleString();
 
   return (
-    <Card className="hover:shadow-md transition-shadow">
+    <Card className="bg-card border-border/50 rounded-xl shadow-lg shadow-primary/5 hover:border-primary/20 transition-all">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
         <div className={cn(
-          "rounded-full p-2",
-          trend === "up" && "bg-green-100 text-green-600",
-          trend === "down" && "bg-red-100 text-red-600",
-          trend === "neutral" && "bg-muted text-muted-foreground"
+          "rounded-lg p-2",
+          trend === "up" && "bg-severity-low/10 text-severity-low",
+          trend === "down" && "bg-severity-critical/10 text-severity-critical",
+          trend === "neutral" && "bg-primary/10 text-primary"
         )}>
           {icon}
         </div>
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold">{formattedValue}</div>
+        <div className="text-2xl font-heading font-bold">{formattedValue}</div>
         {change !== 0 && (
           <p className={cn(
             "text-xs flex items-center mt-1",
-            trend === "up" && "text-green-600",
-            trend === "down" && "text-red-600",
+            trend === "up" && "text-severity-low",
+            trend === "down" && "text-severity-critical",
             trend === "neutral" && "text-muted-foreground"
           )}>
             {trend === "up" ? (

@@ -4,35 +4,41 @@
 
 @layer base {
   :root {
-    --background: 0 0% 0%;
-    --foreground: 0 0% 100%;
+    --background: 225 50% 6%;
+    --foreground: 210 40% 98%;
 
-    --card: 0 0% 3%;
-    --card-foreground: 0 0% 100%;
+    --card: 224 40% 10%;
+    --card-foreground: 210 40% 98%;
 
-    --popover: 0 0% 3%;
-    --popover-foreground: 0 0% 100%;
+    --popover: 224 40% 10%;
+    --popover-foreground: 210 40% 98%;
 
-    --primary: 224 64% 60%;
+    --primary: 231 85% 60%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 240 4% 16%;
-    --secondary-foreground: 0 0% 100%;
+    --secondary: 224 30% 16%;
+    --secondary-foreground: 210 40% 98%;
 
-    --muted: 240 4% 16%;
-    --muted-foreground: 240 5% 65%;
+    --muted: 224 20% 14%;
+    --muted-foreground: 215 20% 55%;
 
-    --accent: 240 4% 16%;
+    --accent: 193 90% 62%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 63% 31%;
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 240 4% 16%;
-    --input: 240 4% 16%;
-    --ring: 224 64% 60%;
+    --border: 224 20% 18%;
+    --input: 224 20% 18%;
+    --ring: 231 85% 60%;
 
     --radius: 0.5rem;
+
+    --severity-critical: #ef4444;
+    --severity-high: #f97316;
+    --severity-medium: #eab308;
+    --severity-low: #22c55e;
+    --severity-info: #4cc9f0;
   }
 }
 
@@ -42,25 +48,76 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-inter), system-ui, sans-serif;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-exo2), system-ui, sans-serif;
+  }
+  code, pre, .font-mono {
+    font-family: var(--font-jetbrains), ui-monospace, monospace;
   }
 }
 
-/* Custom animation for the terminal cursor */
-@keyframes blink {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0;
-  }
-}
-
-.animate-blink {
-  animation: blink 1s infinite;
-}
-
-/* Custom gradient background */
+/* Gradient background utility */
 .bg-gradient-radial {
   background-image: radial-gradient(var(--tw-gradient-stops));
+}
+
+/* Subtle card glow on hover */
+.card-glow {
+  position: relative;
+}
+.card-glow::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(67, 97, 238, 0.15), rgba(114, 9, 183, 0.15));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: -1;
+  filter: blur(8px);
+}
+.card-glow:hover::before {
+  opacity: 1;
+}
+
+/* Grid pattern overlay for dashboard */
+.grid-pattern {
+  background-image:
+    linear-gradient(rgba(67, 97, 238, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(67, 97, 238, 0.03) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Gradient text utility */
+.text-gradient {
+  background: linear-gradient(135deg, #4361ee, #4895ef, #4cc9f0);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-purple {
+  background: linear-gradient(135deg, #4361ee, #7209b7);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Primary gradient button */
+.btn-gradient {
+  background: linear-gradient(135deg, #4361ee, #7209b7);
+  transition: all 0.3s ease;
+}
+.btn-gradient:hover {
+  background: linear-gradient(135deg, #3a54d4, #5f08a0);
+  box-shadow: 0 4px 20px rgba(67, 97, 238, 0.3);
+}
+
+/* Glass effect utility */
+.glass {
+  background: rgba(10, 14, 26, 0.8);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }

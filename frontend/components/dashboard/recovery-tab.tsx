@@ -347,7 +347,7 @@ export default function RecoveryTab() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Wallet Recovery</h2>
+          <h2 className="text-2xl font-heading font-bold tracking-tight">Wallet Recovery</h2>
           <p className="text-muted-foreground">
             Detect compromises, track stolen funds, and coordinate recovery
           </p>
@@ -655,7 +655,7 @@ export default function RecoveryTab() {
                       {analysisResult.recentTransactions.map((tx) => (
                         <TableRow
                           key={tx.signature}
-                          className={tx.isSuspicious ? "bg-red-50/50" : ""}
+                          className={tx.isSuspicious ? "bg-severity-critical/5" : ""}
                         >
                           <TableCell>
                             <TooltipProvider>
