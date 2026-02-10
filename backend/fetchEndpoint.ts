@@ -22,7 +22,7 @@ const PORT = process.env.PORT || 3001;
 // Middleware
 app.use(
   cors({
-    origin: ["https://www.lavinth.com"],
+    origin: ["https://www.lavinth.com", "https://lavinth.com"],
     methods: ["GET", "POST", "DELETE", "PUT", "PATCH"],
     allowedHeaders: ["Content-Type", "x-access-token", "x-api-key"],
   })
