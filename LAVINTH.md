@@ -48,7 +48,7 @@ The Revocation Engine then batches revocation instructions (up to 20 per transac
 
 ### Intelligence Layer
 
-Lavinth aggregates threat data from 7 external sources:
+Lavinth aggregates threat data from 8 external sources:
 
 | Source | Type | Data |
 |--------|------|------|
@@ -59,6 +59,7 @@ Lavinth aggregates threat data from 7 external sources:
 | PhishDestroy | Domain list | Web3 phishing domains |
 | Arkham Intelligence | Entity resolver | Address-to-entity mapping |
 | Helius | Transaction parser | Enhanced transaction classification |
+| Recorded Future | Threat report | 175 Rublevka Team drainer addresses ($10.9M stolen, 240K+ victims) |
 
 This intelligence feeds into every service. When the Fund Tracker encounters an unknown address, it checks the malicious delegate database, queries Arkham for entity resolution, and falls back to GoPlus for real-time risk assessment.
 
@@ -107,6 +108,7 @@ Each transaction gets a risk score (0-100) with transparent factor breakdowns. U
 - **Wallet Security Scanning** - Full SPL token approval audit across Token Program and Token-2022
 - **Risk Scoring** - Multi-factor risk assessment with weighted scoring for threat types
 - **Batch Revocation** - Automated revocation plan generation with batched transactions
+- **Selective Revocation** - Checkbox-based approval selection with inline signing flow
 - **Emergency Revocation** - Fast-track mode prioritizing critical and high-risk approvals
 - **Real-time Monitoring** - Configurable monitoring levels (standard, high, critical)
 - **Compromise Analysis** - Per-transaction analysis with pre/post balance comparison
@@ -117,7 +119,7 @@ Each transaction gets a risk score (0-100) with transparent factor breakdowns. U
 
 ### Threat Intelligence
 
-- **7 Data Sources** - Community lists, domain lists, entity resolution, real-time lookups
+- **8 Data Sources** - Community lists, domain lists, entity resolution, real-time lookups, threat reports
 - **Auto-Sync** - Configurable sync interval (default 6 hours)
 - **Address Lookup** - Combined local database + GoPlus real-time check
 - **Domain Reputation** - Scam/phishing domain verification
@@ -130,18 +132,15 @@ Each transaction gets a risk score (0-100) with transparent factor breakdowns. U
 - **Rate Limiting** - 60 notifications/minute with exponential backoff retry
 - **Subscription Management** - Per-wallet alert preferences with type and severity filters
 
-### Dashboard (10 Tabs)
+### Dashboard (8 Tabs)
 
-1. **Overview** - Key metrics, threat summary, top threats at a glance
-2. **Wallet Security** - Approval scanning and risk profile visualization
-3. **Simulation** - Transaction risk analysis before signing
-4. **Recovery** - Fund tracing status and recovery session management
-5. **Freeze Requests** - Exchange communication tracking and evidence generation
-6. **Threat Intelligence** - Data source management, sync triggers, status monitoring
-7. **Network Analysis** - Transaction graph visualization
-8. **ML Analytics** - Attack pattern analysis and behavioral insights
-9. **Transactions** - Suspicious transaction listing with filters
-10. **Settings/API** - API key management and configuration
+1. **Overview** - Key metrics, security overview, network activity, quick actions
+2. **Wallet Security** - Address scanner for any Solana address (threat intel lookup, security score, read-only approvals)
+3. **Token Approvals** - Connected wallet's approval management with checkbox selection and batch revocation
+4. **Simulation** - Transaction risk analysis before signing (quick check + full simulation)
+5. **Recovery** - Compromise analysis, alerts, fund tracing, and recovery reports
+6. **Freeze Requests** - Exchange communication tracking, evidence generation, email templates
+7. **Settings/API** - API key management, usage tracking, and configuration
 
 ### SDK
 
@@ -151,7 +150,7 @@ Each transaction gets a risk score (0-100) with transparent factor breakdowns. U
 
 ### API
 
-- **55+ Endpoints** - Covering approvals, revocation, compromise detection, fund tracing, exchange coordination, simulation, threat intelligence, and system management
+- **56+ Endpoints** - Covering approvals, revocation, compromise detection, fund tracing, exchange coordination, simulation, threat intelligence, and system management
 - **Paginated Responses** - Consistent limit/offset with total counts
 - **Dual Auth** - Static access token for dashboards, per-user API keys for programmatic access
 - **Input Validation** - Sanitized pagination, base58 format validation, required field checks
@@ -378,13 +377,13 @@ function WalletSecurity({ address }) {
               |                         |
         Dashboard (Next.js)        SDK (@lavinth/*)
         - Wallet auth (Solana)     - TypeScript client
-        - 10-tab interface         - React hooks
+        - 8-tab interface          - React hooks
         - Real-time updates        - CJS + ESM
               |                         |
               +------------+------------+
                            |
                     Express API (Port 3001)
-                    55+ endpoints, dual auth
+                    56+ endpoints, dual auth
                            |
          +-----------------+------------------+
          |                 |                  |
@@ -420,7 +419,7 @@ PostgreSQL     Solana    Helius   Arkham       GoPlus
 | Backend | Express, TypeScript, Node.js |
 | Database | PostgreSQL (Neon), connection pooling |
 | Blockchain | Solana Web3.js, SPL Token, Helius Enhanced API |
-| Intelligence | Arkham, GoPlus, AllenHark, Phantom Blocklist, PhishDestroy |
+| Intelligence | Arkham, GoPlus, AllenHark, Phantom Blocklist, PhishDestroy, Recorded Future |
 | SDK | TypeScript, tsup (CJS + ESM), React hooks |
 | Alerts | Webhooks (HMAC-SHA256), Discord embeds, email templates |
 
@@ -462,7 +461,7 @@ PostgreSQL     Solana    Helius   Arkham       GoPlus
 
 | Table | Purpose | Key Fields |
 |-------|---------|-----------|
-| `threat_intel_sources` | 7 data source configs | source_id, type, url, last_sync, total_addresses |
+| `threat_intel_sources` | 8 data source configs | source_id, type, url, last_sync, total_addresses |
 | `threat_intel_sync_log` | Sync audit trail | source_id, status, addresses_found, duration_ms |
 | `address_entity_labels` | Arkham entity cache (24h TTL) | address, entity_name, entity_type |
 | `malicious_domains` | 80,000+ scam domains | domain, status, external_sources |
@@ -473,7 +472,7 @@ PostgreSQL     Solana    Helius   Arkham       GoPlus
 
 ---
 
-## API Reference (55+ Endpoints)
+## API Reference (56+ Endpoints)
 
 ### Wallet Security
 | Method | Endpoint | Description |
@@ -487,6 +486,7 @@ PostgreSQL     Solana    Helius   Arkham       GoPlus
 |--------|----------|-------------|
 | POST | `/api/revocation/plan` | Create revocation plan |
 | POST | `/api/revocation/build` | Build unsigned transactions |
+| POST | `/api/revocation/build-selective` | Build selective revocation transactions |
 | POST | `/api/revocation/submit` | Submit signed transactions |
 | POST | `/api/revocation/emergency` | Emergency fast-track revocation |
 
@@ -574,3 +574,110 @@ PostgreSQL     Solana    Helius   Arkham       GoPlus
 | GET | `/api/programs/verified` | Verified safe programs |
 | GET | `/api/programs/:programId` | Program details |
 | GET | `/api/system-status` | System health check |
+
+---
+
+## Roadmap Progress
+
+### Completed
+
+#### Phase 1: Approval Management + Emergency Revocation
+- Approval Scanner service — scans wallet token approvals via Helius RPC (Token Program + Token-2022)
+- Revocation Engine service — batch revocation with transaction batching (up to 20 instructions per tx)
+- Selective revocation endpoint (`POST /api/revocation/build-selective`) — choose specific approvals to revoke
+- Emergency Recovery Modal — bulk revoke all risky approvals in fast-track mode
+- Dedicated Token Approvals tab — checkbox selection, indeterminate "select all", inline signing flow via `signAllTransactions`
+
+#### Phase 2: Compromise Detection + Fund Tracking
+- Compromise Detector service — behavioral analysis, rapid drain detection, known drainer interaction, balance monitoring
+- Fund Tracker service — multi-hop BFS fund tracing, exchange/bridge/mixer classification, recovery probability scoring
+- Recovery tab — compromise analysis, alert management, transaction review, fund traces, recovery reports
+- Alert system — SSE streaming, webhook/Discord delivery, severity filtering, subscription management
+
+#### Phase 3: Transaction Simulation (partial)
+- Transaction Simulator service — pre-signing risk analysis, instruction decoding, balance/approval change detection
+- Simulation tab — quick risk check + full simulation with warnings, balance changes, program verification
+- Simulation history + verified programs reference (12 known-safe programs)
+- **Not built:** Dedicated `forensic-analyzer.ts` service (forensic data embedded in Recovery tab reports instead)
+- **Not built:** Dedicated Forensics tab
+
+#### Phase 4: SDK
+- `@lavinth/sdk` — core TypeScript SDK (`scanWallet`, `checkTransaction`, `quickRiskCheck`, `analyzeCompromise`, `startFundTrace`, `getExchangeContacts`, `createFreezeRequest`, etc.)
+- `@lavinth/react` — React hooks + components for wallet providers (`useSecurityProfile`, `useApprovals`, etc.)
+- Built with tsup, exports CJS + ESM
+- SDK tests: 9/9 passed (100%)
+
+#### Phase 5: Exchange Coordination
+- Exchange Coordinator service — freeze request lifecycle, evidence package compilation, email template generation
+- Freeze Requests tab — statistics cards, pending/follow-up/exchanges sub-tabs
+- 16 known exchanges seeded (Binance, Coinbase, Kraken, OKX, Bybit, KuCoin, Jupiter, Raydium, Orca, etc.)
+- 5+ known bridges (Wormhole, Allbridge, Portal, deBridge, Mayan)
+- Evidence package generation with SHA-256 integrity hash
+- Email template generation with exchange-specific SLA deadlines
+
+#### Phase 6: Threat Intelligence
+- 8 threat intel sources registered and syncing
+- 175 Rublevka Team addresses (6 attributed infrastructure + 169 drainer scripts) from Recorded Future report
+- ~4,047 AllenHark community addresses + ~3,055 Phantom Blocklist NFT mint addresses
+- GoPlus real-time per-address risk lookup (free, no API key needed)
+- Combined address lookup endpoint (`GET /api/threat-intel/address/:address`) — local DB + GoPlus
+- Circuit breaker pattern for GoPlus, Arkham, Helius APIs (5 failures = 60s open)
+- In-memory TTL cache for GoPlus (5min, max 500 entries)
+
+#### Security & Infrastructure Fixes (14 issues from E2E audit)
+- P0: CSRF protection added to `/api/api-keys` route
+- P0: API key removed from SSE URL, proxied through server-side route
+- P1: CSRF allowlist updated to include `lavinth.com` (no www)
+- P1: `fetchWithTimeout` added to all external API calls (15s API, 30s sync)
+- P1: 30s `AbortSignal.timeout` added to React Query fetches
+- P1: `RootErrorBoundary` added wrapping all providers in layout
+- P1: ErrorBoundary added to `/wallet-check` and `/sign-in` pages
+- P2: Empty string env validation fixed with `.trim()` check
+- P2: `sanitizeLimit` pagination caps added to 11 unbounded endpoints
+- P2: Max SSE connection limit (100) added
+- P2: Circuit breaker pattern for external API dependencies
+- P2: In-memory TTL caching for GoPlus lookups
+- P2: Atomic SQL UPDATE for API key usage increment (race condition fix)
+- P3: 429 rate-limit feedback added to frontend UX
+
+#### UI/UX
+- Landing page redesign (hero with 3D animation, features, how-it-works, security metrics, footer)
+- Wallet-based auth (replaced NextAuth/Google OAuth with Solana wallet adapters)
+- Dashboard with 8 tabs and tab-based URL routing (`?tab=`)
+- SidebarUser component (wallet avatar + disconnect dropdown)
+- Token Approvals as dedicated sidebar item with checkbox selection + batch revocation
+- Wallet Security tab refactored to address scanner only (read-only approvals for scanned address)
+- Freeze Requests tab null safety fixes (`?? 0` guards on `toFixed` calls)
+- shadcn Checkbox with indeterminate state for partial selection
+- Error boundaries on all tabs + root layout + global error page
+
+#### E2E Testing
+- API Tests: 87/91 passed (96%)
+- SDK Tests: 9/9 passed (100%)
+- Browser Tests: Landing page, dashboard layout, all tabs, auth flow
+- E2E Testing Plan documented: 18 test sections, 350+ test cases (`E2E_TESTING_PLAN.md`)
+
+---
+
+### Remaining
+
+#### High Priority
+- **DATABASE_URL_AUTH env var** — missing, API key CRUD won't work in production
+- **Input validation bugs** — negative offset causes 500 (Postgres: "OFFSET must not be negative"), non-numeric limit causes 500 (NaN)
+- **Forensic Analyzer service** — dedicated `forensic-analyzer.ts` for attack timeline reconstruction, vector identification, threat actor attribution (Phase 3 planned but not built)
+- **Forensics tab** — dedicated UI for forensic reports (currently embedded in Recovery tab)
+- **Emergency Wallet Migration wizard** — guided new wallet setup, safe asset identification, secure transfer execution
+
+#### Medium Priority
+- **Full Security & Penetration Testing** — XSS vectors, SQL injection, auth bypass, rate limit bypass, data leakage (E2E plan Test 17)
+- **Database & Infrastructure Edge Cases** — connection pool exhaustion, retry logic, concurrent write races, memory/perf (E2E plan Test 18)
+- **Load Testing** — 1000+ concurrent users, 10K+ token accounts, 100+ SSE connections
+- **Legacy dusting tables cleanup** — `dusting_attackers`, `dusting_victims`, `dusting_candidates`, `dust_transactions` all empty (from pre-pivot era)
+
+#### Low Priority / Future
+- **Multi-chain expansion** — EVM chain support (post Solana product-market fit)
+- **B2B wallet provider integrations** — Phantom, Solflare, Backpack SDK embedding
+- **Documentation site** — SDK docs, API reference, integration guides
+- **Monitoring dashboard** — real-time system health, sync status, API usage metrics
+- **CI/CD pipeline** — automated tests, build, deploy
+- **Production deployment** — Vercel (frontend) + Railway/Fly (backend)
