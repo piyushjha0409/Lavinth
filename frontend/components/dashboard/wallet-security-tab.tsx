@@ -33,7 +33,7 @@ import {
   CheckCircle2,
   Loader2,
 } from "lucide-react";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import {
   Tooltip,
   TooltipContent,
@@ -95,16 +95,10 @@ export default function WalletSecurityTab() {
   const [profile, setProfile] = useState<SecurityProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [threatIntel, setThreatIntel] = useState<ThreatIntelResult | null>(null);
-  const { toast } = useToast();
-
   // Scan wallet for approvals and threat intelligence
   const handleScanWallet = async () => {
     if (!walletAddress.trim()) {
-      toast({
-        title: "Error",
-        description: "Please enter a wallet address",
-        variant: "destructive",
-      });
+      toast.error("Please enter a wallet address");
       return;
     }
 
@@ -143,18 +137,11 @@ export default function WalletSecurityTab() {
         console.warn("Threat intel response was not valid JSON, skipping");
       }
 
-      toast({
-        title: "Scan Complete",
-        description: `Scan finished for ${walletAddress.slice(0, 8)}...`,
-      });
+      toast.success(`Scan finished for ${walletAddress.slice(0, 8)}...`);
     } catch (err: any) {
       console.error("Scan error:", err);
       setError(err.message);
-      toast({
-        title: "Scan Failed",
-        description: err.message,
-        variant: "destructive",
-      });
+      toast.error(err.message);
     } finally {
       setIsScanning(false);
     }
@@ -163,10 +150,7 @@ export default function WalletSecurityTab() {
   // Copy address to clipboard
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    toast({
-      title: "Copied",
-      description: "Address copied to clipboard",
-    });
+    toast.success("Address copied to clipboard");
   };
 
   // Truncate address for display
@@ -178,15 +162,15 @@ export default function WalletSecurityTab() {
   const getRiskLevelColor = (level: string) => {
     switch (level) {
       case "critical":
-        return "bg-red-500";
+        return "bg-severity-critical";
       case "high":
-        return "bg-orange-500";
+        return "bg-severity-high";
       case "medium":
-        return "bg-yellow-500";
+        return "bg-severity-medium";
       case "low":
-        return "bg-green-500";
+        return "bg-severity-low";
       default:
-        return "bg-gray-500";
+        return "bg-muted-foreground";
     }
   };
 

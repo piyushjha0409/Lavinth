@@ -102,12 +102,12 @@ const WalletCheckWithParams = () => {
   };
 
   return (
-    <Card className="bg-black/50 border border-cyan-500/30 backdrop-blur-sm shadow-[0_0_15px_rgba(0,255,255,0.3)]">
+    <Card className="bg-card border border-border backdrop-blur-sm">
       <CardHeader>
-        <CardTitle className="text-2xl text-center text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-fuchsia-300 to-cyan-400">
+        <CardTitle className="text-2xl text-center">
           Wallet Address Security Check
         </CardTitle>
-        <CardDescription className="text-center text-gray-300">
+        <CardDescription className="text-center text-muted-foreground">
           Check if a Solana wallet address is flagged as potentially malicious
         </CardDescription>
       </CardHeader>
@@ -119,12 +119,12 @@ const WalletCheckWithParams = () => {
               placeholder="Enter Solana wallet address"
               value={walletAddress}
               onChange={handleInputChange}
-              className="flex-1 bg-black/30 border-cyan-500/30 text-white placeholder:text-gray-500 focus:border-fuchsia-500"
+              className="flex-1 bg-input border-border text-foreground placeholder:text-muted-foreground focus:border-primary"
             />
             <Button
               onClick={checkWallet}
               disabled={isLoading}
-              className="bg-gradient-to-r from-cyan-500 to-fuchsia-500 hover:from-cyan-600 hover:to-fuchsia-600 text-white border-none shadow-[0_0_10px_rgba(0,255,255,0.5)] transition-all duration-300"
+              className="btn-gradient text-white border-none transition-all duration-300"
             >
               {isLoading ? (
                 "Checking..."
@@ -198,19 +198,19 @@ const WalletCheckWithParams = () => {
                             <div className="space-y-1 text-sm">
                               {result.details.label && (
                                 <p>
-                                  <span className="text-gray-400">Label:</span>{" "}
+                                  <span className="text-muted-foreground">Label:</span>{" "}
                                   {result.details.label}
                                 </p>
                               )}
                               {result.details.category && (
                                 <p>
-                                  <span className="text-gray-400">Category:</span>{" "}
+                                  <span className="text-muted-foreground">Category:</span>{" "}
                                   {result.details.category}
                                 </p>
                               )}
                               {result.details.sources.length > 0 && (
                                 <p>
-                                  <span className="text-gray-400">Sources:</span>{" "}
+                                  <span className="text-muted-foreground">Sources:</span>{" "}
                                   {result.details.sources.join(", ")}
                                 </p>
                               )}
@@ -240,7 +240,7 @@ const WalletCheckWithParams = () => {
             </motion.div>
           )}
 
-          <div className="text-sm text-gray-400 mt-4">
+          <div className="text-sm text-muted-foreground mt-4">
             <p className="text-center">
               This tool checks if a Solana wallet address has been identified as
               potentially malicious using threat intelligence from multiple
@@ -261,11 +261,11 @@ function WalletCheckErrorFallback({
   resetErrorBoundary: () => void;
 }) {
   return (
-    <Card className="bg-black/50 border border-red-500/30 backdrop-blur-sm">
+    <Card className="bg-card border border-destructive/30 backdrop-blur-sm">
       <CardContent className="p-8 text-center">
-        <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-        <h2 className="text-xl font-semibold text-white mb-2">Something went wrong</h2>
-        <p className="text-gray-400 mb-4">{error.message}</p>
+        <AlertTriangle className="h-12 w-12 text-destructive mx-auto mb-4" />
+        <h2 className="text-xl font-semibold text-foreground mb-2">Something went wrong</h2>
+        <p className="text-muted-foreground mb-4">{error.message}</p>
         <Button onClick={resetErrorBoundary}>Try again</Button>
       </CardContent>
     </Card>
@@ -278,18 +278,18 @@ export default function WalletCheckPage() {
     ? `${publicKey.toBase58().slice(0, 4)}...${publicKey.toBase58().slice(-4)}`
     : null;
   return (
-    <div className="flex min-h-screen flex-col bg-gradient-to-b from-black via-purple-950 to-black text-white font-retro crt relative overflow-hidden">
-      <div className="absolute inset-0 w-full h-full bg-gradient-to-br from-black via-indigo-950 to-black opacity-90" />
+    <div className="flex min-h-screen flex-col bg-background text-foreground font-retro crt relative overflow-hidden">
+      <div className="absolute inset-0 w-full h-full bg-background opacity-90" />
       <Spotlight
         className="-top-40 left-0 md:left-60 md:-top-20"
-        fill="#00ffff"
+        fill="hsl(var(--primary))"
       />
       <BackgroundBeams className="absolute inset-0" />
 
       <header className="absolute top-0 left-0 right-0 p-4 z-20 flex justify-between items-center">
-        <h1 className="text-lg font-bold text-white">Lavinth</h1>
+        <h1 className="text-lg font-bold text-foreground">Lavinth</h1>
         <div className="flex items-center gap-4">
-          {displayAddress && <span className="text-sm text-gray-300">{displayAddress}</span>}
+          {displayAddress && <span className="text-sm text-muted-foreground">{displayAddress}</span>}
           {publicKey && (
             <Button
               variant="outline"
@@ -314,10 +314,10 @@ export default function WalletCheckPage() {
           <ErrorBoundary FallbackComponent={WalletCheckErrorFallback}>
             <Suspense
               fallback={
-                <Card className="bg-black/50 border border-cyan-500/30 backdrop-blur-sm shadow-[0_0_15px_rgba(0,255,255,0.3)]">
+                <Card className="bg-card border border-border backdrop-blur-sm">
                   <CardContent className="p-8">
                     <div className="flex justify-center">
-                      <div className="animate-spin h-8 w-8 border-t-2 border-b-2 border-cyan-500 rounded-full"></div>
+                      <div className="animate-spin h-8 w-8 border-t-2 border-b-2 border-primary rounded-full"></div>
                     </div>
                   </CardContent>
                 </Card>

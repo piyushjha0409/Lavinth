@@ -24,7 +24,7 @@ import {
   Copy,
   Wallet,
 } from "lucide-react";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { Transaction } from "@solana/web3.js";
@@ -71,8 +71,6 @@ export function EmergencyRecoveryModal({
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [signatures, setSignatures] = useState<string[]>([]);
-  const { toast } = useToast();
-
   const { publicKey, connected, signAllTransactions } = useWallet();
 
   // Filter high-risk approvals
@@ -105,10 +103,7 @@ export function EmergencyRecoveryModal({
       setProgress(30);
       setStep("signing");
 
-      toast({
-        title: "Plan Created",
-        description: `Ready to revoke ${data.totalHighRiskApprovals} approvals`,
-      });
+      toast.success(`Ready to revoke ${data.totalHighRiskApprovals} approvals`);
     } catch (err: any) {
       console.error("Error creating plan:", err);
       setError(err.message);
@@ -119,11 +114,7 @@ export function EmergencyRecoveryModal({
   // Handle wallet signing with real wallet adapter
   const handleSign = async () => {
     if (!connected || !signAllTransactions) {
-      toast({
-        title: "Wallet Not Connected",
-        description: "Please connect your wallet first to sign transactions.",
-        variant: "destructive",
-      });
+      toast.error("Please connect your wallet first to sign transactions.");
       return;
     }
 
@@ -180,10 +171,7 @@ export function EmergencyRecoveryModal({
       setSignatures(data.signatures);
       setStep("complete");
 
-      toast({
-        title: "Success!",
-        description: `Successfully revoked ${data.totalRevoked} approvals`,
-      });
+      toast.success(`Successfully revoked ${data.totalRevoked} approvals`);
 
       // Call success callback after delay
       setTimeout(() => {
@@ -211,10 +199,7 @@ export function EmergencyRecoveryModal({
   // Copy to clipboard
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    toast({
-      title: "Copied",
-      description: "Transaction signature copied",
-    });
+    toast.success("Transaction signature copied");
   };
 
   return (

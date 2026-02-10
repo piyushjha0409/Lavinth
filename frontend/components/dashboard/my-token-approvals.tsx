@@ -35,7 +35,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import {
   Tooltip,
   TooltipContent,
@@ -83,8 +83,6 @@ type RevocationStep =
 
 export default function MyTokenApprovals() {
   const { publicKey, connected, signAllTransactions } = useWallet();
-  const { toast } = useToast();
-
   const [approvals, setApprovals] = useState<TokenApproval[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isScanning, setIsScanning] = useState(false);
@@ -103,7 +101,7 @@ export default function MyTokenApprovals() {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    toast({ title: "Copied", description: "Address copied to clipboard" });
+    toast.success("Address copied to clipboard");
   };
 
   const getRiskBadgeVariant = (score: number) => {
@@ -221,11 +219,7 @@ export default function MyTokenApprovals() {
 
   const handleSign = async () => {
     if (!connected || !signAllTransactions) {
-      toast({
-        title: "Wallet Not Connected",
-        description: "Please connect your wallet to sign transactions.",
-        variant: "destructive",
-      });
+      toast.error("Please connect your wallet to sign transactions.");
       return;
     }
 
@@ -270,10 +264,7 @@ export default function MyTokenApprovals() {
       setSignatures(data.signatures || []);
       setRevocationStep("complete");
 
-      toast({
-        title: "Revocation Complete",
-        description: `Successfully revoked ${data.totalRevoked} approval(s)`,
-      });
+      toast.success(`Successfully revoked ${data.totalRevoked} approval(s)`);
 
       // Auto-rescan after a short delay
       setTimeout(() => {

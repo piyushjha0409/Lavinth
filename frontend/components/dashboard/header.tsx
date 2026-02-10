@@ -2,14 +2,23 @@
 
 import { useState, Suspense } from "react";
 import { Button } from "@/components/ui/button";
-import { Shield, Menu, PanelLeftClose } from "lucide-react";
-import { MobileSidebar } from "./sidebar";
+import { Shield } from "lucide-react";
+import { SidebarTrigger } from "@/components/ui/sidebar";
+import { Separator } from "@/components/ui/separator";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 import { WalletCheckModal } from "./wallet-check-modal";
 import { useSearchParams } from "next/navigation";
 
 const tabLabels: Record<string, string> = {
   overview: "Overview",
   "wallet-security": "Wallet Security",
+  "token-approvals": "Token Approvals",
   simulation: "Transaction Simulation",
   recovery: "Recovery",
   "freeze-requests": "Freeze Requests",
@@ -18,48 +27,27 @@ const tabLabels: Record<string, string> = {
 
 function HeaderContent() {
   const [isWalletCheckOpen, setIsWalletCheckOpen] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const searchParams = useSearchParams();
   const activeTab = searchParams.get("tab") || "overview";
 
-  const toggleSidebar = () => {
-    setIsSidebarCollapsed(!isSidebarCollapsed);
-    document.dispatchEvent(
-      new CustomEvent("toggle-sidebar", {
-        detail: { collapsed: !isSidebarCollapsed },
-      })
-    );
-  };
-
   return (
-    <header className="flex h-14 items-center gap-4 border-b border-border/50 bg-card/30 backdrop-blur-sm px-4 lg:h-[60px] lg:px-6">
-      <MobileSidebar />
+    <header className="flex h-14 items-center gap-2 border-b border-border/50 bg-card/30 backdrop-blur-sm px-4">
+      <SidebarTrigger className="-ml-1" />
+      <Separator orientation="vertical" className="mr-2 h-4" />
 
-      <Button
-        variant="ghost"
-        size="icon"
-        className="hidden md:flex text-muted-foreground hover:text-foreground"
-        onClick={toggleSidebar}
-        title={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-      >
-        {isSidebarCollapsed ? (
-          <Menu className="h-5 w-5" />
-        ) : (
-          <PanelLeftClose className="h-5 w-5" />
-        )}
-        <span className="sr-only">
-          {isSidebarCollapsed ? "Expand" : "Collapse"} sidebar
-        </span>
-      </Button>
-
-      {/* Breadcrumb */}
-      <div className="hidden md:flex items-center gap-2 text-sm">
-        <span className="text-muted-foreground">Dashboard</span>
-        <span className="text-muted-foreground/50">/</span>
-        <span className="font-medium text-foreground">
-          {tabLabels[activeTab] || "Overview"}
-        </span>
-      </div>
+      <Breadcrumb className="hidden md:flex">
+        <BreadcrumbList>
+          <BreadcrumbItem>
+            Dashboard
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbPage>
+              {tabLabels[activeTab] || "Overview"}
+            </BreadcrumbPage>
+          </BreadcrumbItem>
+        </BreadcrumbList>
+      </Breadcrumb>
 
       <div className="flex-1" />
 
@@ -84,7 +72,7 @@ function HeaderContent() {
 export function Header() {
   return (
     <Suspense fallback={
-      <header className="flex h-14 items-center gap-4 border-b border-border/50 bg-card/30 px-4 lg:h-[60px] lg:px-6">
+      <header className="flex h-14 items-center gap-4 border-b border-border/50 bg-card/30 px-4">
         <div className="flex-1" />
         <div className="h-8 w-24 bg-muted rounded animate-pulse" />
       </header>

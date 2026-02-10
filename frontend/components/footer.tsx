@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Shield, Twitter, Mail, Github } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export default function Footer() {
   return (
@@ -53,22 +54,24 @@ export default function Footer() {
           </nav>
 
           {/* Social */}
-          <div className="flex items-center gap-3">
-            <Link
-              href="https://x.com/lavinth_secure"
-              target="_blank"
-              className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-primary/10 transition-all"
-              aria-label="Twitter"
-            >
-              <Twitter size={14} />
-            </Link>
-            <Link
-              href="mailto:work.lavinth@gmail.com"
-              className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-primary/10 transition-all"
-              aria-label="Email"
-            >
-              <Mail size={14} />
-            </Link>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" asChild>
+              <Link
+                href="https://x.com/lavinth_secure"
+                target="_blank"
+                aria-label="Twitter"
+              >
+                <Twitter size={14} />
+              </Link>
+            </Button>
+            <Button variant="ghost" size="icon" asChild>
+              <Link
+                href="mailto:work.lavinth@gmail.com"
+                aria-label="Email"
+              >
+                <Mail size={14} />
+              </Link>
+            </Button>
           </div>
         </div>
 

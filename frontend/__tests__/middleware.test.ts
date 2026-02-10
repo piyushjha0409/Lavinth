@@ -21,29 +21,16 @@ const INVALID_WALLET = "not-a-real-wallet!!!";
 describe("Frontend middleware – auth redirects", () => {
   it("allows unauthenticated users to access /", () => {
     const result = middleware(makeRequest("/"));
-    // No redirect for public routes
     expect(result).toBeUndefined();
   });
 
-  it("allows unauthenticated users to access /sign-in", () => {
-    const result = middleware(makeRequest("/sign-in"));
-    expect(result).toBeUndefined();
-  });
-
-  it("redirects unauthenticated users from /dashboard to /sign-in", () => {
+  it("allows unauthenticated users to access /dashboard", () => {
     const result = middleware(makeRequest("/dashboard"));
-    expect(result).toBeDefined();
-    expect(result!.headers.get("location")).toContain("/sign-in");
+    expect(result).toBeUndefined();
   });
 
-  it("redirects unauthenticated users from /wallet-check to /sign-in", () => {
+  it("redirects unauthenticated users from /wallet-check to /dashboard", () => {
     const result = middleware(makeRequest("/wallet-check"));
-    expect(result).toBeDefined();
-    expect(result!.headers.get("location")).toContain("/sign-in");
-  });
-
-  it("redirects authenticated users from /sign-in to /dashboard", () => {
-    const result = middleware(makeRequest("/sign-in", VALID_WALLET));
     expect(result).toBeDefined();
     expect(result!.headers.get("location")).toContain("/dashboard");
   });
@@ -58,15 +45,15 @@ describe("Frontend middleware – auth redirects", () => {
     expect(result).toBeUndefined();
   });
 
-  it("treats invalid wallet cookie as unauthenticated", () => {
-    const result = middleware(makeRequest("/dashboard", INVALID_WALLET));
+  it("treats invalid wallet cookie as unauthenticated on protected routes", () => {
+    const result = middleware(makeRequest("/wallet-check", INVALID_WALLET));
     expect(result).toBeDefined();
-    expect(result!.headers.get("location")).toContain("/sign-in");
+    expect(result!.headers.get("location")).toContain("/dashboard");
   });
 
-  it("treats empty wallet cookie as unauthenticated", () => {
-    const result = middleware(makeRequest("/dashboard", ""));
+  it("treats empty wallet cookie as unauthenticated on protected routes", () => {
+    const result = middleware(makeRequest("/wallet-check", ""));
     expect(result).toBeDefined();
-    expect(result!.headers.get("location")).toContain("/sign-in");
+    expect(result!.headers.get("location")).toContain("/dashboard");
   });
 });

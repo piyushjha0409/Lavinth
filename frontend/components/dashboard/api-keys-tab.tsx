@@ -38,7 +38,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { format } from "date-fns";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -63,8 +63,6 @@ export default function ApiKeysTab() {
   const [newKeyName, setNewKeyName] = useState("");
   const [newApiKey, setNewApiKey] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const { toast } = useToast();
-
   // Fetch API keys
   const fetchApiKeys = async () => {
     try {
@@ -78,11 +76,7 @@ export default function ApiKeysTab() {
       }
     } catch (error) {
       console.error("Error fetching API keys:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load API keys",
-        variant: "destructive",
-      });
+      toast.error("Failed to load API keys");
     } finally {
       setIsLoading(false);
     }
@@ -110,21 +104,14 @@ export default function ApiKeysTab() {
         const data = await response.json();
         setNewApiKey(data.apiKey);
         await fetchApiKeys();
-        toast({
-          title: "Success",
-          description: "API key created successfully. Please copy and save it now.",
-        });
+        toast.success("API key created successfully. Please copy and save it now.");
         // Don't close the dialog - let the user see and copy the key
       } else {
         throw new Error("Failed to create API key");
       }
     } catch (error) {
       console.error("Error creating API key:", error);
-      toast({
-        title: "Error",
-        description: "Failed to create API key",
-        variant: "destructive",
-      });
+      toast.error("Failed to create API key");
       // Close dialog on error
       setIsCreateDialogOpen(false);
       setNewApiKey("");
@@ -144,20 +131,13 @@ export default function ApiKeysTab() {
 
       if (response.ok) {
         await fetchApiKeys();
-        toast({
-          title: "Success",
-          description: "API key revoked successfully",
-        });
+        toast.success("API key revoked successfully");
       } else {
         throw new Error("Failed to revoke API key");
       }
     } catch (error) {
       console.error("Error revoking API key:", error);
-      toast({
-        title: "Error",
-        description: "Failed to revoke API key",
-        variant: "destructive",
-      });
+      toast.error("Failed to revoke API key");
     } finally {
       setIsLoading(false);
     }
@@ -166,10 +146,7 @@ export default function ApiKeysTab() {
   // Copy API key to clipboard
   const handleCopyApiKey = (key: string) => {
     navigator.clipboard.writeText(key);
-    toast({
-      title: "Copied",
-      description: "API key copied to clipboard",
-    });
+    toast.success("API key copied to clipboard");
   };
 
   // Handle dialog open/close state changes
@@ -215,12 +192,12 @@ export default function ApiKeysTab() {
               </DialogHeader>
               {newApiKey ? (
                 <div className="space-y-4">
-                  <Alert className="bg-yellow-50 border-yellow-200">
-                    <AlertCircle className="h-4 w-4 text-yellow-600" />
-                    <AlertTitle className="text-yellow-800">
+                  <Alert className="bg-severity-medium/10 border-severity-medium/20">
+                    <AlertCircle className="h-4 w-4 text-severity-medium" />
+                    <AlertTitle className="text-severity-medium">
                       Important
                     </AlertTitle>
-                    <AlertDescription className="text-yellow-700">
+                    <AlertDescription className="text-severity-medium">
                       This API key will only be shown once. Please copy it and
                       store it securely.
                     </AlertDescription>
@@ -308,8 +285,8 @@ export default function ApiKeysTab() {
                 </div>
               ) : apiKeys.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 space-y-6">
-                  <div className="rounded-full bg-blue-50 p-4">
-                    <Key className="h-10 w-10 text-blue-600" />
+                  <div className="rounded-full bg-primary/10 p-4">
+                    <Key className="h-10 w-10 text-primary" />
                   </div>
                   <div className="text-center space-y-2">
                     <h3 className="text-xl font-semibold">No API Keys Yet</h3>
@@ -345,8 +322,8 @@ export default function ApiKeysTab() {
                         <TableRow key={key.id} className="hover:bg-muted/50">
                           <TableCell>
                             <div className="flex items-center space-x-3">
-                              <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                                <Key className="h-4 w-4 text-blue-600" />
+                              <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
+                                <Key className="h-4 w-4 text-primary" />
                               </div>
                               <div>
                                 <p className="font-medium">{key.name}</p>
@@ -365,7 +342,7 @@ export default function ApiKeysTab() {
                               variant={key.isActive ? "default" : "destructive"}
                               className={
                                 key.isActive
-                                  ? "bg-green-100 text-green-800 hover:bg-green-100"
+                                  ? "bg-severity-low/15 text-severity-low hover:bg-severity-low/20"
                                   : ""
                               }
                             >
@@ -386,13 +363,9 @@ export default function ApiKeysTab() {
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => {
-                                  toast({
-                                    title: "API Key Not Available",
-                                    description: "For security reasons, API keys are only shown once when created. Please create a new key if needed.",
-                                    variant: "destructive",
-                                  });
+                                  toast.error("For security reasons, API keys are only shown once when created. Please create a new key if needed.");
                                 }}
-                                className="h-6 w-6 p-0 hover:bg-red-50"
+                                className="h-6 w-6 p-0 hover:bg-destructive/10"
                               >
                                 <Copy className="h-3 w-3" />
                               </Button>
@@ -404,7 +377,7 @@ export default function ApiKeysTab() {
                               size="sm"
                               onClick={() => handleRevokeApiKey(key.id)}
                               disabled={!key.isActive || isLoading}
-                              className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -443,7 +416,7 @@ export default function ApiKeysTab() {
                 <div className="grid gap-4 md:grid-cols-3">
                   <div className="p-4 border rounded-lg">
                     <div className="flex items-center space-x-2 mb-2">
-                      <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-xs font-bold text-blue-600">
+                      <div className="w-6 h-6 bg-primary/10 rounded-full flex items-center justify-center text-xs font-bold text-primary">
                         1
                       </div>
                       <h4 className="font-medium">Get API Key</h4>
@@ -454,7 +427,7 @@ export default function ApiKeysTab() {
                   </div>
                   <div className="p-4 border rounded-lg">
                     <div className="flex items-center space-x-2 mb-2">
-                      <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-xs font-bold text-blue-600">
+                      <div className="w-6 h-6 bg-primary/10 rounded-full flex items-center justify-center text-xs font-bold text-primary">
                         2
                       </div>
                       <h4 className="font-medium">Make Request</h4>
@@ -465,7 +438,7 @@ export default function ApiKeysTab() {
                   </div>
                   <div className="p-4 border rounded-lg">
                     <div className="flex items-center space-x-2 mb-2">
-                      <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-xs font-bold text-blue-600">
+                      <div className="w-6 h-6 bg-primary/10 rounded-full flex items-center justify-center text-xs font-bold text-primary">
                         3
                       </div>
                       <h4 className="font-medium">Get Results</h4>

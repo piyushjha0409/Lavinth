@@ -43,7 +43,7 @@ import {
   Shield,
   BarChart3,
 } from "lucide-react";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import {
   Tooltip,
   TooltipContent,
@@ -133,8 +133,6 @@ export default function FreezeRequestsTab() {
   const [emailTemplate, setEmailTemplate] = useState<EmailTemplate | null>(null);
   const [isGeneratingEmail, setIsGeneratingEmail] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
-  const { toast } = useToast();
-
   // Fetch data on mount
   useEffect(() => {
     fetchData();
@@ -151,11 +149,7 @@ export default function FreezeRequestsTab() {
       ]);
     } catch (error) {
       console.error("Error fetching data:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load data",
-        variant: "destructive",
-      });
+      toast.error("Failed to load data");
     } finally {
       setIsLoading(false);
     }
@@ -222,16 +216,9 @@ export default function FreezeRequestsTab() {
       }
 
       setEmailTemplate(data.template);
-      toast({
-        title: "Email Generated",
-        description: "Freeze request email template generated successfully",
-      });
+      toast.success("Freeze request email template generated successfully");
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast.error(error.message);
     } finally {
       setIsGeneratingEmail(false);
     }
@@ -259,19 +246,12 @@ export default function FreezeRequestsTab() {
         throw new Error("Failed to update status");
       }
 
-      toast({
-        title: "Status Updated",
-        description: `Request status updated to ${status}`,
-      });
+      toast.success(`Request status updated to ${status}`);
 
       // Refresh data
       await fetchData();
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast.error(error.message);
     } finally {
       setIsUpdatingStatus(false);
     }
@@ -289,27 +269,17 @@ export default function FreezeRequestsTab() {
         throw new Error("Failed to record follow-up");
       }
 
-      toast({
-        title: "Follow-up Recorded",
-        description: "Next follow-up scheduled in 24 hours",
-      });
+      toast.success("Next follow-up scheduled in 24 hours");
 
       await fetchFollowUpRequests();
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast.error(error.message);
     }
   };
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    toast({
-      title: "Copied",
-      description: "Copied to clipboard",
-    });
+    toast.success("Copied to clipboard");
   };
 
   const truncateAddress = (address: string) => {
@@ -320,40 +290,40 @@ export default function FreezeRequestsTab() {
   const getPriorityColor = (priority: string) => {
     switch (priority) {
       case "critical":
-        return "bg-red-500 text-white";
+        return "bg-severity-critical text-white";
       case "high":
-        return "bg-orange-500 text-white";
+        return "bg-severity-high text-white";
       case "medium":
-        return "bg-yellow-500 text-black";
+        return "bg-severity-medium text-black";
       case "low":
-        return "bg-green-500 text-white";
+        return "bg-severity-low text-white";
       default:
-        return "bg-gray-500 text-white";
+        return "bg-muted-foreground text-white";
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case "frozen":
-        return "bg-blue-500";
+        return "bg-primary";
       case "partially_frozen":
-        return "bg-cyan-500";
+        return "bg-severity-info";
       case "submitted":
-        return "bg-purple-500";
+        return "bg-secondary";
       case "acknowledged":
-        return "bg-indigo-500";
+        return "bg-primary";
       case "under_review":
-        return "bg-yellow-500";
+        return "bg-severity-medium";
       case "ready":
-        return "bg-green-500";
+        return "bg-severity-low";
       case "draft":
-        return "bg-gray-500";
+        return "bg-muted-foreground";
       case "rejected":
-        return "bg-red-500";
+        return "bg-severity-critical";
       case "released":
-        return "bg-orange-500";
+        return "bg-severity-high";
       default:
-        return "bg-gray-500";
+        return "bg-muted-foreground";
     }
   };
 

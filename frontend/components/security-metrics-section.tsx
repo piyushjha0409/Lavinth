@@ -68,10 +68,6 @@ export default function SecurityMetricsSection() {
         <div
           ref={ref}
           className="max-w-4xl mx-auto bg-card border border-border/50 rounded-2xl p-8 md:p-10"
-          style={{
-            background:
-              "linear-gradient(135deg, hsl(224 40% 10%) 0%, hsl(231 30% 12%) 100%)",
-          }}
         >
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {stats.map((stat, index) => {

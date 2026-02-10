@@ -41,7 +41,7 @@ import {
   XCircle,
   Clock,
 } from "lucide-react";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import {
   Tooltip,
   TooltipContent,
@@ -135,16 +135,10 @@ export default function RecoveryTab() {
   const [selectedReport, setSelectedReport] = useState<RecoveryReport | null>(null);
   const [traceAmount, setTraceAmount] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const { toast } = useToast();
-
   // Analyze wallet for compromise
   const handleAnalyzeWallet = async () => {
     if (!walletAddress.trim()) {
-      toast({
-        title: "Error",
-        description: "Please enter a wallet address",
-        variant: "destructive",
-      });
+      toast.error("Please enter a wallet address");
       return;
     }
 
@@ -164,21 +158,15 @@ export default function RecoveryTab() {
       // Also fetch existing traces for this wallet
       await fetchTraces();
 
-      toast({
-        title: "Analysis Complete",
-        description: data.isCompromised
-          ? "Warning: Potential compromise detected!"
-          : "No signs of compromise detected",
-        variant: data.isCompromised ? "destructive" : "default",
-      });
+      if (data.isCompromised) {
+        toast.error("Warning: Potential compromise detected!");
+      } else {
+        toast.success("No signs of compromise detected");
+      }
     } catch (err: any) {
       console.error("Analysis error:", err);
       setError(err.message);
-      toast({
-        title: "Analysis Failed",
-        description: err.message,
-        variant: "destructive",
-      });
+      toast.error(err.message);
     } finally {
       setIsAnalyzing(false);
     }
@@ -201,11 +189,7 @@ export default function RecoveryTab() {
   // Start fund trace
   const handleStartTrace = async () => {
     if (!walletAddress.trim() || !traceAmount.trim()) {
-      toast({
-        title: "Error",
-        description: "Please enter wallet address and amount to trace",
-        variant: "destructive",
-      });
+      toast.error("Please enter wallet address and amount to trace");
       return;
     }
 
@@ -227,20 +211,13 @@ export default function RecoveryTab() {
         throw new Error(data.error || "Failed to start trace");
       }
 
-      toast({
-        title: "Trace Started",
-        description: `Tracing ${traceAmount} SOL from wallet`,
-      });
+      toast.success(`Tracing ${traceAmount} SOL from wallet`);
 
       // Refresh traces
       await fetchTraces();
     } catch (err: any) {
       console.error("Trace error:", err);
-      toast({
-        title: "Trace Failed",
-        description: err.message,
-        variant: "destructive",
-      });
+      toast.error(err.message);
     } finally {
       setIsTracing(false);
     }
@@ -259,11 +236,7 @@ export default function RecoveryTab() {
       setSelectedReport(data);
     } catch (err: any) {
       console.error("Report error:", err);
-      toast({
-        title: "Report Failed",
-        description: err.message,
-        variant: "destructive",
-      });
+      toast.error(err.message);
     }
   };
 
@@ -281,26 +254,16 @@ export default function RecoveryTab() {
       // Refresh analysis
       await handleAnalyzeWallet();
 
-      toast({
-        title: "Alert Acknowledged",
-        description: "Alert has been marked as acknowledged",
-      });
+      toast.success("Alert has been marked as acknowledged");
     } catch (err: any) {
-      toast({
-        title: "Error",
-        description: err.message,
-        variant: "destructive",
-      });
+      toast.error(err.message);
     }
   };
 
   // Copy address
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    toast({
-      title: "Copied",
-      description: "Copied to clipboard",
-    });
+    toast.success("Copied to clipboard");
   };
 
   // Truncate address
@@ -312,15 +275,15 @@ export default function RecoveryTab() {
   const getSeverityColor = (severity: string) => {
     switch (severity) {
       case "critical":
-        return "bg-red-500 text-white";
+        return "bg-severity-critical text-white";
       case "high":
-        return "bg-orange-500 text-white";
+        return "bg-severity-high text-white";
       case "medium":
-        return "bg-yellow-500 text-black";
+        return "bg-severity-medium text-black";
       case "low":
-        return "bg-green-500 text-white";
+        return "bg-severity-low text-white";
       default:
-        return "bg-gray-500 text-white";
+        return "bg-muted-foreground text-white";
     }
   };
 
@@ -328,17 +291,17 @@ export default function RecoveryTab() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "completed":
-        return "bg-green-500";
+        return "bg-severity-low";
       case "in_progress":
-        return "bg-blue-500";
+        return "bg-primary";
       case "partial":
-        return "bg-yellow-500";
+        return "bg-severity-medium";
       case "funds_recovered":
-        return "bg-emerald-500";
+        return "bg-severity-low";
       case "funds_lost":
-        return "bg-red-500";
+        return "bg-severity-critical";
       default:
-        return "bg-gray-500";
+        return "bg-muted-foreground";
     }
   };
 

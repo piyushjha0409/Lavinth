@@ -42,8 +42,8 @@ Wallet-based auth using Solana wallet adapters. No NextAuth, no Google OAuth, no
 Auth flow:
 - `lib/wallet-auth.ts` — Server-side `getWalletAddress()` reads the `wallet_address` cookie and validates it as a Solana base58 address
 - `hooks/use-wallet-auth.ts` — Client-side hook that syncs wallet connection state to a `wallet_address` cookie (30-day expiry)
-- `middleware.ts` — Protects all routes except `/` and `/sign-in`; redirects logged-in users away from `/sign-in`
-- `app/sign-in/page.tsx` — Shows `WalletMultiButton`; redirects to `/dashboard` on connect
+- `middleware.ts` — Protects all routes except `/` and `/dashboard`; redirects unauthenticated users to `/dashboard`
+- No dedicated sign-in page — the dashboard page itself shows a `WalletMultiButton` connect prompt when no wallet is connected
 
 ### Backend proxy pattern
 The Next.js API routes (`app/api/`) act as an **authenticated proxy** to an external backend service. Each route:

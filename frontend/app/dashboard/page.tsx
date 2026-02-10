@@ -10,18 +10,51 @@ import TokenApprovalsTab from "@/components/dashboard/token-approvals-tab";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { AlertTriangle, Clock } from "lucide-react";
+import { AlertTriangle, Clock, Shield } from "lucide-react";
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import ApiKeysTab from "@/components/dashboard/api-keys-tab";
 import { ErrorBoundary } from "react-error-boundary";
 import { DashboardErrorFallback } from "@/components/dashboard/error-fallback";
 import { useDashboardData } from "@/hooks/use-api";
+import { useWallet } from "@solana/wallet-adapter-react";
+import dynamic from "next/dynamic";
+
+const WalletMultiButton = dynamic(
+  () =>
+    import("@solana/wallet-adapter-react-ui").then(
+      (mod) => mod.WalletMultiButton
+    ),
+  { ssr: false }
+);
 
 function DashboardContent() {
   const searchParams = useSearchParams();
   const activeTab = searchParams.get("tab") || "overview";
+  const { connected } = useWallet();
   const { data: dashboardData, isLoading, error, refetch } = useDashboardData();
+
+  if (!connected) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="text-center max-w-sm mx-auto px-4">
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+            <Shield className="h-8 w-8 text-primary" />
+          </div>
+          <h1 className="text-2xl font-bold mb-2">Connect Your Wallet</h1>
+          <p className="text-muted-foreground mb-6">
+            Connect your Solana wallet to access the Lavinth security dashboard.
+          </p>
+          <WalletMultiButton
+            style={{
+              width: "100%",
+              justifyContent: "center",
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

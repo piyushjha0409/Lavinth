@@ -5,6 +5,7 @@ import { WalletProvider } from "@/context/WalletProvider";
 import { QueryProvider } from "@/context/QueryProvider";
 import { WalletAuthSync } from "@/components/wallet-auth-sync";
 import { RootErrorBoundary } from "@/components/root-error-boundary";
+import { Toaster } from "@/components/ui/sonner";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -44,6 +45,7 @@ export default function RootLayout({
               <WalletAuthSync>{children}</WalletAuthSync>
             </WalletProvider>
           </QueryProvider>
+          <Toaster richColors position="bottom-right" />
         </RootErrorBoundary>
       </body>
     </html>

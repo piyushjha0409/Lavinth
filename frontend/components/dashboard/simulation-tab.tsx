@@ -44,7 +44,7 @@ import {
   Key,
   Code,
 } from "lucide-react";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import {
   Tooltip,
   TooltipContent,
@@ -139,8 +139,6 @@ export default function SimulationTab() {
   const [verifiedPrograms, setVerifiedPrograms] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("simulate");
-  const { toast } = useToast();
-
   // Fetch simulation history on mount
   useEffect(() => {
     if (walletAddress) {
@@ -184,11 +182,7 @@ export default function SimulationTab() {
   // Quick risk check
   const handleQuickCheck = async () => {
     if (!serializedTx.trim()) {
-      toast({
-        title: "Error",
-        description: "Please enter a serialized transaction",
-        variant: "destructive",
-      });
+      toast.error("Please enter a serialized transaction");
       return;
     }
 
@@ -210,18 +204,11 @@ export default function SimulationTab() {
 
       setQuickCheck(data.check);
 
-      toast({
-        title: "Quick Check Complete",
-        description: `Risk Level: ${data.check.riskLevel}`,
-      });
+      toast.success(`Quick check complete - Risk Level: ${data.check.riskLevel}`);
     } catch (err: any) {
       console.error("Quick check error:", err);
       setError(err.message);
-      toast({
-        title: "Quick Check Failed",
-        description: err.message,
-        variant: "destructive",
-      });
+      toast.error(err.message);
     } finally {
       setIsQuickChecking(false);
     }
@@ -230,11 +217,7 @@ export default function SimulationTab() {
   // Full simulation
   const handleSimulate = async () => {
     if (!serializedTx.trim() || !walletAddress.trim()) {
-      toast({
-        title: "Error",
-        description: "Please enter both wallet address and transaction",
-        variant: "destructive",
-      });
+      toast.error("Please enter both wallet address and transaction");
       return;
     }
 
@@ -261,18 +244,11 @@ export default function SimulationTab() {
       setSimulation(data.simulation);
       fetchHistory();
 
-      toast({
-        title: "Simulation Complete",
-        description: `Risk Level: ${data.simulation.riskLevel}, Score: ${data.simulation.riskScore}`,
-      });
+      toast.success(`Simulation complete - Risk Level: ${data.simulation.riskLevel}, Score: ${data.simulation.riskScore}`);
     } catch (err: any) {
       console.error("Simulation error:", err);
       setError(err.message);
-      toast({
-        title: "Simulation Failed",
-        description: err.message,
-        variant: "destructive",
-      });
+      toast.error(err.message);
     } finally {
       setIsSimulating(false);
     }
@@ -282,17 +258,17 @@ export default function SimulationTab() {
   const getRiskLevelColor = (level: string) => {
     switch (level) {
       case "critical":
-        return "bg-red-500 text-white";
+        return "bg-severity-critical text-white";
       case "high":
-        return "bg-orange-500 text-white";
+        return "bg-severity-high text-white";
       case "medium":
-        return "bg-yellow-500 text-black";
+        return "bg-severity-medium text-black";
       case "low":
-        return "bg-blue-500 text-white";
+        return "bg-primary text-white";
       case "safe":
-        return "bg-green-500 text-white";
+        return "bg-severity-low text-white";
       default:
-        return "bg-gray-500 text-white";
+        return "bg-muted-foreground text-white";
     }
   };
 
@@ -308,7 +284,7 @@ export default function SimulationTab() {
       case "low":
         return <AlertCircle className="h-4 w-4 text-blue-500" />;
       case "info":
-        return <Info className="h-4 w-4 text-gray-500" />;
+        return <Info className="h-4 w-4 text-muted-foreground" />;
       default:
         return <Info className="h-4 w-4" />;
     }

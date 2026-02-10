@@ -12,10 +12,10 @@ function RootErrorFallback({
   resetErrorBoundary: () => void;
 }) {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center p-6 text-center bg-black text-white">
+    <div className="flex min-h-screen flex-col items-center justify-center p-6 text-center bg-background text-foreground">
       <AlertTriangle className="h-16 w-16 text-red-500 mb-6" />
       <h1 className="text-2xl font-bold mb-2">Something went wrong</h1>
-      <p className="text-gray-400 mb-6 max-w-md">{error.message}</p>
+      <p className="text-muted-foreground mb-6 max-w-md">{error.message}</p>
       <div className="flex gap-4">
         <Button onClick={resetErrorBoundary}>Try again</Button>
         <Button variant="outline" onClick={() => (window.location.href = "/")}>

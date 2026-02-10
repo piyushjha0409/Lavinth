@@ -1,19 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const publicRoutes = ["/", "/sign-in"];
+const publicRoutes = ["/", "/dashboard"];
 const SOLANA_REGEX = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
 export function middleware(req: NextRequest) {
   const walletAddress = req.cookies.get("wallet_address")?.value;
   const isLoggedIn = !!walletAddress && SOLANA_REGEX.test(walletAddress);
-  const isPublicRoute = publicRoutes.includes(req.nextUrl.pathname);
-
-  if (isLoggedIn && req.nextUrl.pathname === "/sign-in") {
-    return NextResponse.redirect(new URL("/dashboard", req.nextUrl));
-  }
+  const isPublicRoute = publicRoutes.some(
+    (route) => req.nextUrl.pathname === route || req.nextUrl.pathname.startsWith(route + "/")
+  );
 
   if (!isLoggedIn && !isPublicRoute) {
-    return NextResponse.redirect(new URL("/sign-in", req.nextUrl));
+    return NextResponse.redirect(new URL("/dashboard", req.nextUrl));
   }
 }
 
