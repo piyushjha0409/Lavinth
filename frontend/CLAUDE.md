@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is Lavinth
 
-Lavinth is a Solana post-compromise wallet recovery platform. It provides wallet approval scanning, emergency revocation, compromise detection, fund tracing, exchange freeze requests, transaction simulation, and threat intelligence.
+Lavinth is a Solana post-compromise wallet recovery platform. It provides wallet approval scanning, selective token revocation, compromise detection, fund tracing, exchange freeze requests, transaction simulation, and threat intelligence.
 
 ## Commands
 
@@ -57,13 +57,28 @@ Mutating API routes also validate request origin via `lib/csrf.ts` (`validateOri
 Client-side data fetching uses TanStack React Query via custom hooks in `hooks/use-api.ts`. The `useDashboardData()` hook fetches from `/api/dashboard`. SSE-based real-time alerts are handled by `hooks/use-alert-stream.ts` using `EventSource` with auto-reconnect.
 
 ### Dashboard
-Single-page dashboard at `/dashboard` with tab-based navigation via `?tab=` query param. Tabs: overview, wallet-security, simulation, recovery, freeze-requests, settings-api. Each tab is a separate component in `components/dashboard/`. Tabs are wrapped in `react-error-boundary` `ErrorBoundary` with `DashboardErrorFallback`, keyed by `activeTab` so boundaries reset on tab switch.
+Single-page dashboard at `/dashboard` with tab-based navigation via `?tab=` query param. Tabs: overview, wallet-security, token-approvals, simulation, recovery, freeze-requests, settings-api. Each tab is a separate component in `components/dashboard/`. Tabs are wrapped in `react-error-boundary` `ErrorBoundary` with `DashboardErrorFallback`, keyed by `activeTab` so boundaries reset on tab switch.
+
+**Tab separation:**
+- `wallet-security` — Address scanner for any Solana address (threat intel lookup, security score, read-only approvals table)
+- `token-approvals` — Dedicated tab for the **connected wallet's** token approval management with checkbox selection and batch revocation via `signAllTransactions`
+
+### Token Approvals & Selective Revocation
+- `components/dashboard/my-token-approvals.tsx` — Self-contained component using `useWallet()`. Auto-scans connected wallet on mount/connect. Checkbox selection with `Set<string>` keyed by `tokenAccount`. Inline revocation flow: build → sign → submit → auto-rescan.
+- `app/api/approvals/revoke-selected/route.ts` — Proxy route to backend's `POST /api/revocation/build-selective`
+- Uses shadcn Checkbox (`components/ui/checkbox.tsx`) with Radix `"indeterminate"` state for partial selection
+- `WalletMultiButton` is dynamically imported (`{ ssr: false }`) for SSR compatibility
+
+### Sidebar
+- Navigation items defined in `components/dashboard/sidebar.tsx`
+- `SidebarUser` component at bottom shows connected wallet address + disconnect dropdown
+- No duplicate `WalletMultiButton` — `SidebarUser` handles wallet display and disconnect
 
 ### API key system
 Users can create API keys for programmatic access via the Settings & API tab. Keys are managed through backend endpoints (`/api/user-api-keys/:walletAddress`). Keys are prefixed `lav_live_`, stored as SHA-256 hashes, and support permissions, usage limits, IP restrictions, and expiration.
 
 ### UI components
-shadcn/ui (Radix + Tailwind) configured in `components.json`. Components in `components/ui/`. Three.js via react-three-fiber for the hero section, and Framer Motion for animations.
+shadcn/ui (Radix + Tailwind) configured in `components.json`. Components in `components/ui/` (includes checkbox). Three.js via react-three-fiber for the hero section, and Framer Motion for animations.
 
 ### Testing
 Tests live in `__tests__/` at the project root (not colocated). Vitest with jsdom environment, `@testing-library/react`, and `@testing-library/jest-dom`. Globals are enabled (`vitest.config.ts`), so `describe`/`it`/`expect` don't need imports.
@@ -73,6 +88,7 @@ Tests live in `__tests__/` at the project root (not colocated). Vitest with jsdo
 
 ### Key directories
 - `app/api/` — API route handlers (proxy to backend)
+- `app/api/approvals/` — Approval scan, submit, and selective revocation proxy routes
 - `app/types/` — TypeScript interfaces for dashboard and transaction data
 - `app/utils/` — Data processing utilities
 - `components/dashboard/` — Dashboard tab components
