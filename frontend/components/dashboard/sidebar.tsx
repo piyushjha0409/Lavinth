@@ -10,6 +10,7 @@ import {
   Snowflake,
   PlayCircle,
   KeyRound,
+  FileSearch,
 } from "lucide-react";
 import {
   Sidebar,
@@ -58,6 +59,12 @@ const navigation = [
     href: "/dashboard?tab=recovery",
     tab: "recovery",
     icon: Radar,
+  },
+  {
+    name: "Forensic Analysis",
+    href: "/dashboard?tab=forensics",
+    tab: "forensics",
+    icon: FileSearch,
   },
   {
     name: "Freeze Requests",
@@ -145,7 +152,7 @@ export function AppSidebar() {
           <div className="flex h-full w-full flex-col p-4">
             <div className="h-8 w-32 bg-muted rounded animate-pulse mb-6" />
             <div className="space-y-3">
-              {Array.from({ length: 7 }).map((_, i) => (
+              {Array.from({ length: 8 }).map((_, i) => (
                 <div key={i} className="flex items-center gap-3 px-2">
                   <div className="h-5 w-5 bg-muted rounded animate-pulse" />
                   <div className="h-4 w-24 bg-muted rounded animate-pulse" />

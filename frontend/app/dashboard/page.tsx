@@ -7,6 +7,7 @@ import RecoveryTab from "@/components/dashboard/recovery-tab";
 import FreezeRequestsTab from "@/components/dashboard/freeze-requests-tab";
 import SimulationTab from "@/components/dashboard/simulation-tab";
 import TokenApprovalsTab from "@/components/dashboard/token-approvals-tab";
+import ForensicsTab from "@/components/dashboard/forensics-tab";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -108,6 +109,8 @@ function DashboardContent() {
           return <SimulationTab />;
         case "recovery":
           return <RecoveryTab />;
+        case "forensics":
+          return <ForensicsTab />;
         case "freeze-requests":
           return <FreezeRequestsTab />;
 case "settings-api":

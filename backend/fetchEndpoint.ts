@@ -1496,10 +1496,13 @@ app.post('/api/simulation/alerts/:alertId/acknowledge', validateApiKey, async (r
 
 import { threatIntelligenceService } from "./services/threat-intelligence";
 
+import { forensicAnalyzer } from "./services/forensic-analyzer";
+
 // Wire up threat intelligence to existing services
 compromiseDetector.setThreatIntel(threatIntelligenceService);
 fundTracker.setThreatIntel(threatIntelligenceService);
 exchangeCoordinator.setThreatIntel(threatIntelligenceService);
+forensicAnalyzer.setThreatIntel(threatIntelligenceService);
 
 /**
  * Trigger threat intel sync (all or specific source)
@@ -1663,6 +1666,79 @@ app.get('/api/threat-intel/address/:address', validateApiKey, async (req: Reques
     });
   } catch (error: any) {
     req.log.error({ err: error }, 'Error checking address');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================
+// Forensic Analysis Endpoints (Phase 7)
+// ============================================
+
+/**
+ * Run full forensic analysis on a wallet
+ * GET /api/forensics/analyze/:address
+ */
+app.get('/api/forensics/analyze/:address', strictLimiter, validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const { address } = req.params;
+
+  try {
+    if (!address || !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address)) {
+      res.status(400).json({ error: 'Invalid wallet address format' });
+      return;
+    }
+
+    const report = await forensicAnalyzer.analyzeWallet(address);
+
+    req.log.info({ reportId: report.reportId, attackVector: report.attackVector }, 'Forensic analysis complete');
+    res.json({
+      success: true,
+      report
+    });
+  } catch (error: any) {
+    req.log.error({ err: error }, 'Error running forensic analysis');
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+/**
+ * Get existing forensic report
+ * GET /api/forensics/report/:reportId
+ */
+app.get('/api/forensics/report/:reportId', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const { reportId } = req.params;
+
+  try {
+    const report = await forensicAnalyzer.getReport(reportId);
+
+    if (!report) {
+      res.status(404).json({ error: 'Report not found' });
+      return;
+    }
+
+    res.json(report);
+  } catch (error: any) {
+    req.log.error({ err: error }, 'Error fetching forensic report');
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Get timeline events for a forensic report
+ * GET /api/forensics/timeline/:reportId
+ */
+app.get('/api/forensics/timeline/:reportId', validateApiKey, async (req: Request, res: Response): Promise<void> => {
+  const { reportId } = req.params;
+
+  try {
+    const timeline = await forensicAnalyzer.getTimeline(reportId);
+
+    res.json({
+      reportId,
+      count: timeline.length,
+      events: timeline
+    });
+  } catch (error: any) {
+    req.log.error({ err: error }, 'Error fetching timeline');
     res.status(500).json({ error: 'Internal server error' });
   }
 });

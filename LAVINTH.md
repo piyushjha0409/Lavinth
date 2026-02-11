@@ -594,12 +594,10 @@ PostgreSQL     Solana    Helius   Arkham       GoPlus
 - Recovery tab — compromise analysis, alert management, transaction review, fund traces, recovery reports
 - Alert system — SSE streaming, webhook/Discord delivery, severity filtering, subscription management
 
-#### Phase 3: Transaction Simulation (partial)
+#### Phase 3: Transaction Simulation
 - Transaction Simulator service — pre-signing risk analysis, instruction decoding, balance/approval change detection
 - Simulation tab — quick risk check + full simulation with warnings, balance changes, program verification
 - Simulation history + verified programs reference (12 known-safe programs)
-- **Not built:** Dedicated `forensic-analyzer.ts` service (forensic data embedded in Recovery tab reports instead)
-- **Not built:** Dedicated Forensics tab
 
 #### Phase 4: SDK
 - `@lavinth/sdk` — core TypeScript SDK (`scanWallet`, `checkTransaction`, `quickRiskCheck`, `analyzeCompromise`, `startFundTrace`, `getExchangeContacts`, `createFreezeRequest`, etc.)
@@ -623,6 +621,12 @@ PostgreSQL     Solana    Helius   Arkham       GoPlus
 - Combined address lookup endpoint (`GET /api/threat-intel/address/:address`) — local DB + GoPlus
 - Circuit breaker pattern for GoPlus, Arkham, Helius APIs (5 failures = 60s open)
 - In-memory TTL cache for GoPlus (5min, max 500 entries)
+
+#### Phase 7: Forensic Analysis
+- Forensic Analyzer service (`forensic-analyzer.ts`) — attack timeline reconstruction, vector identification, threat actor attribution, asset inventory
+- Database migration (`migrate-phase7.ts`) — `forensic_reports` and `attack_timeline_events` tables
+- 3 API endpoints: analyze wallet, get report, get timeline
+- Forensics tab — deep forensic investigation UI with attack overview, chronological timeline, affected assets, threat actors, and recovery recommendations
 
 #### Security & Infrastructure Fixes (14 issues from E2E audit)
 - P0: CSRF protection added to `/api/api-keys` route
@@ -662,10 +666,6 @@ PostgreSQL     Solana    Helius   Arkham       GoPlus
 ### Remaining
 
 #### High Priority
-- **DATABASE_URL_AUTH env var** — missing, API key CRUD won't work in production
-- **Input validation bugs** — negative offset causes 500 (Postgres: "OFFSET must not be negative"), non-numeric limit causes 500 (NaN)
-- **Forensic Analyzer service** — dedicated `forensic-analyzer.ts` for attack timeline reconstruction, vector identification, threat actor attribution (Phase 3 planned but not built)
-- **Forensics tab** — dedicated UI for forensic reports (currently embedded in Recovery tab)
 - **Emergency Wallet Migration wizard** — guided new wallet setup, safe asset identification, secure transfer execution
 
 #### Medium Priority
